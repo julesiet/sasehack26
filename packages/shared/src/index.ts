@@ -21,3 +21,4 @@ export * from "./audit";
 export * from "./invoke";
 export * from "./seed";
 export * from "./session";
+export * from "./conversation";

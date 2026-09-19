@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { sessionViewSchema } from "@kasama/shared";
-import { app } from "./app";
+import { conversationTurnResponseSchema, sessionViewSchema } from "@kasama/shared";
+import { app, createApp } from "./app";
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
+import { SttNotConfiguredError } from "./speech";
 
 beforeEach(() => {
   auditLog.clear();
@@ -377,5 +378,123 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.pendingApproval?.tool).toBe("book_ride");
     expect(body.pendingApproval?.reason).toBe("confirmation_required");
     expect(body.lastBooking).toBeNull();
+  });
+
+  it("starts with an empty conversation", async () => {
+    const body = sessionViewSchema.parse(
+      await (await app.request("/sessions/quiet")).json(),
+    );
+    expect(body.conversation).toEqual({
+      turns: [],
+      activeRequest: null,
+      clarificationsAsked: 0,
+    });
+  });
+});
+
+describe("POST /conversation/turn", () => {
+  it("replies to the demo line and projects the turn into the shared session", async () => {
+    const res = await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        transcript: "Please get me a ride to my doctor tomorrow.",
+        sessionId: "family-1",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = conversationTurnResponseSchema.parse(await res.json());
+    expect(body.kind).toBe("proposal");
+    expect(body.reply).toContain("Dr. Chen");
+
+    const view = sessionViewSchema.parse(
+      await (await app.request("/sessions/family-1")).json(),
+    );
+    expect(view.conversation.turns).toHaveLength(2);
+    expect(view.conversation.activeRequest?.intent).toBe("ride");
+    expect(view.appointment?.id).toBe("appt_maria_doctor_01");
+    expect(view.events.map((event) => event.proposed.tool)).toEqual([
+      "get_appointment",
+      "find_ride_options",
+    ]);
+  });
+
+  it("rejects non-JSON and empty transcripts", async () => {
+    const notJson = await app.request("/conversation/turn", {
+      method: "POST",
+      body: "hello",
+    });
+    expect(notJson.status).toBe(400);
+
+    const empty = await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ transcript: "" }),
+    });
+    expect(empty.status).toBe(400);
+  });
+});
+
+describe("POST /speech/transcribe", () => {
+  function audioForm(): FormData {
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array([1, 2, 3])], { type: "audio/m4a" }), "clip.m4a");
+    return form;
+  }
+
+  it("returns the transcript from the configured transcriber", async () => {
+    const testApp = createApp({
+      transcribe: async (audio, filename) => {
+        expect(audio.size).toBe(3);
+        expect(filename).toBe("clip.m4a");
+        return "get me a ride to my doctor tomorrow";
+      },
+    });
+
+    const res = await testApp.request("/speech/transcribe", {
+      method: "POST",
+      body: audioForm(),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ transcript: "get me a ride to my doctor tomorrow" });
+  });
+
+  it("returns 501 stt_not_configured when no key is set", async () => {
+    const testApp = createApp({
+      transcribe: async () => {
+        throw new SttNotConfiguredError();
+      },
+    });
+
+    const res = await testApp.request("/speech/transcribe", {
+      method: "POST",
+      body: audioForm(),
+    });
+    expect(res.status).toBe(501);
+    const body = await res.json();
+    expect(body.error).toBe("stt_not_configured");
+  });
+
+  it("returns 400 when no file is sent", async () => {
+    const testApp = createApp({ transcribe: async () => "never" });
+    const res = await testApp.request("/speech/transcribe", {
+      method: "POST",
+      body: new FormData(),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 502 when the provider fails", async () => {
+    const testApp = createApp({
+      transcribe: async () => {
+        throw new Error("ElevenLabs speech-to-text failed (500).");
+      },
+    });
+    const res = await testApp.request("/speech/transcribe", {
+      method: "POST",
+      body: audioForm(),
+    });
+    expect(res.status).toBe(502);
   });
 });

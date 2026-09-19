@@ -33,11 +33,29 @@ Do not add `apps/web` or an Android app. Do not move contracts out of `packages/
 
 ## Mobile
 
-- Expo SDK in `apps/mobile`, iOS Simulator via `pnpm ios`
+- Expo SDK in `apps/mobile`, iOS Simulator via `pnpm ios` (Expo Go — no dev client, so no native speech-to-text modules)
 - `EXPO_PUBLIC_API_URL` defaults to `http://localhost:3001` (Simulator can use localhost)
-- StyleSheet only until designs land
-- Screens today: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`
+- StyleSheet + tokens in `apps/mobile/src/theme.ts`
+- Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`
 - Designed UI replaces those screens; it does not replace the API
+
+### Senior conversation screen (`#4`)
+
+`apps/mobile/src/screens/SeniorScreen.tsx`. Design baseline: white sky → warm glow → orange sun bowl, serif greeting, peach composer pill (text field + mic) and a separate `•••` button. One chrome; the orb, headline, and pill contents follow the conversation phase from `useKasamaConversation`:
+
+| Phase | Orb | Headline | Pill |
+|---|---|---|---|
+| `idle` | sun, breathing | "Good morning / afternoon / evening" (or last reply) | text field, white mic |
+| `listening` | rings pulse out | "I'm listening." + "Tap the orange button when you're done." | waveform, orange stop |
+| `thinking` | slow turn, dimmer | Maria's words quoted + "Thinking…" | `• • •`, mic disabled |
+| `speaking` | bright pulse | `KASAMA` + reply (serif, 30pt) | text field, stop (interrupt) |
+| `clarify` | sun | reply + "You can answer out loud or type below." | placeholder "Say or type your answer" |
+| `micDenied` | gray, mic-off; bowl gray | "Kasama can't hear you yet." + Settings instruction + **Open Settings** | text field stays usable |
+| `error` | sun | large recoverable message | text field, mic |
+
+Text ≥ 28pt for anything Maria must read; tap targets ≥ 68pt. Ride cards and confirmation are `#8`, not this screen.
+
+Loop: mic → `expo-audio` records (≤ 15 s or tap) → `POST /speech/transcribe` → `POST /conversation/turn` → `expo-speech` speaks the reply on device. If the API returns `501 stt_not_configured`, the screen tells Maria to type and focuses the field. Session id is `DEFAULT_SESSION_ID` so the caretaker view polls the same conversation.
 
 ## API
 
@@ -65,13 +83,26 @@ Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/sh
 
 `GET /audit` returns `{ events }` from the process-local log (`apps/api/src/audit-log.ts`). Optional `?sessionId=` filters. Not durable.
 
+### Conversation (`#4`)
+
+`POST /conversation/turn` body `{ transcript, sessionId?, actor?: "senior" | "caretaker" }` → `{ sessionId, reply, kind: "answer" | "clarification" | "proposal", activeRequest, clarificationsAsked }` (`conversationTurnRequestSchema` / `conversationTurnResponseSchema`).
+
+`apps/api/src/conversation.ts` is a deterministic, rules-based turn so the demo line works without a model key. It is the seam the harness (`#5`) replaces. Rules it must keep:
+
+- Every tool call goes through `invokeTool` as `actor: "model"`, so policy and audit apply (`get_appointment`, `find_ride_options`). It never calls `book_ride`; "yes" marks the request `accepted` and the ride card / approval is `#8`.
+- At most `MAX_CLARIFICATIONS_PER_REQUEST` (1) clarifying question per request. A second vague answer drops the request gracefully.
+- Session memory: `sessionView.conversation` = `{ turns, activeRequest, clarificationsAsked }`. Maria can say "yes" on the next turn without restating the appointment.
+
+`POST /speech/transcribe` — multipart `file` (m4a) → `{ transcript }` via ElevenLabs Scribe (`apps/api/src/speech.ts`, `ELEVENLABS_API_KEY`). `501 { error: "stt_not_configured" }` when no key; `502` on provider failure. Keys never reach the app.
+
 ## Shared contracts
 
 - `packages/shared/src/tools.ts` — tool names, inputs, results (Uber products: `UberX`, `WAV`)
 - `packages/shared/src/policy.ts` — `POLICY_TABLE`, `evaluateAction`, `evaluateToolCall`
 - `packages/shared/src/audit.ts` — event shape + `createAuditLog()`
 - `packages/shared/src/invoke.ts` — HTTP request schema
-- `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`)
+- `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`
+- `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `MAX_CLARIFICATIONS_PER_REQUEST`, transcribe response
 - `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
 - `packages/shared/src/index.ts` — re-exports
 
@@ -85,7 +116,9 @@ Fallback if live Uber is blocked: a controlled Uber-shaped environment — still
 
 ## What is not built yet
 
-Agent harness / playground (`#5`, `#13`), live calendar + Uber (`#7`, `#14`), designed UI (`#4`, `#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
+Agent harness / playground (`#5`, `#13`), live calendar + Uber (`#7`, `#14`), designed UI (`#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
+
+Voice loop (`#4`) is built with a rules-based turn: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. The model-driven turn is `#5`.
 
 Maria's seed data (`#2`) is built: `get_appointment` returns her real appointment (still a stub for every other date, since live calendar is `#7`).
 

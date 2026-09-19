@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auditEventSchema } from "./audit";
+import { conversationStateSchema } from "./conversation";
 import { actors } from "./policy";
 import { wearableReadingSchema } from "./seed";
 import { appointmentSchema, caretakerUrgencySchema } from "./tools";
@@ -62,6 +63,8 @@ export const sessionViewSchema = z.object({
   caretakerActivity: z.array(caretakerActivityItemSchema),
   careSignal: careSignalSchema.nullable(),
   consentGranted: z.boolean(),
+  /** Voice loop memory (#4): turns so far and the request Kasama is carrying. */
+  conversation: conversationStateSchema,
   events: z.array(auditEventSchema),
 });
 

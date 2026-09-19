@@ -9,7 +9,18 @@
     "scheme": "kasama",
     "ios": {
       "bundleIdentifier": "com.kasama.app",
-      "supportsTablet": false
-    }
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Kasama listens when you tap the microphone so you can ask for help out loud."
+      }
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Kasama listens when you tap the microphone so you can ask for help out loud."
+        }
+      ]
+    ]
   }
 }
