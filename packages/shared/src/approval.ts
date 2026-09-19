@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { actors } from "./policy";
+import type { UberProduct, UberRideOption } from "./tools";
 
 /**
  * Approval checkpoints (#6). High-risk actions wait here until a human
@@ -63,9 +64,44 @@ export const approvalResponseSchema = z.object({
 });
 export type ApprovalResponse = z.infer<typeof approvalResponseSchema>;
 
-/** Accessible demo Uber Maria confirms. Ride cards (#8) can offer more later. */
+/** Accessible demo Uber Maria confirms. Ride cards (#8) use the same id. */
 export const DEMO_UBER_WAV_OPTION_ID = "uber_wav_1";
 export const DEMO_UBER_WAV_ESTIMATE = "$24.50";
+
+export function pendingRideOptionId(
+  pending: { tool?: string; input?: unknown } | null,
+): string | undefined {
+  if (pending?.tool !== "book_ride" || !pending.input || typeof pending.input !== "object") {
+    return undefined;
+  }
+  if (!("optionId" in pending.input)) return undefined;
+  return String((pending.input as { optionId: unknown }).optionId);
+}
+
+export function rideProductTitle(product: UberProduct): string {
+  return product === "WAV" ? "Wheelchair Uber" : "UberX";
+}
+
+/** Transcript that selects this product on the next conversation turn. */
+export function spokenRideChoice(product: UberProduct): string {
+  return product === "WAV" ? "the wheelchair Uber" : "the UberX";
+}
+
+export function selectedRideOption(
+  options: UberRideOption[],
+  pending: { tool?: string; input?: unknown } | null,
+  product?: UberProduct,
+): UberRideOption | undefined {
+  const optionId = pendingRideOptionId(pending);
+  if (optionId) {
+    const fromPending = options.find((option) => option.optionId === optionId);
+    if (fromPending) return fromPending;
+  }
+  if (product) {
+    return options.find((option) => option.product === product);
+  }
+  return undefined;
+}
 
 export function bookingApprovalPrompt(estimate: string = DEMO_UBER_WAV_ESTIMATE): string {
   return `The Uber is ${estimate}. Should I book it?`;

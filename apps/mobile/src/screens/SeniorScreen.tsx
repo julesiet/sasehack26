@@ -62,8 +62,16 @@ function orbModeFor(phase: ConversationPhase): OrbMode {
  */
 export function SeniorScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
-  const { state, pressMic, submitText, decideApproval, repeatLastReply, openSettings, recheckMic } =
-    useKasamaConversation();
+  const {
+    state,
+    pressMic,
+    submitText,
+    decideApproval,
+    selectRideOption,
+    repeatLastReply,
+    openSettings,
+    recheckMic,
+  } = useKasamaConversation();
   const [draft, setDraft] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<SeniorTab>("home");
@@ -155,7 +163,12 @@ export function SeniorScreen({ onBack }: Props) {
                 turns={state.turns}
                 pendingApproval={state.pendingApproval}
                 justResolved={state.justResolved}
+                lastRideOptions={state.lastRideOptions}
+                lastBooking={state.lastBooking}
+                activeRequest={state.activeRequest}
+                rideWork={state.rideWork}
                 notice={state.notice}
+                onSelectRide={(option) => void selectRideOption(option)}
                 onConfirm={() => void decideApproval("approve")}
                 onCancel={() => void decideApproval("decline")}
                 onOpenSettings={openSettings}
@@ -221,7 +234,13 @@ function Headline({ state, onOpenSettings }: HeadlineProps) {
       return (
         <View style={styles.headline}>
           {state.seniorText ? <Text style={styles.transcript}>“{state.seniorText}”</Text> : null}
-          <Text style={styles.hint}>Thinking…</Text>
+          <Text style={styles.hint}>
+            {state.rideWork === "finding"
+              ? "Finding Ubers…"
+              : state.rideWork === "booking"
+                ? "Booking your Uber…"
+                : "Thinking…"}
+          </Text>
         </View>
       );
     case "micDenied":

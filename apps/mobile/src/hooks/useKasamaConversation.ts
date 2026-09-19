@@ -13,11 +13,16 @@ import { File, Paths } from "expo-file-system";
 import * as Speech from "expo-speech";
 import {
   DEFAULT_SESSION_ID,
+  pendingRideOptionId,
+  spokenRideChoice,
+  type ActiveRequest,
   type ApprovalChoice,
   type ConversationReplyKind,
   type ConversationTurn,
   type LastApproval,
   type PendingApproval,
+  type SessionBooking,
+  type UberRideOption,
 } from "@kasama/shared";
 import {
   ApiError,
@@ -50,6 +55,8 @@ export type ConversationPhase =
   | "micDenied"
   | "error";
 
+export type RideWork = "none" | "finding" | "booking";
+
 export type ConversationUiState = {
   phase: ConversationPhase;
   /** What Maria said this turn (typed or transcribed). */
@@ -64,11 +71,21 @@ export type ConversationUiState = {
   /** Saved/declined card for the decision we just made. Cleared on the next turn. */
   justResolved: LastApproval | null;
   turns: ConversationTurn[];
+  lastRideOptions: UberRideOption[];
+  lastBooking: SessionBooking | null;
+  activeRequest: ActiveRequest | null;
+  /** Ride-specific busy state so the screen never looks idle (#8). */
+  rideWork: RideWork;
 };
 
 const MAX_RECORDING_MS = 15_000;
 const SPEECH_LANGUAGE = "en-US";
 const SPEECH_RATE = 0.92;
+const RIDE_WORDS = /\b(ride|uber|pickup|taxi|car|wheelchair|wav|uberx)\b/i;
+
+function looksLikeRide(text: string): boolean {
+  return RIDE_WORDS.test(text);
+}
 
 export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -82,6 +99,10 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     lastApproval: null,
     justResolved: null,
     turns: [],
+    lastRideOptions: [],
+    lastBooking: null,
+    activeRequest: null,
+    rideWork: "none",
   });
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
@@ -181,6 +202,10 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         seniorText: clean,
         notice: null,
         justResolved: null,
+        rideWork:
+          looksLikeRide(clean) && prev.lastRideOptions.length === 0 && !prev.lastBooking
+            ? "finding"
+            : "none",
         turns: [...prev.turns, localTurn],
       }));
       try {
@@ -196,12 +221,17 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
                 ? session.lastApproval
                 : null,
             turns: session.conversation.turns,
+            lastRideOptions: session.lastRideOptions,
+            lastBooking: session.lastBooking,
+            activeRequest: session.conversation.activeRequest,
+            rideWork: "none",
           }));
         }
         await speak(reply.reply, reply.kind, reply.pendingApproval);
       } catch (error) {
         patch({
           phase: "error",
+          rideWork: "none",
           notice:
             error instanceof ApiError
               ? "Kasama had trouble with that. Please try again."
@@ -308,7 +338,8 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     async (decision: ApprovalChoice) => {
       if (state.phase === "listening" || state.phase === "thinking") return;
       stopVoice();
-      patch({ phase: "thinking", notice: null });
+      const booking = decision === "approve" && state.pendingApproval?.tool === "book_ride";
+      patch({ phase: "thinking", notice: null, rideWork: booking ? "booking" : "none" });
       try {
         const result = await postApproval(decision, sessionId);
         const session = await fetchSession(sessionId);
@@ -319,17 +350,31 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
             lastApproval: result.lastApproval ?? session.lastApproval,
             justResolved: result.lastApproval ?? session.lastApproval,
             turns: session.conversation.turns,
+            lastRideOptions: session.lastRideOptions,
+            lastBooking: session.lastBooking,
+            activeRequest: session.conversation.activeRequest,
+            rideWork: "none",
           }));
         }
         await speak(result.reply, "answer", result.pendingApproval);
       } catch {
         patch({
           phase: "error",
+          rideWork: "none",
           notice: "Kasama could not save that yes or no. Please try again.",
         });
       }
     },
-    [patch, sessionId, speak, state.phase, stopVoice],
+    [patch, sessionId, speak, state.pendingApproval?.tool, state.phase, stopVoice],
+  );
+
+  const selectRideOption = useCallback(
+    async (option: UberRideOption) => {
+      if (state.phase === "listening" || state.phase === "thinking") return;
+      if (pendingRideOptionId(state.pendingApproval) === option.optionId) return;
+      await sendTurn(spokenRideChoice(option.product));
+    },
+    [sendTurn, state.pendingApproval, state.phase],
   );
 
   const repeatLastReply = useCallback(() => {
@@ -353,6 +398,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     pressMic,
     submitText,
     decideApproval,
+    selectRideOption,
     repeatLastReply,
     openSettings,
     recheckMic,
