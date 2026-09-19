@@ -64,3 +64,5 @@ BROWSERBASE_API_KEY=
 BROWSERBASE_PROJECT_ID=
 COMPOSIO_API_KEY=
 ```
+
+Composio (Gmail for Maria / `senior_maria`): `POST /composio/connect` then `POST /composio/execute` (defaults to `GMAIL_GET_PROFILE`). The key stays in `apps/api/.env`.

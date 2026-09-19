@@ -97,6 +97,15 @@ Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/sh
 
 `POST /speech/speak` — `{ text }` → MPEG audio of Kasama via ElevenLabs TTS (same key; optional `ELEVENLABS_VOICE_ID`, default Sarah / `EXAVITQu4vr4xnSDxMaL`). `501 { error: "tts_not_configured" }` when no key. The iOS app plays the clip with `expo-audio` and falls back to `expo-speech`. Keys never reach the app. The ElevenLabs key needs **Speech to Text** and **Text to Speech**.
 
+### Composio (Gmail)
+
+Live provider tools go through Composio Platform sessions (`apps/api/src/composio.ts`), not a parallel agent. Identity is Maria's existing id (`senior_maria`). The SDK reads `COMPOSIO_API_KEY` from the environment.
+
+- `POST /composio/connect` — create or resume a session and return a Gmail Connect Link when the account is not connected
+- `POST /composio/execute` — `session.execute`. First verified tool is `GMAIL_GET_PROFILE` (`user_id: "me"`). `409` + Connect Link if Gmail is not authorized
+
+Calendar and Uber stay stubs. Do not send caretaker mail through Composio until `notify_caretaker` policy still gates it.
+
 ## Shared contracts
 
 - `packages/shared/src/tools.ts` — tool names, inputs, results (Uber products: `UberX`, `WAV`)
@@ -105,10 +114,13 @@ Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/sh
 - `packages/shared/src/invoke.ts` — HTTP request schema
 - `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`
 - `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `MAX_CLARIFICATIONS_PER_REQUEST`, transcribe response
+- `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`
 - `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
 - `packages/shared/src/index.ts` — re-exports
 
 If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in `apps/api/src/invoke-tool.ts`, project any session fields in `apps/api/src/session-store.ts`, add tests, and update this file.
+
+Composio session tools (`GMAIL_GET_PROFILE` and later Gmail writes) live on `POST /composio/*` until a Kasama tool is wired through `invokeTool` + policy.
 
 ## Uber
 
@@ -121,6 +133,8 @@ Fallback if live Uber is blocked: a controlled Uber-shaped environment — still
 Agent harness / playground (`#5`, `#13`), live calendar + Uber (`#7`, `#14`), designed UI (`#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
 
 Voice loop (`#4`) is built with a rules-based turn: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. The model-driven turn is `#5`.
+
+Composio Platform sessions are on `POST /composio/connect` and `POST /composio/execute` (Gmail / `GMAIL_GET_PROFILE` for `senior_maria`). They are not wired into the conversation turn or `notify_caretaker` yet.
 
 Maria's seed data (`#2`) is built: `get_appointment` returns her real appointment (still a stub for every other date, since live calendar is `#7`).
 

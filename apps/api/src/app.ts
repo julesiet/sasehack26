@@ -1,7 +1,13 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { healthSchema, speakRequestSchema } from "@kasama/shared";
+import {
+  composioConnectRequestSchema,
+  composioExecuteRequestSchema,
+  healthSchema,
+  speakRequestSchema,
+} from "@kasama/shared";
 import { auditLog } from "./audit-log";
+import { ComposioNotConfiguredError, kasamaComposio, type KasamaComposio } from "./composio";
 import { runConversationTurn } from "./conversation";
 import { invokeTool } from "./invoke-tool";
 import { sessionStore } from "./session-store";
@@ -17,11 +23,13 @@ import {
 export type AppDeps = {
   transcribe: Transcriber;
   speak?: Speaker;
+  composio?: KasamaComposio;
 };
 
 export function createApp({
   transcribe,
   speak = speaker,
+  composio = kasamaComposio,
 }: AppDeps = { transcribe: transcriber, speak: speaker }): Hono {
   const app = new Hono();
 
@@ -42,6 +50,8 @@ export function createApp({
       conversation: "POST /conversation/turn",
       transcribe: "POST /speech/transcribe",
       speak: "POST /speech/speak",
+      composioConnect: "POST /composio/connect",
+      composioExecute: "POST /composio/execute",
       hint: "This is the API. The app runs in the iOS Simulator via pnpm ios.",
     });
   });
@@ -160,6 +170,69 @@ export function createApp({
       }
       const summary = error instanceof Error ? error.message : "Speech failed.";
       return c.json({ error: "tts_failed", summary }, 502);
+    }
+  });
+
+  /** Start or resume a Composio session and return a Gmail Connect Link if needed. */
+  app.post("/composio/connect", async (c) => {
+    let raw: unknown = {};
+    try {
+      raw = await c.req.json();
+    } catch {
+      raw = {};
+    }
+
+    const request = composioConnectRequestSchema.safeParse(raw);
+    if (!request.success) {
+      return c.json({ error: "bad_request", summary: "Invalid connect body." }, 400);
+    }
+
+    try {
+      return c.json(await composio.connect(request.data));
+    } catch (error) {
+      if (error instanceof ComposioNotConfiguredError) {
+        return c.json(
+          {
+            error: "composio_not_configured",
+            summary: "Composio is not configured. Set COMPOSIO_API_KEY in apps/api/.env.",
+          },
+          501,
+        );
+      }
+      const summary = error instanceof Error ? error.message : "Connect failed.";
+      return c.json({ error: "composio_failed", summary }, 502);
+    }
+  });
+
+  /** Execute a session tool. Defaults to GMAIL_GET_PROFILE for `senior_maria`. */
+  app.post("/composio/execute", async (c) => {
+    let raw: unknown = {};
+    try {
+      raw = await c.req.json();
+    } catch {
+      raw = {};
+    }
+
+    const request = composioExecuteRequestSchema.safeParse(raw);
+    if (!request.success) {
+      return c.json({ error: "bad_request", summary: "Invalid execute body." }, 400);
+    }
+
+    try {
+      const body = await composio.execute(request.data);
+      return c.json(body, body.needsAuth ? 409 : 200);
+    } catch (error) {
+      if (error instanceof ComposioNotConfiguredError) {
+        return c.json(
+          {
+            error: "composio_not_configured",
+            summary: "Composio is not configured. Set COMPOSIO_API_KEY in apps/api/.env.",
+          },
+          501,
+        );
+      }
+      const summary = error instanceof Error ? error.message : "Execute failed.";
+      return c.json({ error: "composio_failed", summary }, 502);
     }
   });
 
