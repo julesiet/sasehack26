@@ -1,6 +1,6 @@
 # Architecture
 
-Kasama is one React Native iOS app (senior + caretaker modes) talking to one TypeScript agent API.
+Kasama is one React Native iOS app (senior + caretaker modes) talking to one TypeScript API. The product AI is **Kasama**, not “the agent”.
 
 ```text
 Kasama (Expo, iOS)
@@ -79,7 +79,7 @@ Fallback if live Uber is blocked: a controlled Uber-shaped environment — still
 
 ## What is not built yet
 
-Agent harness / playground (`#5`, `#13`), Maria seed (`#2`), live calendar + Uber (`#7`, `#14`), designed UI (`#4`, `#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`), session HTTP (`#18`).
+Kasama harness / playground (`#5`, `#13`), Maria seed (`#2`), live calendar + Uber (`#7`, `#14`), designed UI (`#4`, `#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`), session HTTP (`#18`).
 
 ## Keeping architecture context shared
 

@@ -8,7 +8,7 @@ Where to put work so every agent sees the same system.
 apps/mobile/src/screens/    iOS screens (placeholders until design-ready)
 apps/api/src/               Hono app, tool invoke, in-memory audit
 packages/shared/src/        Zod + policy + audit types (source of truth)
-AGENTS.md                   Agent operating manual
+AGENTS.md                   Coding-agent operating manual
 ARCHITECTURE.md             System map
 docs/                       Extra canonical docs only (this folder)
 ```
@@ -41,6 +41,6 @@ Agent-facing facts go in the canonical files listed in [AGENTS.md](../AGENTS.md)
 
 ## Tools
 
-Keep tools narrow. The model asks; `evaluateToolCall` decides.
+Keep tools narrow. Kasama asks; `evaluateToolCall` decides.
 
 Stub results must still be valid Zod. Never return a fake “booked” Uber that skipped policy.

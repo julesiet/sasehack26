@@ -1,6 +1,12 @@
 # AGENTS.md
 
-Operating instructions for every agent (Cursor, Claude, Copilot, humans acting as agents).
+Operating instructions for coding agents (Cursor, Claude, Copilot, humans pairing on this repo).
+
+## Naming
+
+**Kasama** is the product AI. In UI, voice, issues, and docs, call it Kasama — not “the AI”, “the assistant”, or “the agent”.
+
+In this file, “coding agent” means someone working on the codebase. Do not call Kasama “the agent” in user-facing copy.
 
 ## Shared context is mandatory
 
@@ -24,7 +30,7 @@ Code contracts live in `packages/shared`. Docs describe them; they do not fork t
 
 ## Product
 
-Kasama is a voice-first, care-aware iOS agent. Seniors ask for help; families see explainable activity. Ride booking is **Uber only**.
+Kasama is a voice-first, care-aware iOS product. Seniors talk to Kasama; families see explainable activity. Ride booking is **Uber only**.
 
 iOS only. Android is out of scope. No Next.js / web client for MVP.
 
@@ -65,7 +71,7 @@ Calendar and Uber are **stubs**. Policy and audit are real. Live Uber is later (
 
 ## Safety (non-negotiable)
 
-The model requests. The harness decides. Encode policy in `packages/shared/src/policy.ts`, not comments.
+Kasama may request tools. The harness decides. Encode policy in `packages/shared/src/policy.ts`, not comments.
 
 - Book Uber / send message / spend money → human `approvalToken`, actor ≠ `model`
 - Model cannot self-approve even with a token
