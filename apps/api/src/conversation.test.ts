@@ -3,10 +3,12 @@ import { conversationTurnResponseSchema } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { runConversationTurn } from "./conversation";
 import { sessionStore } from "./session-store";
+import { resetControlledUberProvider } from "./uber-provider";
 
 beforeEach(() => {
   auditLog.clear();
   sessionStore.clear();
+  resetControlledUberProvider();
   process.env.MODEL_API_KEY = "";
 });
 
