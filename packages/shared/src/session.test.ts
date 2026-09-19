@@ -45,9 +45,29 @@ describe("session view contract", () => {
         flaggedConfusionCount: 2,
       },
       consentGranted: true,
+      conversation: {
+        turns: [
+          {
+            id: "turn_1",
+            timestamp: "2026-09-18T20:00:00.000Z",
+            speaker: "senior",
+            text: "Please get me a ride to my doctor tomorrow.",
+          },
+        ],
+        activeRequest: {
+          intent: "ride",
+          destination: "Springfield Family Medicine",
+          date: "2026-09-19",
+          appointmentId: "appt_maria_doctor_01",
+          status: "proposed",
+        },
+        clarificationsAsked: 0,
+      },
       events: [],
     });
 
+    expect(parsed.conversation.turns).toHaveLength(1);
+    expect(parsed.conversation.activeRequest?.intent).toBe("ride");
     expect(parsed.lastBooking?.provider).toBe("uber");
     expect(parsed.careSignal?.label).toBe("worth reviewing");
   });

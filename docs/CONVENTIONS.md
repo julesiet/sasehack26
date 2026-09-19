@@ -6,7 +6,11 @@ Where to put work so every agent sees the same system.
 
 ```text
 apps/mobile/src/screens/    iOS screens (placeholders until design-ready)
-apps/api/src/               Hono app, tool invoke, in-memory session + audit
+apps/mobile/src/components/ Reusable senior-mode pieces (orb, sun bowl, composer pill)
+apps/mobile/src/hooks/      Conversation state machine (record → transcribe → turn → speak)
+apps/mobile/src/lib/        API client
+apps/mobile/src/theme.ts    Design tokens
+apps/api/src/               Hono app, tool invoke, conversation turn, speech, in-memory session + audit
 packages/shared/src/        Zod + policy + audit + session types (source of truth)
 AGENTS.md                   Coding-agent operating manual
 ARCHITECTURE.md             System map
@@ -35,7 +39,8 @@ Agent-facing facts go in the canonical files listed in [AGENTS.md](../AGENTS.md)
 
 - TypeScript strict
 - Zod at the boundary
-- React Native `StyleSheet` until designs exist
+- React Native `StyleSheet`; colors/type/sizes from `apps/mobile/src/theme.ts`
+- Expo Go–compatible packages only (`npx expo install`); no `expo prebuild`
 - Tests next to the unit (`*.test.ts`) with vitest
 - No secrets in git; use `.env.example` keys only
 

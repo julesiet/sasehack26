@@ -1,15 +1,19 @@
 import {
   bookRideInputSchema,
   bookRideResultSchema,
+  emptyConversationState,
   getAppointmentResultSchema,
   getMariaSeedBundle,
   notifyCaretakerInputSchema,
   sessionViewSchema,
   type Actor,
+  type ActiveRequest,
   type Appointment,
   type AuditEvent,
   type CaretakerActivityItem,
   type CareSignal,
+  type ConversationReplyKind,
+  type ConversationState,
   type PendingApproval,
   type PolicyDecision,
   type SessionBooking,
@@ -28,6 +32,18 @@ type SessionState = {
   caretakerActivity: CaretakerActivityItem[];
   careSignal: CareSignal | null;
   consentGranted: boolean;
+  conversation: ConversationState;
+};
+
+export type ApplyConversationTurnInput = {
+  sessionId: string;
+  seniorText: string;
+  kasamaText: string;
+  kind: ConversationReplyKind;
+  activeRequest: ActiveRequest | null;
+  /** Set when this turn asked a clarification; the store enforces the count. */
+  askedClarification: boolean;
+  timestamp: string;
 };
 
 export type ApplyToolEventInput = {
@@ -68,6 +84,7 @@ function emptyState(sessionId: string): SessionState {
     caretakerActivity: [],
     careSignal: seedCareSignal(),
     consentGranted: false,
+    conversation: emptyConversationState(),
   };
 }
 
@@ -101,12 +118,21 @@ function appendCaretakerActivity(
 
 export type SessionStore = {
   get: (sessionId: string) => SessionView;
+  /** Conversation memory for the voice loop, without the audit projection. */
+  getConversation: (sessionId: string) => ConversationState;
   applyToolEvent: (input: ApplyToolEventInput) => SessionView;
+  applyConversationTurn: (input: ApplyConversationTurnInput) => SessionView;
   clear: () => void;
 };
 
 export function createSessionStore(): SessionStore {
   const sessions = new Map<string, SessionState>();
+  let turnCounter = 0;
+
+  function nextTurnId(): string {
+    turnCounter += 1;
+    return `turn_${turnCounter}`;
+  }
 
   function getOrCreate(sessionId: string): SessionState {
     const existing = sessions.get(sessionId);
@@ -121,6 +147,46 @@ export function createSessionStore(): SessionStore {
   return {
     get(sessionId) {
       return toView(getOrCreate(sessionId));
+    },
+    getConversation(sessionId) {
+      return structuredClone(getOrCreate(sessionId).conversation);
+    },
+    applyConversationTurn({
+      sessionId,
+      seniorText,
+      kasamaText,
+      kind,
+      activeRequest,
+      askedClarification,
+      timestamp,
+    }) {
+      const state = getOrCreate(sessionId);
+      const conversation = state.conversation;
+
+      conversation.turns.push({
+        id: nextTurnId(),
+        timestamp,
+        speaker: "senior",
+        text: seniorText,
+      });
+      conversation.turns.push({
+        id: nextTurnId(),
+        timestamp,
+        speaker: "kasama",
+        text: kasamaText,
+        kind,
+      });
+
+      // The clarification budget is per request: it grows while Kasama is still
+      // gathering and resets once the request resolves (proposal, answer, or dropped).
+      if (askedClarification) {
+        conversation.clarificationsAsked += 1;
+      } else if (activeRequest === null || activeRequest.status !== "gathering") {
+        conversation.clarificationsAsked = 0;
+      }
+      conversation.activeRequest = activeRequest;
+
+      return toView(state);
     },
     applyToolEvent({
       sessionId,
@@ -197,6 +263,7 @@ export function createSessionStore(): SessionStore {
     },
     clear() {
       sessions.clear();
+      turnCounter = 0;
     },
   };
 }

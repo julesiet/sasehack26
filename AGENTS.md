@@ -65,12 +65,21 @@ There is no product website. `http://localhost:3001` is the API. The app is the 
 - `POST /tools/:name` — validate → policy → audit → session projection → stub execute
 - `GET /sessions/:sessionId` — in-memory session view (current request, pending approval, appointment, last Uber booking, caretaker activity, care signal, session events)
 - `GET /audit` — `{ events: [...] }` all process-local events; optional `?sessionId=` filters. Cleared on process restart
+- `POST /conversation/turn` — `{ transcript, sessionId? }` → Kasama's reply text + `kind` (`answer` / `clarification` / `proposal`). Rules-based until the harness (`#5`); tools go through policy + audit
+- `POST /speech/transcribe` — multipart `file` → `{ transcript }` via ElevenLabs (needs `ELEVENLABS_API_KEY` in `apps/api/.env`; `501` otherwise)
+- `POST /speech/speak` — `{ text }` → MPEG audio of Kasama (same key, plus Text to Speech on the key; `501` otherwise, device falls back to iOS speech)
 
 Omitted `sessionId` on a tool call is stored as `default`. Senior and caretaker clients poll the same `sessionId`.
 
 Tools: `get_appointment`, `find_ride_options`, `book_ride`, `notify_caretaker`.
 
 Calendar and Uber are **stubs**. Policy and audit are real. Live Uber is later (`#14` / `#7`).
+
+## Mobile
+
+Expo Go only (`pnpm ios`). Add only Expo Go–compatible packages; no native speech-to-text modules and no `expo prebuild`. Speech-to-text and Kasama's voice run on the API via ElevenLabs. The device falls back to `expo-speech` if TTS is not configured.
+
+Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Keep text ≥ 28pt and tap targets ≥ 68pt on senior screens.
 
 ## Safety (non-negotiable)
 

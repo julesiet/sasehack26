@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CaretakerScreen } from "./src/screens/CaretakerScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { SeniorScreen } from "./src/screens/SeniorScreen";
@@ -10,7 +11,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
 
   return (
-    <>
+    <SafeAreaProvider>
       {screen === "home" ? (
         <HomeScreen
           onOpenSenior={() => setScreen("senior")}
@@ -23,7 +24,7 @@ export default function App() {
       {screen === "caretaker" ? (
         <CaretakerScreen onBack={() => setScreen("home")} />
       ) : null}
-      <StatusBar style="auto" />
-    </>
+      <StatusBar style="dark" />
+    </SafeAreaProvider>
   );
 }
