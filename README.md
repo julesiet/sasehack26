@@ -2,6 +2,8 @@
 
 Voice-first, care-aware AI agent that helps older adults complete everyday tasks while giving families early, explainable signals when something changes.
 
+Agents: start at [AGENTS.md](AGENTS.md). System map: [ARCHITECTURE.md](ARCHITECTURE.md).
+
 iOS only. Android is out of scope.
 
 ## Architecture
