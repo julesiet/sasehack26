@@ -13,4 +13,6 @@ If you change packages, routes, tools, policy, or commands, update the same docs
 
 Tool and permission source of truth is `packages/shared` (`tools.ts`, `policy.ts`). Docs must match the code.
 
+The product AI is **Kasama**. Do not call it “the AI agent” in UI or docs.
+
 iOS-only Expo app. Uber for rides. No designed UI on `blocked:design` issues. Do not commit unless the user asks.

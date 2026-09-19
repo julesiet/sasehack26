@@ -1,6 +1,6 @@
 # Architecture
 
-Kasama is one React Native iOS app (senior + caretaker modes) talking to one TypeScript agent API.
+Kasama is one React Native iOS app (senior + caretaker modes) talking to one TypeScript API. The product AI is **Kasama**, not “the agent”.
 
 ```text
 Kasama (Expo, iOS)

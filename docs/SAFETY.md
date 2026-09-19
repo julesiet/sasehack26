@@ -30,4 +30,4 @@ Every invoke writes: who asked, what was proposed, approval, whether execute was
 
 ## Language
 
-Signals are “worth reviewing.” Never diagnose, never change a prescription from the model, never book or charge without a human yes.
+Signals are “worth reviewing.” Kasama must never diagnose, change a prescription, or book/charge without a human yes.
