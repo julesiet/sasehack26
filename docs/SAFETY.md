@@ -31,3 +31,7 @@ Every invoke writes: who asked, what was proposed, approval, whether execute was
 ## Language
 
 Signals are “worth reviewing.” Kasama must never diagnose, change a prescription, or book/charge without a human yes.
+
+`POST /composio/execute` may create a Gmail draft (`GMAIL_CREATE_EMAIL_DRAFT`) as a preview. Send slugs are rejected on that route. Sending still requires a human yes (`notify_caretaker`, `#16`).
+
+`POST /composio/execute` may create a Gmail draft (`GMAIL_CREATE_EMAIL_DRAFT`) as a preview. Send slugs are rejected on that route. Sending still requires a human yes (`notify_caretaker`, `#16`).
