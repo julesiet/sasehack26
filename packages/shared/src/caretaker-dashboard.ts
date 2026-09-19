@@ -16,11 +16,11 @@ export type CaretakerConsentItem = {
   detail: string;
 };
 
-export type CaretakerActivityActor = "maria" | "kasama";
+export type CaretakerTimelineActor = "maria" | "kasama";
 
-export type CaretakerActivityItem = {
+export type CaretakerTimelineItem = {
   id: string;
-  actor: CaretakerActivityActor;
+  actor: CaretakerTimelineActor;
   initial: "M" | "K";
   title: string;
   quote?: string;
@@ -54,7 +54,7 @@ export type CaretakerDashboard = {
   appointment: CaretakerAppointmentCard;
   ride: CaretakerRideCard | null;
   consentItems: CaretakerConsentItem[];
-  activity: CaretakerActivityItem[];
+  activity: CaretakerTimelineItem[];
 };
 
 const EMPTY_VIEW: SessionView = {
@@ -286,10 +286,10 @@ function consentItems(view: SessionView, senior: string): CaretakerConsentItem[]
   return items;
 }
 
-function activityItems(view: SessionView, senior: string): CaretakerActivityItem[] {
+function activityItems(view: SessionView, senior: string): CaretakerTimelineItem[] {
   const turns = view.conversation.turns;
   if (turns.length === 0) {
-    const fallback: CaretakerActivityItem[] = [];
+    const fallback: CaretakerTimelineItem[] = [];
     if (view.lastBooking?.status === "booked") {
       fallback.push({
         id: "booking",
@@ -305,7 +305,7 @@ function activityItems(view: SessionView, senior: string): CaretakerActivityItem
 
   const lastSeniorId = [...turns].reverse().find((turn) => turn.speaker === "senior")?.id;
   return turns.map((turn) => {
-    const actor: CaretakerActivityActor = turn.speaker === "senior" ? "maria" : "kasama";
+    const actor: CaretakerTimelineActor = turn.speaker === "senior" ? "maria" : "kasama";
     const isLatestMaria = turn.id === lastSeniorId && actor === "maria";
     return {
       id: turn.id,

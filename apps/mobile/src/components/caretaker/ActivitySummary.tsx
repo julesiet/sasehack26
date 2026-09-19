@@ -1,10 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { CaretakerActivityItem } from "@kasama/shared";
+import type { CaretakerTimelineItem } from "@kasama/shared";
 import { colors, radius } from "../../theme";
 
 type Props = {
-  items: CaretakerActivityItem[];
+  items: CaretakerTimelineItem[];
   expanded: boolean;
   onToggle: () => void;
 };

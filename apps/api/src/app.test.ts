@@ -4,6 +4,7 @@ import {
   COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
   COMPOSIO_GMAIL_SEND_TOOL,
   PLAYGROUND_DEMO_TRANSCRIPT,
+  buildCaretakerDashboard,
   conversationTurnResponseSchema,
   playgroundResponseSchema,
   sessionViewSchema,
@@ -391,6 +392,18 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.consentGranted).toBe(true);
     expect(body.pendingApproval).toBeNull();
     expect(body.currentRequest?.tool).toBe("book_ride");
+
+    const dashboard = buildCaretakerDashboard({ view: body });
+    expect(dashboard.overviewStatus).toBe("confirmed");
+    expect(dashboard.overviewBadge).toBe("CONFIRMED");
+    expect(dashboard.ride?.title).toBe("UberX");
+    expect(dashboard.ride?.booked).toBe(true);
+    expect(dashboard.ride?.confirmationId).toMatch(/^UBER-UBERX-\d{4}$/);
+    expect(dashboard.consentItems[0]).toMatchObject({
+      tone: "approved",
+      title: "Ride booking approved",
+    });
+    expect(dashboard.careNotes).toMatch(/No diagnosis noted/);
   });
 
   it("lets senior and caretaker clients share the same sessionId", async () => {
