@@ -8,7 +8,7 @@ iOS only. Android is out of scope.
 
 ```text
 Kasama (Expo / React Native, iOS)
-  Senior mode: voice, ride cards, spoken + tap confirmation
+  Senior mode: voice, Uber ride cards, spoken + tap confirmation
   Caretaker mode: activity, consent, care signals
         ↓
 Kasama API (Hono / TypeScript)
