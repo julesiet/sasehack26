@@ -56,6 +56,8 @@ pnpm typecheck
 pnpm test
 ```
 
+GitHub Actions on pull requests and `main` runs `pnpm typecheck` and `pnpm test` (`.github/workflows/ci.yml`). No `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY` is required.
+
 `pnpm dev`, `pnpm start`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy.
 
 There is no product website. `http://localhost:3001` is the API. The app is Expo Go (`pnpm start` / `pnpm dev`) or the Simulator (`pnpm ios`). For a phone, put this Mac's LAN IP in `apps/mobile/.env` as `EXPO_PUBLIC_API_URL=http://<ip>:3001` (`ipconfig getifaddr en0`) so the QR is not localhost. Restart Expo after changing `.env`.
