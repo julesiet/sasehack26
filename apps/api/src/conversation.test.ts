@@ -215,6 +215,60 @@ describe("runConversationTurn", () => {
     expect(result.status).toBe(400);
   });
 
+  it("does not stop on a ChatGPT checking filler with no tools", async () => {
+    const result = await runConversationTurn(
+      { transcript: "Please get me a ride to my doctor tomorrow.", sessionId: "filler-1" },
+      {
+        complete: async () => ({
+          role: "assistant",
+          content: "Let me check for ride options",
+        }),
+      },
+    );
+    expect(result.status).toBe(200);
+    const body = conversationTurnResponseSchema.parse(result.body);
+    expect(body.kind).toBe("proposal");
+    expect(body.reply).toContain("Dr. Chen");
+    expect(body.reply).toMatch(/Should I set that up\?$/);
+    expect(body.reply).not.toMatch(/let me check/i);
+    expect(body.plan.steps.map((step) => step.tool)).toEqual([
+      "get_appointment",
+      "find_ride_options",
+    ]);
+  });
+
+  it("opens the WAV checkpoint when Maria says she wants WAV", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    const reply = await turn("I want WAV");
+    expect(reply.kind).toBe("proposal");
+    expect(reply.reply).toBe("The Uber is $24.50. Should I book it?");
+    expect(reply.pendingApproval?.input).toEqual({ optionId: "uber_wav_1" });
+    expect(reply.pendingApproval?.estimate).toBe("$24.50");
+  });
+
+  it("opens the WAV card when ChatGPT only offers to propose WAV", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    const result = await runConversationTurn(
+      { transcript: "I want WAV", sessionId: "voice-1" },
+      {
+        complete: async () => ({
+          role: "assistant",
+          content: "I can propose the WAV for you. Should I set it up?",
+        }),
+      },
+    );
+    expect(result.status).toBe(200);
+    const reply = conversationTurnResponseSchema.parse(result.body);
+    expect(reply.reply).toBe("The Uber is $24.50. Should I book it?");
+    expect(reply.pendingApproval?.input).toEqual({ optionId: "uber_wav_1" });
+  });
+
+  it("opens the WAV card when the first request already names WAV", async () => {
+    const reply = await turn("I want the WAV to my doctor tomorrow");
+    expect(reply.pendingApproval?.input).toEqual({ optionId: "uber_wav_1" });
+    expect(reply.reply).toBe("The Uber is $24.50. Should I book it?");
+  });
+
   it("opens the WAV checkpoint when Maria chooses the accessible Uber", async () => {
     await turn("Get me a ride to my doctor tomorrow");
     const reply = await turn("Choose the accessible one");
@@ -283,11 +337,11 @@ describe("runConversationTurn", () => {
     expect(body.reply).not.toContain(thirtyEarly);
   });
 
-  it("remembers an accessible request until the checkpoint", async () => {
-    const proposed = await turn("Get me the accessible Uber to my doctor tomorrow");
-    expect(proposed.activeRequest?.product).toBe("WAV");
-    const reply = await turn("Yes");
+  it("opens the WAV card when the first request already names accessible", async () => {
+    const reply = await turn("Get me the accessible Uber to my doctor tomorrow");
+    expect(reply.activeRequest?.product).toBe("WAV");
     expect(reply.pendingApproval?.input).toEqual({ optionId: "uber_wav_1" });
+    expect(reply.reply).toBe("The Uber is $24.50. Should I book it?");
   });
 
   it("falls back to rules when ChatGPT throws", async () => {

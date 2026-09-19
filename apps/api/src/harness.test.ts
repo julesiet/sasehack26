@@ -149,6 +149,37 @@ describe("runHarnessTurn", () => {
     expect(result.kind).toBe("answer");
   });
 
+  it("does not leave Maria on a checking filler after a successful ride search", async () => {
+    const appointment = getMariaAppointment(NOW);
+    const complete = scripted([
+      assistantTools([{ name: "get_appointment", args: { date: appointment.start } }]),
+      assistantTools([
+        {
+          name: "find_ride_options",
+          args: {
+            pickup: appointment.pickup,
+            destination: appointment.destination,
+            arriveBy: computeArrivalTarget(appointment),
+          },
+        },
+      ]),
+      assistantText("Let me check for ride options"),
+    ]);
+
+    const result = await runHarnessTurn({
+      transcript: "Please get me a ride to my doctor tomorrow",
+      sessionId: "harness-filler",
+      state: emptyConversationState(),
+      now: NOW,
+      complete,
+    });
+
+    expect(result.kind).toBe("proposal");
+    expect(result.text).toMatch(/Should I set that up\?/);
+    expect(result.text).not.toMatch(/let me check/i);
+    expect(result.activeRequest?.status).toBe("proposed");
+  });
+
   it("accepts a spoken yes against the remembered proposal without booking", async () => {
     const complete = scripted([assistantText("Okay. You'll confirm on the screen before anything is booked.")]);
 

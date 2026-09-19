@@ -17,7 +17,12 @@ import {
   type ConversationTurnResponse,
 } from "@kasama/shared";
 import { resolvePendingApproval } from "./approval";
-import { planFromAuditEvents, runHarnessTurn, type HarnessTurnResult } from "./harness";
+import {
+  isCheckingFiller,
+  planFromAuditEvents,
+  runHarnessTurn,
+  type HarnessTurnResult,
+} from "./harness";
 import { invokeTool } from "./invoke-tool";
 import { openaiChatComplete, type ChatComplete } from "./model";
 import { auditLog } from "./audit-log";
@@ -43,7 +48,7 @@ export type ConversationHttpResult = {
 
 const YES = /\b(yes|yeah|yep|yup|sure|please do|ok|okay|go ahead|that works|sounds good|do it|book it)\b/;
 const NO = /\b(no|nope|don'?t|do not|cancel|never ?mind|stop|not now)\b/;
-const RIDE = /\b(ride|uber|car|taxi|cab|drive|driver|take me|get me to|bring me|pick me up|lift)\b/;
+const RIDE = /\b(ride|uber|wav|wave|wheelchair|car|taxi|cab|drive|driver|take me|get me to|bring me|pick me up|lift)\b/;
 const DOCTOR = /\b(doctor'?s?|dr\.?|appointment|check ?up|clinic|chen|physician)\b/;
 const APPOINTMENT_INFO = /\b(what time|when is|when'?s|what day|do i have|remind me)\b/;
 const VAGUE_PLACE = /\b(somewhere|anywhere|i don'?t know|not sure|dunno|um+|uh+)\b/;
@@ -105,7 +110,7 @@ function lookupAppointment(sessionId: string, date: string): Appointment | null 
 }
 
 function spokenProduct(text: string): "UberX" | "WAV" | undefined {
-  if (/\b(accessible|wav|wheelchair)\b/.test(text)) return "WAV";
+  if (/\b(accessible|wav|wave|wheelchair)\b/.test(text)) return "WAV";
   if (/\b(cheaper|uberx|uber x|regular)\b/.test(text)) return "UberX";
   return undefined;
 }
@@ -174,19 +179,26 @@ function applySpokenProduct(
   transcript: string,
   decided: HarnessTurnResult,
   previous: ActiveRequest | null,
+  sessionId: string,
 ): HarnessTurnResult {
   const product = spokenProduct(normalize(transcript));
-  const active = decided.activeRequest;
-  if (!product || active?.intent !== "ride") {
+  const active =
+    decided.activeRequest?.intent === "ride"
+      ? decided.activeRequest
+      : previous?.intent === "ride"
+        ? previous
+        : null;
+  if (!product || !active) {
     return decided;
   }
   const answeringProposal = previous?.intent === "ride" && previous.status === "proposed";
+  const hasOptions = sessionStore.get(sessionId).lastRideOptions.length > 0;
   return {
     ...decided,
     activeRequest: {
       ...active,
       product,
-      status: answeringProposal && active.status === "proposed" ? "accepted" : active.status,
+      status: answeringProposal || hasOptions ? "accepted" : active.status,
     },
   };
 }
@@ -487,19 +499,28 @@ export async function runConversationTurn(
     };
   } else if (complete) {
     try {
+      const fromModel = applySpokenProduct(
+        request.data.transcript,
+        await runHarnessTurn({
+          transcript: request.data.transcript,
+          sessionId,
+          state,
+          now,
+          complete,
+        }),
+        state.activeRequest,
+        sessionId,
+      );
       decided = maybeOpenBookingCheckpoint(
         sessionId,
-        applySpokenProduct(
-          request.data.transcript,
-          await runHarnessTurn({
-            transcript: request.data.transcript,
-            sessionId,
-            state,
-            now,
-            complete,
-          }),
-          state.activeRequest,
-        ),
+        fromModel.plan.steps.length === 0 && isCheckingFiller(fromModel.text)
+          ? applySpokenProduct(
+              request.data.transcript,
+              runRulesTurn(sessionId, request.data.transcript, state, now),
+              state.activeRequest,
+              sessionId,
+            )
+          : fromModel,
       );
     } catch {
       decided = maybeOpenBookingCheckpoint(
@@ -508,6 +529,7 @@ export async function runConversationTurn(
           request.data.transcript,
           runRulesTurn(sessionId, request.data.transcript, state, now),
           state.activeRequest,
+          sessionId,
         ),
       );
     }
@@ -518,6 +540,7 @@ export async function runConversationTurn(
         request.data.transcript,
         runRulesTurn(sessionId, request.data.transcript, state, now),
         state.activeRequest,
+        sessionId,
       ),
     );
   }
