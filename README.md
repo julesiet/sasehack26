@@ -84,3 +84,7 @@ COMPOSIO_API_KEY=
 ```
 
 Composio (Gmail for Maria / `senior_maria`): `POST /composio/connect` then `POST /composio/execute` (defaults to `GMAIL_GET_PROFILE`; pass `GMAIL_CREATE_EMAIL_DRAFT` or `GMAIL_SEND_EMAIL` for Jules). The key stays in `apps/api/.env`.
+
+## CI
+
+Pull requests and pushes to `main` run `pnpm typecheck` and `pnpm test` in GitHub Actions. Those checks do not need `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY`.
