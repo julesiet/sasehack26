@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { conversationTurnResponseSchema, sessionViewSchema } from "@kasama/shared";
+import {
+  COMPOSIO_DEFAULT_TOOL,
+  conversationTurnResponseSchema,
+  sessionViewSchema,
+} from "@kasama/shared";
 import { app, createApp } from "./app";
 import { auditLog } from "./audit-log";
+import { ComposioNotConfiguredError, type KasamaComposio } from "./composio";
 import { sessionStore } from "./session-store";
 import { SttNotConfiguredError, TtsNotConfiguredError } from "./speech";
 
@@ -551,5 +556,103 @@ describe("POST /speech/speak", () => {
       body: JSON.stringify({ text: "   " }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /composio/connect and /composio/execute", () => {
+  const unusedTranscribe = async () => "unused";
+
+  it("returns 501 when Composio is not configured", async () => {
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new ComposioNotConfiguredError();
+        },
+        execute: async () => {
+          throw new ComposioNotConfiguredError();
+        },
+      },
+    });
+
+    const res = await testApp.request("/composio/connect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(501);
+    expect((await res.json()).error).toBe("composio_not_configured");
+  });
+
+  it("returns a Connect Link and then a profile result with a log id", async () => {
+    const composio: KasamaComposio = {
+      connect: async () => ({
+        userId: "senior_maria",
+        sessionId: "sess_1",
+        toolkit: "gmail",
+        connected: false,
+        redirectUrl: "https://connect.composio.dev/link/ln_gmail",
+      }),
+      execute: async () => ({
+        userId: "senior_maria",
+        sessionId: "sess_1",
+        toolSlug: COMPOSIO_DEFAULT_TOOL,
+        successful: true,
+        data: { emailAddress: "maria@example.com" },
+        logId: "log_abc",
+      }),
+    };
+    const testApp = createApp({ transcribe: unusedTranscribe, composio });
+
+    const connect = await testApp.request("/composio/connect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(connect.status).toBe(200);
+    expect(await connect.json()).toMatchObject({
+      connected: false,
+      redirectUrl: "https://connect.composio.dev/link/ln_gmail",
+    });
+
+    const execute = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(execute.status).toBe(200);
+    expect(await execute.json()).toMatchObject({
+      successful: true,
+      toolSlug: COMPOSIO_DEFAULT_TOOL,
+      logId: "log_abc",
+    });
+  });
+
+  it("returns 409 when execute needs Gmail authorization", async () => {
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new Error("unused");
+        },
+        execute: async () => ({
+          userId: "senior_maria",
+          sessionId: "sess_1",
+          toolSlug: COMPOSIO_DEFAULT_TOOL,
+          successful: false,
+          needsAuth: true,
+          toolkit: "gmail",
+          redirectUrl: "https://connect.composio.dev/link/ln_gmail",
+        }),
+      },
+    });
+
+    const res = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(409);
+    expect((await res.json()).needsAuth).toBe(true);
   });
 });
