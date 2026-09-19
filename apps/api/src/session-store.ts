@@ -259,6 +259,24 @@ export function createSessionStore(): SessionStore {
         return toView(state);
       }
 
+      if (decision.preview && tool === "notify_caretaker") {
+        state.pendingApproval = {
+          tool,
+          input,
+          reason: "confirmation_required",
+          summary: "This action requires a confirmation token from a human.",
+          timestamp: event.timestamp,
+          status: "pending",
+          ...describePendingApproval({
+            tool,
+            toolInput: input,
+            rideOptions: state.lastRideOptions,
+          }),
+        };
+        appendCaretakerActivity(state, input, event, false);
+        return toView(state);
+      }
+
       if (state.pendingApproval?.tool === tool) {
         state.lastApproval = {
           tool,

@@ -144,10 +144,28 @@ describe("evaluateToolCall", () => {
     expect(decision.reason).toBe("confirmation_required");
   });
 
-  it("does not allow notify_caretaker send to skip confirmation", () => {
+  it("drafts notify_caretaker automatically when send confirmation is missing", () => {
     const decision = evaluateToolCall("notify_caretaker", model);
+    expect(decision.allowed).toBe(true);
+    expect(decision.preview).toBe(true);
+    expect(decision.action).toBe("draft_caretaker_message");
+    expect(evaluateAction("send_message", model).reason).toBe("confirmation_required");
+  });
+
+  it("sends notify_caretaker only with a human approval token", () => {
+    const decision = evaluateToolCall("notify_caretaker", seniorApproved);
+    expect(decision.allowed).toBe(true);
+    expect(decision.preview).toBeUndefined();
+    expect(decision.action).toBe("send_message");
+  });
+
+  it("rejects a model self-approved notify_caretaker send", () => {
+    const decision = evaluateToolCall("notify_caretaker", {
+      actor: "model",
+      approvalToken: "tok_yes",
+    });
     expect(decision.allowed).toBe(false);
-    expect(decision.reason).toBe("confirmation_required");
+    expect(decision.reason).toBe("model_cannot_self_approve");
   });
 
   it("treats book_ride as spending money, so it cannot skip that check", () => {

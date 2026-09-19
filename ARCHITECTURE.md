@@ -96,7 +96,7 @@ When `MODEL_API_KEY` is set, `apps/api/src/harness.ts` asks ChatGPT (Chat Comple
 
 Rules the harness keeps:
 
-- Every tool call goes through `invokeTool`, so policy and audit apply (`get_appointment`, `find_ride_options`). `book_ride` / `notify_caretaker` from the model are denied (`confirmation_required`) — not a failure. That denial becomes `pendingApproval`. The first "yes" on a ride plan asks "The Uber is $24.50. Should I book it?" A second human yes, or `POST /approvals`, books as `senior` with a token. "No" logs `declined_by_human` and does not execute.
+- Every tool call goes through `invokeTool`, so policy and audit apply (`get_appointment`, `find_ride_options`). `book_ride` from the model is denied (`confirmation_required`) — not a failure. `notify_caretaker` without a human token is an automatic draft (`preview`, not sent) and still opens `pendingApproval` for send. A model token cannot send (`model_cannot_self_approve`). The first "yes" on a ride plan asks "The Uber is $24.50. Should I book it?" A second human yes, or `POST /approvals`, books as `senior` with a token. "No" logs `declined_by_human` and does not execute.
 - At most `MAX_CLARIFICATIONS_PER_REQUEST` (1) clarifying question per request. At most `MAX_TOOL_ROUNDS_PER_TURN` (4) ChatGPT tool rounds; hitting the cap is a `handoff`.
 - `plan.steps` lists tools run this turn (`ok` / `denied` / `failed`). `failure` is `retry` or `handoff` when a tool actually failed — never a fake booking.
 - Session memory: `sessionView.conversation` = `{ turns, activeRequest, clarificationsAsked, plan, failure }`. Maria can say "yes" on the next turn without restating the appointment.
@@ -112,7 +112,7 @@ Live provider tools go through Composio Platform sessions (`apps/api/src/composi
 - `POST /composio/connect` — create or resume a session and return a Gmail Connect Link when the account is not connected
 - `POST /composio/execute` — `session.execute`. Default remains `GMAIL_GET_PROFILE` (`user_id: "me"`). Pass `toolSlug: "GMAIL_CREATE_EMAIL_DRAFT"` or `GMAIL_SEND_EMAIL` (documented at https://docs.composio.dev/toolkits/gmail.md). Omitted caretaker fields fill `GMAIL_CARETAKER_DRAFT_ARGUMENTS` / `GMAIL_CARETAKER_SEND_ARGUMENTS` (`juleselvandrade@gmail.com`). `GMAIL_SEND_DRAFT` is rejected. `409` + Connect Link if Gmail is not authorized
 
-Calendar stays seeded; Uber uses the controlled provider. Do not send caretaker mail through Composio until `notify_caretaker` policy still gates it.
+Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` drafts without a token and mocks email/SMS after a human yes. Do not send caretaker mail through Composio until that same policy still gates it.
 
 ## Shared contracts
 
@@ -139,7 +139,7 @@ Live Uber (official API or Browserbase) is issue `#14`. A later adapter implemen
 
 ## What is not built yet
 
-Agent playground (`#13`), live Uber (`#14`), ride-option cards (`#8`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
+Agent playground (`#13`), live Uber (`#14`), ride-option cards (`#8`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`. `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
 
 Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
 
