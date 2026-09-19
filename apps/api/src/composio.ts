@@ -3,6 +3,7 @@ import {
   COMPOSIO_DEFAULT_TOOL,
   COMPOSIO_DEFAULT_TOOLKIT,
   MARIA_PROFILE,
+  resolveComposioExecuteArguments,
   type ComposioConnectRequest,
   type ComposioConnectResponse,
   type ComposioExecuteRequest,
@@ -143,7 +144,10 @@ export function createKasamaComposio(
         };
       }
 
-      const result = await session.execute(toolSlug, input.arguments ?? { user_id: "me" });
+      const result = await session.execute(
+        toolSlug,
+        resolveComposioExecuteArguments(toolSlug, input.arguments),
+      );
       return {
         userId,
         sessionId: session.sessionId,

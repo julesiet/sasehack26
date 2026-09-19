@@ -1,17 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPOSIO_CARETAKER_RECIPIENT,
   COMPOSIO_DEFAULT_TOOL,
   COMPOSIO_DEFAULT_TOOLKIT,
+  COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+  COMPOSIO_GMAIL_SEND_TOOL,
+  GMAIL_CARETAKER_DRAFT_ARGUMENTS,
+  GMAIL_CARETAKER_SEND_ARGUMENTS,
   composioConnectRequestSchema,
   composioConnectResponseSchema,
   composioExecuteRequestSchema,
   composioExecuteResponseSchema,
+  resolveComposioExecuteArguments,
 } from "./composio";
 
 describe("composio contract", () => {
   it("defaults the first integration to documented Gmail profile read", () => {
     expect(COMPOSIO_DEFAULT_TOOLKIT).toBe("gmail");
     expect(COMPOSIO_DEFAULT_TOOL).toBe("GMAIL_GET_PROFILE");
+  });
+
+  it("exposes documented Gmail draft and send slugs without changing the default", () => {
+    expect(COMPOSIO_GMAIL_CREATE_DRAFT_TOOL).toBe("GMAIL_CREATE_EMAIL_DRAFT");
+    expect(COMPOSIO_GMAIL_SEND_TOOL).toBe("GMAIL_SEND_EMAIL");
+    expect(COMPOSIO_CARETAKER_RECIPIENT).toBe("juleselvandrade@gmail.com");
   });
 
   it("allows an empty connect body and a Connect Link response", () => {
@@ -37,5 +49,44 @@ describe("composio contract", () => {
       logId: "log_abc",
     });
     expect(parsed.logId).toBe("log_abc");
+  });
+
+  it("accepts draft and send slugs and rejects GMAIL_SEND_DRAFT", () => {
+    expect(
+      composioExecuteRequestSchema.parse({
+        toolSlug: COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+      }).toolSlug,
+    ).toBe("GMAIL_CREATE_EMAIL_DRAFT");
+    expect(
+      composioExecuteRequestSchema.parse({
+        toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      }).toolSlug,
+    ).toBe("GMAIL_SEND_EMAIL");
+    expect(
+      composioExecuteRequestSchema.safeParse({ toolSlug: "GMAIL_SEND_DRAFT" }).success,
+    ).toBe(false);
+  });
+
+  it("fills caretaker draft and send arguments and keeps caller overrides", () => {
+    expect(resolveComposioExecuteArguments(COMPOSIO_DEFAULT_TOOL)).toEqual({
+      user_id: "me",
+    });
+    expect(resolveComposioExecuteArguments(COMPOSIO_GMAIL_CREATE_DRAFT_TOOL)).toEqual(
+      GMAIL_CARETAKER_DRAFT_ARGUMENTS,
+    );
+    expect(resolveComposioExecuteArguments(COMPOSIO_GMAIL_SEND_TOOL)).toEqual(
+      GMAIL_CARETAKER_SEND_ARGUMENTS,
+    );
+    expect(
+      resolveComposioExecuteArguments(COMPOSIO_GMAIL_SEND_TOOL, {
+        subject: "Ride booked",
+        body: "Maria's WAV is confirmed.",
+      }),
+    ).toMatchObject({
+      user_id: "me",
+      recipient_email: COMPOSIO_CARETAKER_RECIPIENT,
+      subject: "Ride booked",
+      body: "Maria's WAV is confirmed.",
+    });
   });
 });
