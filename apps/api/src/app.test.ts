@@ -928,6 +928,38 @@ describe("POST /composio/connect and /composio/execute", () => {
     });
   });
 
+  it("returns 409 with a Connect Link when a draft execute needs Gmail authorization", async () => {
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new Error("unused");
+        },
+        execute: async (input?: { toolSlug?: string }) => ({
+          userId: "senior_maria",
+          sessionId: "sess_1",
+          toolSlug: input?.toolSlug ?? COMPOSIO_DEFAULT_TOOL,
+          successful: false,
+          needsAuth: true,
+          toolkit: "gmail",
+          redirectUrl: "https://connect.composio.dev/link/ln_gmail",
+        }),
+      },
+    });
+
+    const res = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ toolSlug: COMPOSIO_GMAIL_CREATE_DRAFT_TOOL }),
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      needsAuth: true,
+      toolSlug: COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+      redirectUrl: "https://connect.composio.dev/link/ln_gmail",
+    });
+  });
+
   it("sends Gmail when the caller asks for the documented send tool", async () => {
     const execute = async (input?: { toolSlug?: string }) => ({
       userId: "senior_maria",

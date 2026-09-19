@@ -3,6 +3,7 @@ import {
   COMPOSIO_DEFAULT_TOOL,
   COMPOSIO_DEFAULT_TOOLKIT,
   MARIA_PROFILE,
+  normalizeComposioExecuteData,
   resolveComposioExecuteArguments,
   type ComposioConnectRequest,
   type ComposioConnectResponse,
@@ -153,7 +154,7 @@ export function createKasamaComposio(
         sessionId: session.sessionId,
         toolSlug,
         successful: !result.error,
-        data: result.data,
+        data: normalizeComposioExecuteData(toolSlug, result.data),
         ...(result.logId ? { logId: result.logId } : {}),
         ...(result.error ? { error: result.error } : {}),
       };
