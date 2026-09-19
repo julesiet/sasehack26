@@ -52,10 +52,8 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={[
-          styles.body,
-          { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 36 },
-        ]}
+        contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={[styles.body, { paddingTop: insets.top + 18 }]}
       >
         <View style={styles.sky}>
           <View style={styles.dateRow}>
@@ -78,7 +76,10 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
           <ContactsRow contacts={dashboard.contacts} />
         </View>
 
-        <LinearGradient colors={[colors.bowlTop, colors.bowlBottom]} style={styles.bowl}>
+        <LinearGradient
+          colors={[colors.bowlTop, colors.bowlBottom]}
+          style={[styles.bowl, { paddingBottom: Math.max(insets.bottom, 20) }]}
+        >
           <View style={styles.overviewHeader}>
             <Text style={styles.overviewTitle}>Overview</Text>
             {dashboard.overviewBadge ? (
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
   sky: {
     paddingHorizontal: 24,
     gap: 22,
-    paddingBottom: 28,
+    paddingBottom: 8,
   },
   dateRow: {
     flexDirection: "row",
@@ -158,11 +159,11 @@ const styles = StyleSheet.create({
   bowl: {
     borderTopLeftRadius: 88,
     borderTopRightRadius: 88,
+    marginTop: -20,
     paddingHorizontal: 20,
-    paddingTop: 28,
-    paddingBottom: 16,
+    paddingTop: 72,
     gap: 16,
-    minHeight: 520,
+    flexGrow: 1,
   },
   overviewHeader: {
     flexDirection: "row",
