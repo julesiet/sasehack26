@@ -83,8 +83,18 @@ export function declinedNotifyReply(): string {
   return "Okay. I will not send that message. Is there anything else you need?";
 }
 
-export function approvedBookingReply(estimate: string = DEMO_UBER_WAV_ESTIMATE): string {
-  return `Okay. I booked that Uber for ${estimate}.`;
+export function approvedBookingReply(input: {
+  estimate?: string;
+  product?: "UberX" | "WAV";
+  confirmationId: string;
+}): string {
+  const estimate = input.estimate ?? DEMO_UBER_WAV_ESTIMATE;
+  const spoken = input.product === "UberX" ? "UberX" : "wheelchair Uber";
+  return `I booked the ${spoken} for ${estimate}. Your confirmation is ${input.confirmationId}.`;
+}
+
+export function failedBookingReply(): string {
+  return "I couldn't confirm that Uber booking. Nothing was charged. We can try again.";
 }
 
 export function approvedNotifyReply(): string {

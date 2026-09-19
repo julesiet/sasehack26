@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pendingApprovalSchema } from "./approval";
-import { toolNameSchema } from "./tools";
+import { toolNameSchema, uberProductSchema } from "./tools";
 
 /**
  * Voice conversation loop contracts (#4).
@@ -72,6 +72,7 @@ export const activeRequestSchema = z.object({
   /** ISO date (YYYY-MM-DD) Kasama resolved from words like "tomorrow". */
   date: z.string().optional(),
   appointmentId: z.string().optional(),
+  product: uberProductSchema.optional(),
   status: z.enum(["gathering", "proposed", "accepted"]),
 });
 export type ActiveRequest = z.infer<typeof activeRequestSchema>;

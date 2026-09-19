@@ -34,6 +34,17 @@ describe("conversation contract", () => {
     });
   });
 
+  it("accepts a preferred Uber product on the active request", () => {
+    const parsed = conversationTurnResponseSchema.parse({
+      sessionId: "default",
+      reply: "Should I set that up?",
+      kind: "proposal",
+      activeRequest: { intent: "ride", status: "proposed", product: "WAV" },
+      clarificationsAsked: 0,
+    });
+    expect(parsed.activeRequest?.product).toBe("WAV");
+  });
+
   it("accepts a proposal response", () => {
     const parsed = conversationTurnResponseSchema.parse({
       sessionId: "default",

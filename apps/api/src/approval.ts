@@ -5,10 +5,12 @@ import {
   approvedNotifyReply,
   declinedBookingReply,
   declinedNotifyReply,
+  failedBookingReply,
   resolveSessionId,
   type ActiveRequest,
   type Actor,
   type ApprovalChoice,
+  type ConversationFailure,
   type ConversationPlan,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
@@ -25,6 +27,7 @@ export type ResolvedApproval = {
   reply: string;
   activeRequest: ActiveRequest | null;
   plan: ConversationPlan;
+  failure: ConversationFailure | null;
 };
 
 function humanToken(actor: Actor): string {
@@ -44,6 +47,7 @@ export function resolvePendingApproval(input: {
       reply: "There is nothing waiting for a yes or no right now.",
       activeRequest: sessionStore.getConversation(sessionId).activeRequest,
       plan: { steps: [] },
+      failure: null,
     };
   }
 
@@ -54,6 +58,7 @@ export function resolvePendingApproval(input: {
       reply: pending.tool === "notify_caretaker" ? declinedNotifyReply() : declinedBookingReply(),
       activeRequest: view.conversation.activeRequest,
       plan: planFromAuditEvents(auditLog.list().slice(before)),
+      failure: null,
     };
   }
 
@@ -66,15 +71,46 @@ export function resolvePendingApproval(input: {
     consentGranted: true,
   });
   const view = sessionStore.get(sessionId);
-  const estimate = pending.estimate;
-  const reply =
-    pending.tool === "notify_caretaker"
-      ? approvedNotifyReply()
-      : approvedBookingReply(estimate);
+  if (pending.tool === "notify_caretaker") {
+    return {
+      reply: approvedNotifyReply(),
+      activeRequest: view.conversation.activeRequest,
+      plan: planFromAuditEvents(auditLog.list().slice(before)),
+      failure: null,
+    };
+  }
+
+  const confirmationId = view.lastBooking?.confirmationId;
+  const option = view.lastRideOptions.find((item) => {
+    const input = pending.input;
+    return (
+      input &&
+      typeof input === "object" &&
+      "optionId" in input &&
+      item.optionId === String((input as { optionId: unknown }).optionId)
+    );
+  });
+  if (!confirmationId) {
+    return {
+      reply: failedBookingReply(),
+      activeRequest: view.conversation.activeRequest,
+      plan: planFromAuditEvents(auditLog.list().slice(before)),
+      failure: {
+        kind: "retry",
+        tool: "book_ride",
+        summary: "Uber booking could not be confirmed.",
+      },
+    };
+  }
   return {
-    reply,
+    reply: approvedBookingReply({
+      estimate: pending.estimate ?? option?.estimate,
+      product: option?.product,
+      confirmationId,
+    }),
     activeRequest: view.conversation.activeRequest,
     plan: planFromAuditEvents(auditLog.list().slice(before)),
+    failure: null,
   };
 }
 
@@ -109,7 +145,7 @@ export function decideApproval(raw: unknown): ApprovalHttpResult {
     activeRequest: resolved.activeRequest,
     askedClarification: false,
     plan: resolved.plan,
-    failure: null,
+    failure: resolved.failure,
     timestamp: new Date().toISOString(),
   });
 
