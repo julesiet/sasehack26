@@ -84,7 +84,7 @@ Calendar and Uber are **stubs**. Policy and audit are real. Live Uber is later (
 
 Expo Go only (`pnpm start` or `pnpm ios`). Add only Expo Go–compatible packages; no native speech-to-text modules and no `expo prebuild`. Speech-to-text and Kasama's voice run on the API via ElevenLabs. The device falls back to `expo-speech` if TTS is not configured.
 
-Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Senior tabs: Home (sun welcome), Chat (last started conversation), Tasks (empty). Active tab is sun orange. Confirmation is a descriptive Cancel / Confirm card that only appears for a pending (or just-finished) decision. Tap targets ≥ 68pt on senior actions; the tab bar is compact.
+Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Senior tabs: Home (sun welcome), Chat (last started conversation), Tasks (empty). Active tab is sun orange. On Home the compact tab bar is 80% opaque over the sun. Confirmation is a descriptive Cancel / Confirm card that only appears for a pending (or just-finished) decision. Tap targets ≥ 68pt on senior actions.
 
 ## Safety (non-negotiable)
 

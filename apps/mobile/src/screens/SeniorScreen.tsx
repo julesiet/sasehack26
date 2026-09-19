@@ -14,7 +14,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ComposerPill } from "../components/ComposerPill";
 import { OverflowMenu } from "../components/OverflowMenu";
-import { SeniorTabBar, type SeniorTab } from "../components/SeniorTabBar";
+import {
+  SENIOR_TAB_ROW_HEIGHT,
+  SeniorTabBar,
+  type SeniorTab,
+} from "../components/SeniorTabBar";
 import { SunBowl } from "../components/SunBowl";
 import { SunOrb, type OrbMode } from "../components/SunOrb";
 import {
@@ -178,6 +182,7 @@ export function SeniorScreen({ onBack }: Props) {
             />
           </View>
         ) : null}
+        <View style={{ height: SENIOR_TAB_ROW_HEIGHT + Math.max(insets.bottom, 8) }} />
       </KeyboardAvoidingView>
 
       <SeniorTabBar

@@ -36,7 +36,7 @@ Do not add `apps/web` or an Android app. Do not move contracts out of `packages/
 - Expo SDK in `apps/mobile`, Expo Go via `pnpm start` / `pnpm dev` or Simulator via `pnpm ios` (no dev client, so no native speech-to-text modules)
 - `EXPO_PUBLIC_API_URL` defaults to `http://localhost:3001` (Simulator). On a phone, set it to `http://<mac-lan-ip>:3001` in `apps/mobile/.env` — that host is also used for the Expo QR (`REACT_NATIVE_PACKAGER_HOSTNAME`). The API listens on `0.0.0.0`.
 - StyleSheet + tokens in `apps/mobile/src/theme.ts`
-- Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`. `HomeScreen` is unchanged. Senior tabs: **Home** (sun welcome), **Chat** (last started conversation), **Tasks** (empty). Chat is disabled until Kasama has replied. Active tab is sun orange. Composer stays on Home and Chat, above a compact tab bar.
+- Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`. `HomeScreen` is unchanged. Senior tabs: **Home** (sun welcome), **Chat** (last started conversation), **Tasks** (empty). Chat is disabled until Kasama has replied. Active tab is sun orange. Composer stays on Home and Chat, above a compact tab bar. On Home the bar overlays the sun at 80% opacity so the bowl is not hard-cropped; Chat and Tasks stay solid. Spacing vs the home indicator is interim — polish is [#27](https://github.com/julesiet/sasehack26/issues/27).
 - Designed UI replaces those screens; it does not replace the API
 
 ### Senior conversation screen (`#4`)
