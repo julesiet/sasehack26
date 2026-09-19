@@ -325,4 +325,57 @@ describe("runConversationTurn", () => {
     expect(reply.pendingApproval?.input).toEqual({ optionId: "uberx_1" });
     expect(reply.pendingApproval?.estimate).toBe("$18.00");
   });
+
+  it("replaces a WAV checkpoint when ChatGPT books WAV but Maria said cheaper", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    let calls = 0;
+    const result = await runConversationTurn(
+      { transcript: "the cheaper one", sessionId: "voice-1" },
+      {
+        complete: async () => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_wav",
+                  type: "function",
+                  function: {
+                    name: "book_ride",
+                    arguments: JSON.stringify({ optionId: "uber_wav_1" }),
+                  },
+                },
+              ],
+            };
+          }
+          return { role: "assistant", content: "I'll book the accessible Uber." };
+        },
+      },
+    );
+    expect(result.status).toBe(200);
+    const reply = conversationTurnResponseSchema.parse(result.body);
+    expect(reply.pendingApproval?.input).toEqual({ optionId: "uberx_1" });
+    expect(reply.pendingApproval?.estimate).toBe("$18.00");
+  });
+
+  it("does not treat a prior booking as proof when a later approve fails", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    await turn("Yes");
+    await turn("Yes, book it");
+    const firstBooking = sessionStore.get("voice-1").lastBooking;
+    expect(firstBooking?.confirmationId).toBe("UBER-WAV-0001");
+
+    await turn("Get me a ride to my doctor tomorrow");
+    await turn("Yes");
+    resetControlledUberProvider({ failNextVerify: true });
+    const reply = await turn("Yes, book it");
+
+    expect(reply.reply).toBe(
+      "I couldn't confirm that Uber booking. Nothing was charged. We can try again.",
+    );
+    expect(reply.reply).not.toMatch(/booked/i);
+    expect(sessionStore.get("voice-1").lastBooking).toEqual(firstBooking);
+  });
 });

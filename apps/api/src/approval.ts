@@ -63,7 +63,7 @@ export function resolvePendingApproval(input: {
   }
 
   const before = auditLog.list().length;
-  invokeTool(pending.tool, {
+  const invoked = invokeTool(pending.tool, {
     input: pending.input,
     actor: input.actor,
     approvalToken: humanToken(input.actor),
@@ -80,7 +80,12 @@ export function resolvePendingApproval(input: {
     };
   }
 
-  const confirmationId = view.lastBooking?.confirmationId;
+  const confirmationId =
+    invoked.status === 200 &&
+    invoked.body.success === true &&
+    typeof invoked.body.confirmationId === "string"
+      ? invoked.body.confirmationId
+      : undefined;
   const option = view.lastRideOptions.find((item) => {
     const input = pending.input;
     return (
