@@ -1,17 +1,28 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { healthSchema } from "@kasama/shared";
+import { healthSchema, speakRequestSchema } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { runConversationTurn } from "./conversation";
 import { invokeTool } from "./invoke-tool";
 import { sessionStore } from "./session-store";
-import { SttNotConfiguredError, transcriber, type Transcriber } from "./speech";
+import {
+  SttNotConfiguredError,
+  TtsNotConfiguredError,
+  speaker,
+  transcriber,
+  type Speaker,
+  type Transcriber,
+} from "./speech";
 
 export type AppDeps = {
   transcribe: Transcriber;
+  speak?: Speaker;
 };
 
-export function createApp({ transcribe }: AppDeps = { transcribe: transcriber }): Hono {
+export function createApp({
+  transcribe,
+  speak = speaker,
+}: AppDeps = { transcribe: transcriber, speak: speaker }): Hono {
   const app = new Hono();
 
   app.use(
@@ -30,6 +41,7 @@ export function createApp({ transcribe }: AppDeps = { transcribe: transcriber })
       audit: "GET /audit",
       conversation: "POST /conversation/turn",
       transcribe: "POST /speech/transcribe",
+      speak: "POST /speech/speak",
       hint: "This is the API. The app runs in the iOS Simulator via pnpm ios.",
     });
   });
@@ -116,6 +128,38 @@ export function createApp({ transcribe }: AppDeps = { transcribe: transcriber })
       }
       const summary = error instanceof Error ? error.message : "Transcription failed.";
       return c.json({ error: "transcription_failed", summary }, 502);
+    }
+  });
+
+  /** `{ text }` → MPEG audio of Kasama speaking. Falls back to iOS speech on the device if 501. */
+  app.post("/speech/speak", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "bad_request", summary: "Request body must be JSON." }, 400);
+    }
+
+    const request = speakRequestSchema.safeParse(raw);
+    if (!request.success) {
+      return c.json({ error: "bad_request", summary: "Reply text is required." }, 400);
+    }
+
+    try {
+      const spoken = await speak(request.data.text);
+      return c.body(Buffer.from(spoken.bytes), 200, { "Content-Type": spoken.contentType });
+    } catch (error) {
+      if (error instanceof TtsNotConfiguredError) {
+        return c.json(
+          {
+            error: "tts_not_configured",
+            summary: "Kasama's ElevenLabs voice is not configured. Set ELEVENLABS_API_KEY.",
+          },
+          501,
+        );
+      }
+      const summary = error instanceof Error ? error.message : "Speech failed.";
+      return c.json({ error: "tts_failed", summary }, 502);
     }
   });
 

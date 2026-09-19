@@ -49,7 +49,7 @@ pnpm ios
 
 The Simulator can reach the API at `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). Kasama speaks back with iOS speech.
 
-Speech-to-text runs on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the Senior screen asks you to type instead. The Simulator uses your Mac's microphone.
+Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env` (the key needs Speech to Text **and** Text to Speech). Without it the Senior screen asks you to type and uses iOS speech for replies. The Simulator uses your Mac's microphone.
 
 ## Env
 

@@ -3,7 +3,7 @@ import { conversationTurnResponseSchema, sessionViewSchema } from "@kasama/share
 import { app, createApp } from "./app";
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
-import { SttNotConfiguredError } from "./speech";
+import { SttNotConfiguredError, TtsNotConfiguredError } from "./speech";
 
 beforeEach(() => {
   auditLog.clear();
@@ -496,5 +496,60 @@ describe("POST /speech/transcribe", () => {
       body: audioForm(),
     });
     expect(res.status).toBe(502);
+  });
+});
+
+describe("POST /speech/speak", () => {
+  it("returns mpeg audio from the configured speaker", async () => {
+    const bytes = new Uint8Array([9, 8, 7]);
+    const testApp = createApp({
+      transcribe: async () => "unused",
+      speak: async (text) => {
+        expect(text).toBe("Should I set that up?");
+        return { bytes, contentType: "audio/mpeg" };
+      },
+    });
+
+    const res = await testApp.request("/speech/speak", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "Should I set that up?" }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/audio\/mpeg/);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
+  });
+
+  it("returns 501 tts_not_configured when no key is set", async () => {
+    const testApp = createApp({
+      transcribe: async () => "unused",
+      speak: async () => {
+        throw new TtsNotConfiguredError();
+      },
+    });
+
+    const res = await testApp.request("/speech/speak", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "Hello" }),
+    });
+    expect(res.status).toBe(501);
+    const body = await res.json();
+    expect(body.error).toBe("tts_not_configured");
+  });
+
+  it("rejects an empty reply", async () => {
+    const testApp = createApp({
+      transcribe: async () => "unused",
+      speak: async () => {
+        throw new Error("should not speak");
+      },
+    });
+    const res = await testApp.request("/speech/speak", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "   " }),
+    });
+    expect(res.status).toBe(400);
   });
 });

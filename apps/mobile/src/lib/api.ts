@@ -61,3 +61,17 @@ export async function transcribeRecording(uri: string): Promise<string> {
   if (!res.ok) throw await readError(res);
   return transcribeResponseSchema.parse(await res.json()).transcript;
 }
+
+/**
+ * Fetch ElevenLabs audio for Kasama's reply.
+ * Throws `ApiError` with `code === "tts_not_configured"` when the API has no key.
+ */
+export async function fetchKasamaVoice(text: string): Promise<Uint8Array> {
+  const res = await fetch(`${apiUrl}/speech/speak`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw await readError(res);
+  return new Uint8Array(await res.arrayBuffer());
+}

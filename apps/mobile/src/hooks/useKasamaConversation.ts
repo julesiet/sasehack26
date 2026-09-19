@@ -2,14 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking } from "react-native";
 import {
   RecordingPresets,
+  createAudioPlayer,
   getRecordingPermissionsAsync,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioRecorder,
+  type AudioPlayer,
 } from "expo-audio";
+import { File, Paths } from "expo-file-system";
 import * as Speech from "expo-speech";
 import { DEFAULT_SESSION_ID, type ConversationReplyKind } from "@kasama/shared";
-import { ApiError, postConversationTurn, transcribeRecording } from "../lib/api";
+import { ApiError, fetchKasamaVoice, postConversationTurn, transcribeRecording } from "../lib/api";
 
 /**
  * Conversation phases. Each one maps to a designed state on the senior screen.
@@ -56,26 +59,34 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     notice: null,
   });
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
   const mounted = useRef(true);
+
+  const stopVoice = useCallback(() => {
+    void Speech.stop();
+    const player = playerRef.current;
+    if (player) {
+      player.pause();
+      player.remove();
+      playerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
       if (stopTimer.current) clearTimeout(stopTimer.current);
-      Speech.stop();
+      stopVoice();
     };
-  }, []);
+  }, [stopVoice]);
 
   const patch = useCallback((next: Partial<ConversationUiState>) => {
     if (mounted.current) setState((prev) => ({ ...prev, ...next }));
   }, []);
 
-  const speak = useCallback(
-    (text: string, kind: ConversationReplyKind) => {
-      const settle = () => patch({ phase: kind === "clarification" ? "clarify" : "idle" });
-      patch({ phase: "speaking", kasamaText: text, kasamaKind: kind, notice: null });
-      Speech.stop();
+  const speakWithDevice = useCallback(
+    (text: string, settle: () => void) => {
       Speech.speak(text, {
         language: SPEECH_LANGUAGE,
         rate: SPEECH_RATE,
@@ -84,7 +95,39 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         onError: settle,
       });
     },
-    [patch],
+    [],
+  );
+
+  const speak = useCallback(
+    async (text: string, kind: ConversationReplyKind) => {
+      const settle = () => patch({ phase: kind === "clarification" ? "clarify" : "idle" });
+      stopVoice();
+      patch({ phase: "speaking", kasamaText: text, kasamaKind: kind, notice: null });
+
+      try {
+        const bytes = await fetchKasamaVoice(text);
+        if (!mounted.current) return;
+        const file = new File(Paths.cache, "kasama-reply.mp3");
+        if (!file.exists) file.create();
+        file.write(bytes);
+        await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+        const player = createAudioPlayer({ uri: file.uri });
+        playerRef.current = player;
+        player.addListener("playbackStatusUpdate", (status) => {
+          if (!status.didJustFinish) return;
+          if (playerRef.current === player) {
+            player.remove();
+            playerRef.current = null;
+          }
+          settle();
+        });
+        player.play();
+      } catch {
+        if (!mounted.current) return;
+        speakWithDevice(text, settle);
+      }
+    },
+    [patch, speakWithDevice, stopVoice],
   );
 
   const sendTurn = useCallback(
@@ -94,7 +137,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
       patch({ phase: "thinking", seniorText: clean, notice: null });
       try {
         const reply = await postConversationTurn(clean, sessionId);
-        speak(reply.reply, reply.kind);
+        await speak(reply.reply, reply.kind);
       } catch (error) {
         patch({
           phase: "error",
@@ -166,26 +209,27 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         await stopListening();
         return;
       case "speaking":
-        await Speech.stop();
+        stopVoice();
+        patch({ phase: state.kasamaKind === "clarification" ? "clarify" : "idle" });
         return;
       case "thinking":
         return;
       default:
         await startListening();
     }
-  }, [startListening, state.phase, stopListening]);
+  }, [patch, startListening, state.kasamaKind, state.phase, stopListening, stopVoice]);
 
   const submitText = useCallback(
     async (text: string) => {
       if (state.phase === "listening" || state.phase === "thinking") return;
-      await Speech.stop();
+      stopVoice();
       await sendTurn(text);
     },
-    [sendTurn, state.phase],
+    [sendTurn, state.phase, stopVoice],
   );
 
   const repeatLastReply = useCallback(() => {
-    if (state.kasamaText && state.kasamaKind) speak(state.kasamaText, state.kasamaKind);
+    if (state.kasamaText && state.kasamaKind) void speak(state.kasamaText, state.kasamaKind);
   }, [speak, state.kasamaKind, state.kasamaText]);
 
   const openSettings = useCallback(() => {

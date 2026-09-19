@@ -85,3 +85,9 @@ export const transcribeUnavailableSchema = z.object({
   error: z.literal("stt_not_configured"),
   summary: z.string(),
 });
+
+/** `POST /speech/speak` body. Kasama's reply, spoken by ElevenLabs. */
+export const speakRequestSchema = z.object({
+  text: z.string().trim().min(1),
+});
+export type SpeakRequest = z.infer<typeof speakRequestSchema>;

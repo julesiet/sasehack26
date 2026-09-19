@@ -55,7 +55,7 @@ Do not add `apps/web` or an Android app. Do not move contracts out of `packages/
 
 Text ≥ 28pt for anything Maria must read; tap targets ≥ 68pt. Ride cards and confirmation are `#8`, not this screen.
 
-Loop: mic → `expo-audio` records (≤ 15 s or tap) → `POST /speech/transcribe` → `POST /conversation/turn` → `expo-speech` speaks the reply on device. If the API returns `501 stt_not_configured`, the screen tells Maria to type and focuses the field. Session id is `DEFAULT_SESSION_ID` so the caretaker view polls the same conversation.
+Loop: mic → `expo-audio` records (≤ 15 s or tap) → `POST /speech/transcribe` → `POST /conversation/turn` → `POST /speech/speak` (ElevenLabs) → play on device. If STT is `501`, the screen tells Maria to type. If TTS is `501`, the device falls back to `expo-speech`. Session id is `DEFAULT_SESSION_ID` so the caretaker view polls the same conversation.
 
 ## API
 
@@ -93,7 +93,9 @@ Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/sh
 - At most `MAX_CLARIFICATIONS_PER_REQUEST` (1) clarifying question per request. A second vague answer drops the request gracefully.
 - Session memory: `sessionView.conversation` = `{ turns, activeRequest, clarificationsAsked }`. Maria can say "yes" on the next turn without restating the appointment.
 
-`POST /speech/transcribe` — multipart `file` (m4a) → `{ transcript }` via ElevenLabs Scribe (`apps/api/src/speech.ts`, `ELEVENLABS_API_KEY`). `501 { error: "stt_not_configured" }` when no key; `502` on provider failure. Keys never reach the app.
+`POST /speech/transcribe` — multipart `file` (m4a) → `{ transcript }` via ElevenLabs Scribe (`apps/api/src/speech.ts`, `ELEVENLABS_API_KEY`). `501 { error: "stt_not_configured" }` when no key; `502` on provider failure.
+
+`POST /speech/speak` — `{ text }` → MPEG audio of Kasama via ElevenLabs TTS (same key; optional `ELEVENLABS_VOICE_ID`, default Sarah / `EXAVITQu4vr4xnSDxMaL`). `501 { error: "tts_not_configured" }` when no key. The iOS app plays the clip with `expo-audio` and falls back to `expo-speech`. Keys never reach the app. The ElevenLabs key needs **Speech to Text** and **Text to Speech**.
 
 ## Shared contracts
 

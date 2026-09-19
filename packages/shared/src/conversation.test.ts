@@ -4,6 +4,7 @@ import {
   conversationTurnRequestSchema,
   conversationTurnResponseSchema,
   emptyConversationState,
+  speakRequestSchema,
 } from "./conversation";
 
 describe("conversation contract", () => {
@@ -40,5 +41,10 @@ describe("conversation contract", () => {
       clarificationsAsked: 0,
     });
     expect(parsed.kind).toBe("proposal");
+  });
+
+  it("requires reply text for Kasama's voice", () => {
+    expect(speakRequestSchema.safeParse({ text: "Should I set that up?" }).success).toBe(true);
+    expect(speakRequestSchema.safeParse({ text: "  " }).success).toBe(false);
   });
 });
