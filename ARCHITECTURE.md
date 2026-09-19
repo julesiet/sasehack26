@@ -31,6 +31,8 @@ Senior speaks on iPhone → Kasama understands intent → Kasama gathers care co
 
 Do not add `apps/web` or an Android app. Do not move contracts out of `packages/shared`.
 
+CI: GitHub Actions (`.github/workflows/ci.yml`) on pull requests and `main` runs `pnpm typecheck` and `pnpm test` with Node 20 and pnpm 9. No product secrets.
+
 ## Mobile
 
 - Expo SDK in `apps/mobile`, Expo Go via `pnpm start` / `pnpm dev` or Simulator via `pnpm ios` (no dev client, so no native speech-to-text modules)
