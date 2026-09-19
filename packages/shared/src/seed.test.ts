@@ -93,6 +93,10 @@ describe("getMariaSeedBundle", () => {
       "James",
       "Emily",
     ]);
+    expect(bundle.conversationTurns).toHaveLength(3);
+    expect(bundle.conversationTurns[0]?.text).toBe(
+      "Please get me a ride to my doctor tomorrow.",
+    );
     expect(bundle.wearableReadings).toHaveLength(7);
     expect(bundle.priorRequests.length).toBeGreaterThan(0);
   });

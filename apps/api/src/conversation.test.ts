@@ -207,7 +207,7 @@ describe("runConversationTurn", () => {
     const result = await runConversationTurn({ transcript: "Get me a ride to the doctor" });
     expect(result.status).toBe(200);
     expect(result.body.sessionId).toBe("default");
-    expect(sessionStore.get("default").conversation.turns).toHaveLength(2);
+    expect(sessionStore.get("default").conversation.turns).toHaveLength(5);
   });
 
   it("rejects an empty transcript", async () => {
