@@ -43,6 +43,9 @@ describe("getMariaDemoSession", () => {
       lastRideOptions: demo.lastRideOptions,
       appointment: demo.appointment,
       lastBooking: demo.lastBooking,
+      lastMedicationReminder: null,
+      lastHospitalVisit: null,
+      tasks: [],
       caretakerActivity: demo.caretakerActivity,
       careSignal: {
         label: "worth reviewing",

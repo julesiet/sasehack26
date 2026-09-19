@@ -22,6 +22,9 @@ function view(partial: Partial<SessionView> = {}): SessionView {
     lastRideOptions: [],
     appointment: null,
     lastBooking: null,
+    lastMedicationReminder: null,
+    lastHospitalVisit: null,
+    tasks: [],
     caretakerActivity: [],
     careSignal: {
       label: "worth reviewing",
