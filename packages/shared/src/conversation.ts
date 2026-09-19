@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toolNameSchema } from "./tools";
 
 /**
  * Voice conversation loop contracts (#4).
@@ -10,6 +11,35 @@ import { z } from "zod";
 
 /** Kasama asks at most this many clarifying questions per request. */
 export const MAX_CLARIFICATIONS_PER_REQUEST = 1;
+
+/** ChatGPT may request at most this many tool rounds per turn. */
+export const MAX_TOOL_ROUNDS_PER_TURN = 4;
+
+export const conversationPlanStepStatusSchema = z.enum(["ok", "denied", "failed"]);
+export type ConversationPlanStepStatus = z.infer<typeof conversationPlanStepStatusSchema>;
+
+export const conversationPlanStepSchema = z.object({
+  tool: toolNameSchema,
+  status: conversationPlanStepStatusSchema,
+  summary: z.string(),
+  auditId: z.string().optional(),
+});
+export type ConversationPlanStep = z.infer<typeof conversationPlanStepSchema>;
+
+export const conversationPlanSchema = z.object({
+  steps: z.array(conversationPlanStepSchema),
+});
+export type ConversationPlan = z.infer<typeof conversationPlanSchema>;
+
+export const conversationFailureKindSchema = z.enum(["retry", "handoff"]);
+export type ConversationFailureKind = z.infer<typeof conversationFailureKindSchema>;
+
+export const conversationFailureSchema = z.object({
+  kind: conversationFailureKindSchema,
+  tool: toolNameSchema.optional(),
+  summary: z.string(),
+});
+export type ConversationFailure = z.infer<typeof conversationFailureSchema>;
 
 export const conversationSpeakerSchema = z.enum(["senior", "kasama"]);
 export type ConversationSpeaker = z.infer<typeof conversationSpeakerSchema>;
@@ -49,11 +79,21 @@ export const conversationStateSchema = z.object({
   turns: z.array(conversationTurnSchema),
   activeRequest: activeRequestSchema.nullable(),
   clarificationsAsked: z.number().int().nonnegative(),
+  /** Tools the harness ran on the latest turn. */
+  plan: conversationPlanSchema.default({ steps: [] }),
+  /** Set when the latest turn needs a retry or a family handoff. */
+  failure: conversationFailureSchema.nullable().default(null),
 });
 export type ConversationState = z.infer<typeof conversationStateSchema>;
 
 export function emptyConversationState(): ConversationState {
-  return { turns: [], activeRequest: null, clarificationsAsked: 0 };
+  return {
+    turns: [],
+    activeRequest: null,
+    clarificationsAsked: 0,
+    plan: { steps: [] },
+    failure: null,
+  };
 }
 
 /** `POST /conversation/turn` body. */
@@ -71,6 +111,8 @@ export const conversationTurnResponseSchema = z.object({
   kind: conversationReplyKindSchema,
   activeRequest: activeRequestSchema.nullable(),
   clarificationsAsked: z.number().int().nonnegative(),
+  plan: conversationPlanSchema.default({ steps: [] }),
+  failure: conversationFailureSchema.nullable().default(null),
 });
 export type ConversationTurnResponse = z.infer<typeof conversationTurnResponseSchema>;
 

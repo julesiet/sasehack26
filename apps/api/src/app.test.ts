@@ -13,6 +13,7 @@ import { SttNotConfiguredError, TtsNotConfiguredError } from "./speech";
 beforeEach(() => {
   auditLog.clear();
   sessionStore.clear();
+  process.env.MODEL_API_KEY = "";
 });
 
 describe("POST /tools/:name", () => {
@@ -393,6 +394,8 @@ describe("GET /sessions/:sessionId", () => {
       turns: [],
       activeRequest: null,
       clarificationsAsked: 0,
+      plan: { steps: [] },
+      failure: null,
     });
   });
 });

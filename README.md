@@ -65,6 +65,8 @@ The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, t
 
 Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env` (the key needs Speech to Text **and** Text to Speech). Without it the Senior screen asks you to type and uses iOS speech for replies. The Simulator uses your Mac's microphone.
 
+ChatGPT plans each turn when `MODEL_API_KEY` is in `apps/api/.env` (OpenAI Chat Completions, default `gpt-4o-mini`). Without it the API uses the rules-based turn so the demo line still works.
+
 ## Env
 
 Copy `.env.example` into `apps/api/.env` and `apps/mobile/.env` when you add keys.
@@ -75,6 +77,7 @@ EXPO_PUBLIC_API_URL=http://localhost:3001
 # Expo Go: http://<mac-lan-ip>:3001
 ELEVENLABS_API_KEY=
 MODEL_API_KEY=
+MODEL_NAME=
 BROWSERBASE_API_KEY=
 BROWSERBASE_PROJECT_ID=
 COMPOSIO_API_KEY=

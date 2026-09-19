@@ -10,6 +10,7 @@ import { auditLog } from "./audit-log";
 import { ComposioNotConfiguredError, kasamaComposio, type KasamaComposio } from "./composio";
 import { runConversationTurn } from "./conversation";
 import { invokeTool } from "./invoke-tool";
+import type { ChatComplete } from "./model";
 import { sessionStore } from "./session-store";
 import {
   SttNotConfiguredError,
@@ -24,12 +25,14 @@ export type AppDeps = {
   transcribe: Transcriber;
   speak?: Speaker;
   composio?: KasamaComposio;
+  complete?: ChatComplete;
 };
 
 export function createApp({
   transcribe,
   speak = speaker,
   composio = kasamaComposio,
+  complete,
 }: AppDeps = { transcribe: transcriber, speak: speaker }): Hono {
   const app = new Hono();
 
@@ -99,7 +102,7 @@ export function createApp({
       return c.json({ success: false, summary: "Request body must be JSON." }, 400);
     }
 
-    const result = runConversationTurn(raw);
+    const result = await runConversationTurn(raw, complete ? { complete } : {});
     return c.json(result.body, result.status);
   });
 

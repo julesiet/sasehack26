@@ -13,17 +13,24 @@ import {
   type ConversationState,
   type ConversationTurnResponse,
 } from "@kasama/shared";
+import { planFromAuditEvents, runHarnessTurn, type HarnessTurnResult } from "./harness";
 import { invokeTool } from "./invoke-tool";
+import { openaiChatComplete, type ChatComplete } from "./model";
+import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
 
 /**
- * One conversational turn for the voice loop (#4).
+ * One conversational turn for the voice loop (#4) and harness (#5).
  *
- * This is a deterministic, rules-based turn so the demo line works without a
- * model key. It is the seam the harness (#5) replaces: keep the input/output
- * contract (`conversationTurnRequestSchema` → `conversationTurnResponseSchema`)
- * and keep every tool call going through `invokeTool` so policy and audit stay real.
+ * ChatGPT plans when `MODEL_API_KEY` is set (or a complete function is injected).
+ * Otherwise the original rules-based turn runs so the demo works without a key.
+ * Every tool call still goes through `invokeTool` so policy and audit stay real.
  */
+
+export type ConversationTurnDeps = {
+  now?: Date;
+  complete?: ChatComplete;
+};
 
 export type ConversationHttpResult = {
   status: 200 | 400;
@@ -270,7 +277,32 @@ function decide(
   };
 }
 
-export function runConversationTurn(raw: unknown, now: Date = new Date()): ConversationHttpResult {
+function runRulesTurn(
+  sessionId: string,
+  transcript: string,
+  state: ConversationState,
+  now: Date,
+): HarnessTurnResult {
+  const before = auditLog.list().length;
+  const reply = decide(sessionId, transcript, state, now);
+  const plan = planFromAuditEvents(auditLog.list().slice(before));
+  const failed = plan.steps.find((step) => step.status === "failed");
+  return {
+    text: reply.text,
+    kind: reply.kind,
+    activeRequest: reply.activeRequest,
+    askedClarification: reply.askedClarification ?? false,
+    plan,
+    failure: failed ? { kind: "retry", tool: failed.tool, summary: failed.summary } : null,
+  };
+}
+
+export async function runConversationTurn(
+  raw: unknown,
+  deps: ConversationTurnDeps | Date = {},
+): Promise<ConversationHttpResult> {
+  const options: ConversationTurnDeps = deps instanceof Date ? { now: deps } : deps;
+  const now = options.now ?? new Date();
   const request = conversationTurnRequestSchema.safeParse(raw);
   if (!request.success) {
     return {
@@ -281,24 +313,46 @@ export function runConversationTurn(raw: unknown, now: Date = new Date()): Conve
 
   const sessionId = resolveSessionId(request.data.sessionId);
   const state = sessionStore.getConversation(sessionId);
-  const reply = decide(sessionId, request.data.transcript, state, now);
+  const complete =
+    options.complete ?? (process.env.MODEL_API_KEY?.trim() ? openaiChatComplete : undefined);
+
+  let decided: HarnessTurnResult;
+  if (complete) {
+    try {
+      decided = await runHarnessTurn({
+        transcript: request.data.transcript,
+        sessionId,
+        state,
+        now,
+        complete,
+      });
+    } catch {
+      decided = runRulesTurn(sessionId, request.data.transcript, state, now);
+    }
+  } else {
+    decided = runRulesTurn(sessionId, request.data.transcript, state, now);
+  }
 
   const view = sessionStore.applyConversationTurn({
     sessionId,
     seniorText: request.data.transcript,
-    kasamaText: reply.text,
-    kind: reply.kind,
-    activeRequest: reply.activeRequest,
-    askedClarification: reply.askedClarification ?? false,
+    kasamaText: decided.text,
+    kind: decided.kind,
+    activeRequest: decided.activeRequest,
+    askedClarification: decided.askedClarification,
+    plan: decided.plan,
+    failure: decided.failure,
     timestamp: now.toISOString(),
   });
 
   const body: ConversationTurnResponse = conversationTurnResponseSchema.parse({
     sessionId,
-    reply: reply.text,
-    kind: reply.kind,
+    reply: decided.text,
+    kind: decided.kind,
     activeRequest: view.conversation.activeRequest,
     clarificationsAsked: view.conversation.clarificationsAsked,
+    plan: view.conversation.plan,
+    failure: view.conversation.failure,
   });
   return { status: 200, body };
 }

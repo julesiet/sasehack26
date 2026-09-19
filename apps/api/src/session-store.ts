@@ -12,6 +12,8 @@ import {
   type AuditEvent,
   type CaretakerActivityItem,
   type CareSignal,
+  type ConversationFailure,
+  type ConversationPlan,
   type ConversationReplyKind,
   type ConversationState,
   type PendingApproval,
@@ -43,6 +45,8 @@ export type ApplyConversationTurnInput = {
   activeRequest: ActiveRequest | null;
   /** Set when this turn asked a clarification; the store enforces the count. */
   askedClarification: boolean;
+  plan: ConversationPlan;
+  failure: ConversationFailure | null;
   timestamp: string;
 };
 
@@ -158,6 +162,8 @@ export function createSessionStore(): SessionStore {
       kind,
       activeRequest,
       askedClarification,
+      plan,
+      failure,
       timestamp,
     }) {
       const state = getOrCreate(sessionId);
@@ -185,6 +191,8 @@ export function createSessionStore(): SessionStore {
         conversation.clarificationsAsked = 0;
       }
       conversation.activeRequest = activeRequest;
+      conversation.plan = plan;
+      conversation.failure = failure;
 
       return toView(state);
     },

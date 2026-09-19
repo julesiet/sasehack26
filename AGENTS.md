@@ -67,7 +67,7 @@ There is no product website. `http://localhost:3001` is the API. The app is Expo
 - `POST /tools/:name` — validate → policy → audit → session projection → stub execute
 - `GET /sessions/:sessionId` — in-memory session view (current request, pending approval, appointment, last Uber booking, caretaker activity, care signal, session events)
 - `GET /audit` — `{ events: [...] }` all process-local events; optional `?sessionId=` filters. Cleared on process restart
-- `POST /conversation/turn` — `{ transcript, sessionId? }` → Kasama's reply text + `kind` (`answer` / `clarification` / `proposal`). Rules-based until the harness (`#5`); tools go through policy + audit
+- `POST /conversation/turn` — `{ transcript, sessionId? }` → Kasama's reply + `kind` + `plan` + `failure`. ChatGPT plans when `MODEL_API_KEY` is set; otherwise the rules-based turn. Every tool still goes through policy + audit. ChatGPT is never allowed to book or send.
 - `POST /speech/transcribe` — multipart `file` → `{ transcript }` via ElevenLabs (needs `ELEVENLABS_API_KEY` in `apps/api/.env`; `501` otherwise)
 - `POST /speech/speak` — `{ text }` → MPEG audio of Kasama (same key, plus Text to Speech on the key; `501` otherwise, device falls back to iOS speech)
 - `POST /composio/connect` — `{ userId?, toolkit?, wait? }` → Gmail Connect Link or `{ connected: true }`. Session user is `senior_maria` (`MARIA_PROFILE.id`). Needs `COMPOSIO_API_KEY` in `apps/api/.env`; `501` otherwise
