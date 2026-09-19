@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "playground": "tsx src/playground-cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

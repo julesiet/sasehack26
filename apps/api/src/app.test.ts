@@ -3,7 +3,9 @@ import {
   COMPOSIO_DEFAULT_TOOL,
   COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
   COMPOSIO_GMAIL_SEND_TOOL,
+  PLAYGROUND_DEMO_TRANSCRIPT,
   conversationTurnResponseSchema,
+  playgroundResponseSchema,
   sessionViewSchema,
 } from "@kasama/shared";
 import { app, createApp } from "./app";
@@ -633,6 +635,43 @@ describe("POST /conversation/turn", () => {
     expect(notJson.status).toBe(400);
 
     const empty = await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ transcript: "" }),
+    });
+    expect(empty.status).toBe(400);
+  });
+});
+
+describe("POST /playground", () => {
+  it("returns appointment context, ride options, and a pending approval", async () => {
+    const res = await app.request("/playground", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        transcript: PLAYGROUND_DEMO_TRANSCRIPT,
+        sessionId: "http-play-1",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = playgroundResponseSchema.parse(await res.json());
+    expect(body.appointment?.id).toBe("appt_maria_doctor_01");
+    expect(body.rideOptions).toHaveLength(2);
+    expect(body.pendingApproval?.tool).toBe("book_ride");
+    expect(body.pendingApproval?.estimate).toBe("$24.50");
+    expect(body.lastBooking).toBeNull();
+    expect(body.seed.profileId).toBe("senior_maria");
+  });
+
+  it("rejects non-JSON and empty transcripts", async () => {
+    const notJson = await app.request("/playground", {
+      method: "POST",
+      body: "hello",
+    });
+    expect(notJson.status).toBe(400);
+
+    const empty = await app.request("/playground", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ transcript: "" }),
