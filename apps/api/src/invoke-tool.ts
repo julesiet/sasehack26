@@ -1,10 +1,8 @@
 import {
   bookRideInputSchema,
-  bookRideResultSchema,
   computeArrivalTarget,
   evaluateToolCall,
   findRideOptionsInputSchema,
-  findRideOptionsResultSchema,
   getAppointmentInputSchema,
   getAppointmentResultSchema,
   getMariaAppointment,
@@ -18,6 +16,7 @@ import {
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
+import { getUberProvider } from "./uber-provider";
 
 export type ToolHttpResult = {
   status: 200 | 400 | 403 | 404;
@@ -78,42 +77,11 @@ function executeStub(name: ToolName, input: unknown) {
       });
     }
     case "find_ride_options": {
-      const parsed = findRideOptionsInputSchema.parse(input);
-      return findRideOptionsResultSchema.parse({
-        success: true,
-        summary: `Two Uber options from ${parsed.pickup} to ${parsed.destination}: UberX about $18.00, WAV about $24.50.`,
-        options: [
-          {
-            optionId: "uberx_1",
-            provider: "uber",
-            product: "UberX",
-            estimate: "$18.00",
-            etaMinutes: 8,
-            accessible: false,
-          },
-          {
-            optionId: "uber_wav_1",
-            provider: "uber",
-            product: "WAV",
-            estimate: "$24.50",
-            etaMinutes: 12,
-            accessible: true,
-          },
-        ],
-      });
+      return getUberProvider().findOptions(findRideOptionsInputSchema.parse(input));
     }
     case "book_ride": {
       const { optionId } = bookRideInputSchema.parse(input);
-      return bookRideResultSchema.parse({
-        success: true,
-        confirmationId: `stub_uber_${optionId}`,
-        summary: `Uber booking is not implemented yet. Option ${optionId} would be booked.`,
-        booking: {
-          provider: "uber",
-          optionId,
-          status: "not_implemented",
-        },
-      });
+      return getUberProvider().book(optionId);
     }
     case "notify_caretaker": {
       const parsed = notifyCaretakerInputSchema.parse(input);

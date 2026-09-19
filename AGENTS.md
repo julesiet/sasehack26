@@ -76,9 +76,9 @@ There is no product website. `http://localhost:3001` is the API. The app is Expo
 
 Omitted `sessionId` on a tool call is stored as `default`. Senior and caretaker clients poll the same `sessionId`.
 
-Tools: `get_appointment`, `find_ride_options`, `book_ride`, `notify_caretaker`.
+Tools: `get_appointment`, `find_ride_options`, `book_ride`, `notify_caretaker`. After a human yes, `book_ride` returns `status: "booked"` and a confirmation id, or `success: false` if the confirmation cannot be proven.
 
-Calendar and Uber are **stubs**. Policy and audit are real. Live Uber is later (`#14` / `#7`).
+Calendar is **seeded** (`get_appointment` for Maria's tomorrow appointment). Uber search and book use a controlled in-process provider (`apps/api/src/uber-provider.ts`). Policy and audit are real. Live Uber is `#14`.
 
 ## Mobile
 

@@ -9,10 +9,12 @@ import { auditLog } from "./audit-log";
 import { ComposioNotConfiguredError, type KasamaComposio } from "./composio";
 import { sessionStore } from "./session-store";
 import { SttNotConfiguredError, TtsNotConfiguredError } from "./speech";
+import { resetControlledUberProvider } from "./uber-provider";
 
 beforeEach(() => {
   auditLog.clear();
   sessionStore.clear();
+  resetControlledUberProvider();
   process.env.MODEL_API_KEY = "";
 });
 
@@ -124,9 +126,29 @@ describe("POST /tools/:name", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    expect(body.booking?.status).toBe("booked");
+    expect(body.confirmationId).toBe("UBER-UBERX-0001");
     expect(body.booking?.provider).toBe("uber");
     expect(auditLog.list()[0]?.approved?.allowed).toBe(true);
     expect(auditLog.list()[0]?.executed?.attempted).toBe(true);
+  });
+
+  it("does not project lastBooking when book_ride cannot be verified", async () => {
+    const res = await app.request("/tools/book_ride", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { optionId: "unknown_option" },
+        actor: "senior",
+        approvalToken: "tok_yes",
+        sessionId: "bad-book",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.confirmationId).toBeUndefined();
+    expect(sessionStore.get("bad-book").lastBooking).toBeNull();
   });
 
   it("does not let the model self-approve a booking even with a token", async () => {
@@ -284,6 +306,8 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.appointment?.id).toBe("appt_maria_doctor_01");
     expect(body.lastBooking?.provider).toBe("uber");
     expect(body.lastBooking?.optionId).toBe("uberx_1");
+    expect(body.lastBooking?.status).toBe("booked");
+    expect(body.lastBooking?.confirmationId).toMatch(/^UBER-UBERX-\d{4}$/);
     expect(body.lastBooking?.timestamp).toBeTruthy();
     expect(body.lastBooking?.consentGranted).toBe(true);
     expect(body.consentGranted).toBe(true);

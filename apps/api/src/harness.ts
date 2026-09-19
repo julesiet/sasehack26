@@ -213,6 +213,15 @@ function looksLikeQuestion(text: string): boolean {
   return /\?\s*$/.test(text.trim()) || /^(where|when|what|which|who|how)\b/i.test(text.trim());
 }
 
+/** ChatGPT often narrates "Let me check…" and then stops. That is not a proposal. */
+export function isCheckingFiller(text: string): boolean {
+  return (
+    /\b(let me (check|look|search|find)|checking|looking up|one moment|hold on|searching for)\b/i.test(
+      text,
+    ) && !looksLikeQuestion(text)
+  );
+}
+
 function failureFromSteps(steps: ConversationPlanStep[]): ConversationFailure | null {
   const failed = steps.find((step) => step.status === "failed");
   if (!failed) return null;
@@ -267,6 +276,7 @@ function inferReply(
           ...(destination ? { destination } : {}),
           ...(appointmentDate ? { date: appointmentDate } : {}),
           ...(parsedAppointmentId ? { appointmentId: parsedAppointmentId } : {}),
+          ...(previous?.product ? { product: previous.product } : {}),
           status: wasProposed ? "accepted" : "proposed",
         },
         askedClarification: false,
@@ -283,6 +293,7 @@ function inferReply(
         ...(destination ? { destination } : {}),
         ...(appointmentDate ? { date: appointmentDate } : {}),
         ...(parsedAppointmentId ? { appointmentId: parsedAppointmentId } : {}),
+        ...(previous?.product ? { product: previous.product } : {}),
         status: "proposed",
       },
       askedClarification: false,
@@ -425,6 +436,8 @@ export async function runHarnessTurn(input: {
     } else {
       text = "I can get you a ride to your appointments, or tell you when your next appointment is. What would you like?";
     }
+  } else if (inferred.kind === "proposal" && isCheckingFiller(text)) {
+    text = "I can set up an Uber for you. Should I set that up?";
   }
 
   const bookedDenied = executed.some((item) => item.tool === "book_ride" && item.step.status === "denied");

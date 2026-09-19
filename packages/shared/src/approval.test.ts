@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  approvedBookingReply,
+  failedBookingReply,
   bookingApprovalPrompt,
   describePendingApproval,
   DEMO_UBER_WAV_ESTIMATE,
@@ -21,6 +23,32 @@ describe("approval prompts", () => {
     expect(described.action).toBe("book_ride");
     expect(described.estimate).toBe("$24.50");
     expect(described.prompt).toContain("Should I book it?");
+  });
+
+  it("reads a WAV booking back with the confirmation id", () => {
+    expect(
+      approvedBookingReply({
+        estimate: DEMO_UBER_WAV_ESTIMATE,
+        product: "WAV",
+        confirmationId: "UBER-WAV-0001",
+      }),
+    ).toBe("I booked the wheelchair Uber for $24.50. Your confirmation is UBER-WAV-0001.");
+  });
+
+  it("reads an UberX booking back with the confirmation id", () => {
+    expect(
+      approvedBookingReply({
+        estimate: "$18.00",
+        product: "UberX",
+        confirmationId: "UBER-UBERX-0001",
+      }),
+    ).toBe("I booked the UberX for $18.00. Your confirmation is UBER-UBERX-0001.");
+  });
+
+  it("does not claim a booking when verification failed", () => {
+    expect(failedBookingReply()).toBe(
+      "I couldn't confirm that Uber booking. Nothing was charged. We can try again.",
+    );
   });
 
   it("marks a caretaker draft as preview only", () => {

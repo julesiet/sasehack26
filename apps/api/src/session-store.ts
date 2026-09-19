@@ -296,18 +296,20 @@ export function createSessionStore(): SessionStore {
 
       if (tool === "book_ride" && result) {
         const booked = bookRideResultSchema.parse(result);
-        const { optionId } = bookRideInputSchema.parse(input);
-        state.lastBooking = {
-          provider: "uber",
-          optionId,
-          status: booked.booking?.status ?? "not_implemented",
-          confirmationId: booked.confirmationId,
-          summary: booked.summary,
-          timestamp: event.timestamp,
-          consentGranted: consentGranted ?? true,
-        };
-        state.consentGranted = true;
-        state.conversation.activeRequest = null;
+        if (booked.success && booked.booking?.status === "booked") {
+          const { optionId } = bookRideInputSchema.parse(input);
+          state.lastBooking = {
+            provider: "uber",
+            optionId,
+            status: "booked",
+            confirmationId: booked.confirmationId,
+            summary: booked.summary,
+            timestamp: event.timestamp,
+            consentGranted: consentGranted ?? true,
+          };
+          state.consentGranted = true;
+          state.conversation.activeRequest = null;
+        }
       }
 
       if (tool === "notify_caretaker") {
