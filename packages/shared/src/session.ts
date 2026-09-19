@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { lastApprovalSchema, pendingApprovalSchema } from "./approval";
 import { auditEventSchema } from "./audit";
 import { conversationStateSchema } from "./conversation";
 import { actors } from "./policy";
 import { wearableReadingSchema } from "./seed";
-import { appointmentSchema, caretakerUrgencySchema } from "./tools";
+import { appointmentSchema, caretakerUrgencySchema, uberRideOptionSchema } from "./tools";
 
 /** Used when `POST /tools/:name` omits `sessionId`. Documented default for polling. */
 export const DEFAULT_SESSION_ID = "default";
@@ -16,14 +17,6 @@ export const sessionRequestSchema = z.object({
   tool: z.string(),
   input: z.unknown(),
   actor: z.enum(actors),
-  timestamp: z.string(),
-});
-
-export const pendingApprovalSchema = z.object({
-  tool: z.string(),
-  input: z.unknown(),
-  reason: z.string(),
-  summary: z.string(),
   timestamp: z.string(),
 });
 
@@ -58,6 +51,8 @@ export const sessionViewSchema = z.object({
   sessionId: z.string(),
   currentRequest: sessionRequestSchema.nullable(),
   pendingApproval: pendingApprovalSchema.nullable(),
+  lastApproval: lastApprovalSchema.nullable().default(null),
+  lastRideOptions: z.array(uberRideOptionSchema).default([]),
   appointment: appointmentSchema.nullable(),
   lastBooking: sessionBookingSchema.nullable(),
   caretakerActivity: z.array(caretakerActivityItemSchema),
@@ -69,7 +64,6 @@ export const sessionViewSchema = z.object({
 });
 
 export type SessionRequest = z.infer<typeof sessionRequestSchema>;
-export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
 export type SessionBooking = z.infer<typeof sessionBookingSchema>;
 export type CaretakerActivityItem = z.infer<typeof caretakerActivityItemSchema>;
 export type CareSignal = z.infer<typeof careSignalSchema>;

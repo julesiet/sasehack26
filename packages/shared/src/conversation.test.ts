@@ -34,6 +34,17 @@ describe("conversation contract", () => {
     });
   });
 
+  it("accepts a preferred Uber product on the active request", () => {
+    const parsed = conversationTurnResponseSchema.parse({
+      sessionId: "default",
+      reply: "Should I set that up?",
+      kind: "proposal",
+      activeRequest: { intent: "ride", status: "proposed", product: "WAV" },
+      clarificationsAsked: 0,
+    });
+    expect(parsed.activeRequest?.product).toBe("WAV");
+  });
+
   it("accepts a proposal response", () => {
     const parsed = conversationTurnResponseSchema.parse({
       sessionId: "default",
@@ -45,6 +56,30 @@ describe("conversation contract", () => {
     expect(parsed.kind).toBe("proposal");
     expect(parsed.plan).toEqual({ steps: [] });
     expect(parsed.failure).toBeNull();
+    expect(parsed.pendingApproval).toBeNull();
+  });
+
+  it("accepts a booking checkpoint on the turn response", () => {
+    const parsed = conversationTurnResponseSchema.parse({
+      sessionId: "default",
+      reply: "The Uber is $24.50. Should I book it?",
+      kind: "proposal",
+      activeRequest: { intent: "ride", status: "accepted" },
+      clarificationsAsked: 0,
+      pendingApproval: {
+        tool: "book_ride",
+        input: { optionId: "uber_wav_1" },
+        reason: "confirmation_required",
+        summary: "This action requires a confirmation token from a human.",
+        timestamp: "2026-09-19T12:00:00.000Z",
+        action: "book_ride",
+        prompt: "The Uber is $24.50. Should I book it?",
+        detail: "WAV · $24.50",
+        estimate: "$24.50",
+      },
+    });
+    expect(parsed.pendingApproval?.estimate).toBe("$24.50");
+    expect(parsed.pendingApproval?.prompt).toContain("Should I book it?");
   });
 
   it("accepts a plan and a retry failure on the turn response", () => {

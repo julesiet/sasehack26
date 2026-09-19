@@ -8,6 +8,7 @@ import {
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { ComposioNotConfiguredError, kasamaComposio, type KasamaComposio } from "./composio";
+import { decideApproval } from "./approval";
 import { runConversationTurn } from "./conversation";
 import { invokeTool } from "./invoke-tool";
 import type { ChatComplete } from "./model";
@@ -51,6 +52,7 @@ export function createApp({
       sessions: "GET /sessions/:sessionId",
       audit: "GET /audit",
       conversation: "POST /conversation/turn",
+      approvals: "POST /approvals",
       transcribe: "POST /speech/transcribe",
       speak: "POST /speech/speak",
       composioConnect: "POST /composio/connect",
@@ -91,6 +93,18 @@ export function createApp({
     }
 
     const result = invokeTool(c.req.param("name"), raw);
+    return c.json(result.body, result.status);
+  });
+
+  app.post("/approvals", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ success: false, summary: "Request body must be JSON." }, 400);
+    }
+
+    const result = decideApproval(raw);
     return c.json(result.body, result.status);
   });
 
@@ -207,7 +221,7 @@ export function createApp({
     }
   });
 
-  /** Execute a session tool. Defaults to GMAIL_GET_PROFILE for `senior_maria`. */
+  /** Execute a session tool. Defaults to GMAIL_GET_PROFILE; draft or send when asked. */
   app.post("/composio/execute", async (c) => {
     let raw: unknown = {};
     try {

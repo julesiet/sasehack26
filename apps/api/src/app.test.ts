@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   COMPOSIO_DEFAULT_TOOL,
+  COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+  COMPOSIO_GMAIL_SEND_TOOL,
   conversationTurnResponseSchema,
   sessionViewSchema,
 } from "@kasama/shared";
@@ -9,10 +11,12 @@ import { auditLog } from "./audit-log";
 import { ComposioNotConfiguredError, type KasamaComposio } from "./composio";
 import { sessionStore } from "./session-store";
 import { SttNotConfiguredError, TtsNotConfiguredError } from "./speech";
+import { resetControlledUberProvider } from "./uber-provider";
 
 beforeEach(() => {
   auditLog.clear();
   sessionStore.clear();
+  resetControlledUberProvider();
   process.env.MODEL_API_KEY = "";
 });
 
@@ -41,25 +45,99 @@ describe("POST /tools/:name", () => {
     expect(events[0]?.outcome.denied).toBe(true);
   });
 
-  it("denies notify_caretaker send without approval and returns a preview draft", async () => {
+  it("drafts notify_caretaker without sending when approval is missing", async () => {
     const res = await app.request("/tools/notify_caretaker", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         input: { summary: "Maria is running late.", urgency: "high" },
         actor: "model",
+        sessionId: "notify-draft-1",
       }),
     });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.denied).toBe(true);
+    expect(body.success).toBe(true);
     expect(body.preview).toBe(true);
     expect(body.sent).toBe(false);
     expect(body.draft).toEqual({
       summary: "Maria is running late.",
       urgency: "high",
     });
+    expect(String(body.summary)).toMatch(/not sent/i);
+
+    const events = auditLog.list();
+    expect(events).toHaveLength(1);
+    expect(events[0]?.proposed.tool).toBe("notify_caretaker");
+    expect(events[0]?.approved?.allowed).toBe(true);
+    expect(events[0]?.executed?.attempted).toBe(true);
+    expect(events[0]?.outcome.reason).toBe("preview");
+    expect(events[0]?.outcome.denied).toBeUndefined();
+
+    const view = sessionViewSchema.parse(
+      await (await app.request("/sessions/notify-draft-1")).json(),
+    );
+    expect(view.pendingApproval?.tool).toBe("notify_caretaker");
+    expect(view.pendingApproval?.reason).toBe("confirmation_required");
+    expect(view.caretakerActivity).toHaveLength(1);
+    expect(view.caretakerActivity[0]?.sent).toBe(false);
+    expect(view.caretakerActivity[0]?.preview).toBe(true);
+  });
+
+  it("does not send notify_caretaker when a model presents its own token", async () => {
+    const res = await app.request("/tools/notify_caretaker", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { summary: "Maria is running late.", urgency: "high" },
+        actor: "model",
+        approvalToken: "tok_model",
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.denied).toBe(true);
+    expect(body.reason).toBe("model_cannot_self_approve");
+    expect(body.sent).toBe(false);
+    expect(auditLog.list()[0]?.executed?.attempted).toBe(false);
+  });
+
+  it("sends a mocked caretaker message with a human approval token", async () => {
+    const res = await app.request("/tools/notify_caretaker", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { summary: "Maria's Uber is booked.", urgency: "low" },
+        actor: "senior",
+        approvalToken: "tok_yes",
+        sessionId: "notify-send-1",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.sent).toBe(true);
+    expect(body.preview).toBe(false);
+    expect(String(body.summary)).toMatch(/email|sms/i);
+    expect(String(body.summary)).not.toMatch(/not implemented/i);
+
+    const events = auditLog.list();
+    expect(events[0]?.approved?.allowed).toBe(true);
+    expect(events[0]?.approved?.approvalTokenPresent).toBe(true);
+    expect(events[0]?.executed?.attempted).toBe(true);
+    expect(events[0]?.outcome.denied).toBeUndefined();
+
+    const view = sessionViewSchema.parse(
+      await (await app.request("/sessions/notify-send-1")).json(),
+    );
+    expect(view.pendingApproval).toBeNull();
+    expect(view.caretakerActivity).toHaveLength(1);
+    expect(view.caretakerActivity[0]?.sent).toBe(true);
+    expect(view.caretakerActivity[0]?.preview).toBe(false);
+    expect(view.caretakerActivity[0]?.summary).toBe("Maria's Uber is booked.");
   });
 
   it("allows get_appointment without approval and records the outcome", async () => {
@@ -124,9 +202,29 @@ describe("POST /tools/:name", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    expect(body.booking?.status).toBe("booked");
+    expect(body.confirmationId).toBe("UBER-UBERX-0001");
     expect(body.booking?.provider).toBe("uber");
     expect(auditLog.list()[0]?.approved?.allowed).toBe(true);
     expect(auditLog.list()[0]?.executed?.attempted).toBe(true);
+  });
+
+  it("does not project lastBooking when book_ride cannot be verified", async () => {
+    const res = await app.request("/tools/book_ride", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { optionId: "unknown_option" },
+        actor: "senior",
+        approvalToken: "tok_yes",
+        sessionId: "bad-book",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.confirmationId).toBeUndefined();
+    expect(sessionStore.get("bad-book").lastBooking).toBeNull();
   });
 
   it("does not let the model self-approve a booking even with a token", async () => {
@@ -284,6 +382,8 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.appointment?.id).toBe("appt_maria_doctor_01");
     expect(body.lastBooking?.provider).toBe("uber");
     expect(body.lastBooking?.optionId).toBe("uberx_1");
+    expect(body.lastBooking?.status).toBe("booked");
+    expect(body.lastBooking?.confirmationId).toMatch(/^UBER-UBERX-\d{4}$/);
     expect(body.lastBooking?.timestamp).toBeTruthy();
     expect(body.lastBooking?.consentGranted).toBe(true);
     expect(body.consentGranted).toBe(true);
@@ -397,6 +497,103 @@ describe("GET /sessions/:sessionId", () => {
       plan: { steps: [] },
       failure: null,
     });
+  });
+});
+
+describe("POST /approvals", () => {
+  it("approves a pending Uber from the senior Yes button", async () => {
+    await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        transcript: "Please get me a ride to my doctor tomorrow.",
+        sessionId: "tap-1",
+      }),
+    });
+    await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ transcript: "Yes", sessionId: "tap-1" }),
+    });
+
+    const res = await app.request("/approvals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "tap-1", decision: "approve", actor: "senior" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.decision).toBe("approved");
+    expect(body.pendingApproval).toBeNull();
+    expect(sessionStore.get("tap-1").lastBooking?.optionId).toBe("uber_wav_1");
+  });
+
+  it("declines a pending Uber from the No button and writes the audit", async () => {
+    await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        transcript: "Please get me a ride to my doctor tomorrow.",
+        sessionId: "tap-2",
+      }),
+    });
+    await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ transcript: "Yes", sessionId: "tap-2" }),
+    });
+
+    const res = await app.request("/approvals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "tap-2", decision: "decline", actor: "senior" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.decision).toBe("declined");
+    expect(body.reply).toContain("will not book");
+    expect(sessionStore.get("tap-2").lastBooking).toBeNull();
+    expect(sessionStore.get("tap-2").lastApproval?.decision).toBe("declined");
+    expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
+  });
+
+  it("cancels a drafted caretaker message and never sends it", async () => {
+    await app.request("/tools/notify_caretaker", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { summary: "Maria is going to the doctor.", urgency: "normal" },
+        actor: "model",
+        sessionId: "notify-cancel-1",
+      }),
+    });
+
+    const res = await app.request("/approvals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "notify-cancel-1",
+        decision: "decline",
+        actor: "senior",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.decision).toBe("declined");
+    expect(body.reply).toContain("will not send");
+    expect(sessionStore.get("notify-cancel-1").caretakerActivity.some((item) => item.sent)).toBe(
+      false,
+    );
+    expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
+  });
+
+  it("rejects a model actor on the approval route", async () => {
+    const res = await app.request("/approvals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "tap-3", decision: "approve", actor: "model" }),
+    });
+    expect(res.status).toBe(400);
   });
 });
 
@@ -657,5 +854,94 @@ describe("POST /composio/connect and /composio/execute", () => {
     });
     expect(res.status).toBe(409);
     expect((await res.json()).needsAuth).toBe(true);
+  });
+
+  it("creates a Gmail draft when the caller asks for the documented draft tool", async () => {
+    const execute = async (input?: { toolSlug?: string }) => ({
+      userId: "senior_maria",
+      sessionId: "sess_1",
+      toolSlug: input?.toolSlug ?? COMPOSIO_DEFAULT_TOOL,
+      successful: true,
+      data: { draft_id: "r-draft-1" },
+      logId: "log_draft",
+    });
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new Error("unused");
+        },
+        execute,
+      },
+    });
+
+    const res = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ toolSlug: COMPOSIO_GMAIL_CREATE_DRAFT_TOOL }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      successful: true,
+      toolSlug: COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+      logId: "log_draft",
+      data: { draft_id: "r-draft-1" },
+    });
+  });
+
+  it("sends Gmail when the caller asks for the documented send tool", async () => {
+    const execute = async (input?: { toolSlug?: string }) => ({
+      userId: "senior_maria",
+      sessionId: "sess_1",
+      toolSlug: input?.toolSlug ?? COMPOSIO_DEFAULT_TOOL,
+      successful: true,
+      data: { id: "1a0bb8b230927c57" },
+      logId: "log_send",
+    });
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new Error("unused");
+        },
+        execute,
+      },
+    });
+
+    const res = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ toolSlug: COMPOSIO_GMAIL_SEND_TOOL }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      successful: true,
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      logId: "log_send",
+      data: { id: "1a0bb8b230927c57" },
+    });
+  });
+
+  it("rejects GMAIL_SEND_DRAFT so only the documented send slug can send", async () => {
+    const execute = async () => {
+      throw new Error("send draft must not reach Composio");
+    };
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new Error("unused");
+        },
+        execute,
+      },
+    });
+
+    const res = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ toolSlug: "GMAIL_SEND_DRAFT" }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("bad_request");
   });
 });

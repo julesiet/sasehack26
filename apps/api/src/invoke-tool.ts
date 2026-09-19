@@ -1,10 +1,8 @@
 import {
   bookRideInputSchema,
-  bookRideResultSchema,
   computeArrivalTarget,
   evaluateToolCall,
   findRideOptionsInputSchema,
-  findRideOptionsResultSchema,
   getAppointmentInputSchema,
   getAppointmentResultSchema,
   getMariaAppointment,
@@ -18,6 +16,7 @@ import {
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
+import { getUberProvider } from "./uber-provider";
 
 export type ToolHttpResult = {
   status: 200 | 400 | 403 | 404;
@@ -48,7 +47,7 @@ function formatTime(iso: string): string {
   });
 }
 
-function executeStub(name: ToolName, input: unknown) {
+function executeStub(name: ToolName, input: unknown, options?: { preview?: boolean }) {
   switch (name) {
     case "get_appointment": {
       const { date } = getAppointmentInputSchema.parse(input);
@@ -78,32 +77,27 @@ function executeStub(name: ToolName, input: unknown) {
       });
     }
     case "find_ride_options": {
-      const parsed = findRideOptionsInputSchema.parse(input);
-      return findRideOptionsResultSchema.parse({
-        success: true,
-        summary: `Uber ride search is not implemented yet from ${parsed.pickup} to ${parsed.destination}.`,
-        options: [],
-      });
+      return getUberProvider().findOptions(findRideOptionsInputSchema.parse(input));
     }
     case "book_ride": {
       const { optionId } = bookRideInputSchema.parse(input);
-      return bookRideResultSchema.parse({
-        success: true,
-        confirmationId: `stub_uber_${optionId}`,
-        summary: `Uber booking is not implemented yet. Option ${optionId} would be booked.`,
-        booking: {
-          provider: "uber",
-          optionId,
-          status: "not_implemented",
-        },
-      });
+      return getUberProvider().book(optionId);
     }
     case "notify_caretaker": {
       const parsed = notifyCaretakerInputSchema.parse(input);
+      if (options?.preview) {
+        return notifyCaretakerResultSchema.parse({
+          success: true,
+          summary: `Draft for your family (${parsed.urgency}): ${parsed.summary} Not sent.`,
+          preview: true,
+          sent: false,
+          draft: parsed,
+        });
+      }
       return notifyCaretakerResultSchema.parse({
         success: true,
         confirmationId: `stub_notify_${parsed.urgency}`,
-        summary: `Caretaker notification is not implemented yet. Message would be sent (${parsed.urgency}).`,
+        summary: `Mocked family email/SMS (${parsed.urgency}): ${parsed.summary}`,
         preview: false,
         sent: true,
         draft: parsed,
@@ -213,7 +207,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     };
   }
 
-  const result = executeStub(name, input);
+  const result = executeStub(name, input, { preview: decision.preview });
   const event = auditLog.append({
     whoAsked: {
       actor: request.data.actor,
@@ -229,6 +223,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     outcome: {
       success: result.success,
       summary: result.summary,
+      ...(decision.preview ? { reason: "preview" } : {}),
     },
   });
   sessionStore.applyToolEvent({

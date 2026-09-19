@@ -5,13 +5,14 @@ Where to put work so every agent sees the same system.
 ## One layout
 
 ```text
-apps/mobile/src/screens/    iOS screens (placeholders until design-ready)
-apps/mobile/src/components/ Reusable senior-mode pieces (orb, sun bowl, composer pill)
+apps/mobile/src/screens/    iOS screens (app Home unchanged; Senior Home / Chat / Tasks; caretaker shows approvals)
+apps/mobile/src/components/ Reusable senior-mode pieces (orb, sun bowl, composer pill, chat bubble, confirmation card, compact tab bar)
 apps/mobile/src/hooks/      Conversation state machine (record → transcribe → turn → speak)
 apps/mobile/src/lib/        API client
 apps/mobile/src/theme.ts    Design tokens
-apps/api/src/               Hono app, tool invoke, conversation turn, harness (ChatGPT), speech, Composio session, in-memory session + audit
+apps/api/src/               Hono app, tool invoke, conversation turn, harness (ChatGPT), approvals, speech, Composio session, in-memory session + audit
 packages/shared/src/        Zod + policy + audit + session types (source of truth)
+.github/workflows/          GitHub Actions (`ci.yml` runs typecheck + tests)
 AGENTS.md                   Coding-agent operating manual
 ARCHITECTURE.md             System map
 docs/                       Extra canonical docs only (this folder)

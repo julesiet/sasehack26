@@ -61,7 +61,7 @@ iOS Simulator:
 pnpm ios
 ```
 
-The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). Kasama speaks back with iOS speech.
+The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). After you say yes, Kasama asks "The Uber is $24.50. Should I book it?" — say yes or tap **Yes**. Nothing is booked until that second yes. Tap **Caretaker** to see the same pending or declined approval.
 
 Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env` (the key needs Speech to Text **and** Text to Speech). Without it the Senior screen asks you to type and uses iOS speech for replies. The Simulator uses your Mac's microphone.
 
@@ -83,4 +83,10 @@ BROWSERBASE_PROJECT_ID=
 COMPOSIO_API_KEY=
 ```
 
-Composio (Gmail for Maria / `senior_maria`): `POST /composio/connect` then `POST /composio/execute` (defaults to `GMAIL_GET_PROFILE`). The key stays in `apps/api/.env`.
+Composio (Gmail for Maria / `senior_maria`): `POST /composio/connect` then `POST /composio/execute` (defaults to `GMAIL_GET_PROFILE`; pass `GMAIL_CREATE_EMAIL_DRAFT` or `GMAIL_SEND_EMAIL` for Jules). The key stays in `apps/api/.env`.
+
+## CI
+
+Pull requests and pushes to `main` run `pnpm typecheck` and `pnpm test` in GitHub Actions. Those checks do not need `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY`.
+
+## TEST TEST TESTING THIS IS DAN I SWEAR!

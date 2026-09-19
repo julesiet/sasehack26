@@ -11,8 +11,22 @@ import {
 } from "expo-audio";
 import { File, Paths } from "expo-file-system";
 import * as Speech from "expo-speech";
-import { DEFAULT_SESSION_ID, type ConversationReplyKind } from "@kasama/shared";
-import { ApiError, fetchKasamaVoice, postConversationTurn, transcribeRecording } from "../lib/api";
+import {
+  DEFAULT_SESSION_ID,
+  type ApprovalChoice,
+  type ConversationReplyKind,
+  type ConversationTurn,
+  type LastApproval,
+  type PendingApproval,
+} from "@kasama/shared";
+import {
+  ApiError,
+  fetchKasamaVoice,
+  fetchSession,
+  postApproval,
+  postConversationTurn,
+  transcribeRecording,
+} from "../lib/api";
 
 /**
  * Conversation phases. Each one maps to a designed state on the senior screen.
@@ -22,6 +36,7 @@ import { ApiError, fetchKasamaVoice, postConversationTurn, transcribeRecording }
  * thinking   Transcribing and waiting on Kasama's reply.
  * speaking   Kasama is talking. Tap mic to interrupt.
  * clarify    Kasama asked one question and is waiting for the answer.
+ * approving  High-risk Yes / No is on screen. Voice still works.
  * micDenied  Microphone permission refused. Large-text recovery + typing.
  * error      Could not reach Kasama or hear the clip. Recoverable.
  */
@@ -31,6 +46,7 @@ export type ConversationPhase =
   | "thinking"
   | "speaking"
   | "clarify"
+  | "approving"
   | "micDenied"
   | "error";
 
@@ -43,6 +59,11 @@ export type ConversationUiState = {
   kasamaKind: ConversationReplyKind | null;
   /** Large-text message for `error`, or a hint when speech-to-text is unavailable. */
   notice: string | null;
+  pendingApproval: PendingApproval | null;
+  lastApproval: LastApproval | null;
+  /** Saved/declined card for the decision we just made. Cleared on the next turn. */
+  justResolved: LastApproval | null;
+  turns: ConversationTurn[];
 };
 
 const MAX_RECORDING_MS = 15_000;
@@ -57,6 +78,10 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     kasamaText: null,
     kasamaKind: null,
     notice: null,
+    pendingApproval: null,
+    lastApproval: null,
+    justResolved: null,
+    turns: [],
   });
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
@@ -99,10 +124,20 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
   );
 
   const speak = useCallback(
-    async (text: string, kind: ConversationReplyKind) => {
-      const settle = () => patch({ phase: kind === "clarification" ? "clarify" : "idle" });
+    async (text: string, kind: ConversationReplyKind, pending: PendingApproval | null = null) => {
+      const settle = () =>
+        patch({
+          phase: kind === "clarification" ? "clarify" : pending ? "approving" : "idle",
+          pendingApproval: pending,
+        });
       stopVoice();
-      patch({ phase: "speaking", kasamaText: text, kasamaKind: kind, notice: null });
+      patch({
+        phase: "speaking",
+        kasamaText: text,
+        kasamaKind: kind,
+        notice: null,
+        pendingApproval: pending,
+      });
 
       try {
         const bytes = await fetchKasamaVoice(text);
@@ -134,10 +169,36 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     async (transcript: string) => {
       const clean = transcript.trim();
       if (!clean) return;
-      patch({ phase: "thinking", seniorText: clean, notice: null });
+      const localTurn: ConversationTurn = {
+        id: `local_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        speaker: "senior",
+        text: clean,
+      };
+      setState((prev) => ({
+        ...prev,
+        phase: "thinking",
+        seniorText: clean,
+        notice: null,
+        justResolved: null,
+        turns: [...prev.turns, localTurn],
+      }));
       try {
         const reply = await postConversationTurn(clean, sessionId);
-        await speak(reply.reply, reply.kind);
+        const session = await fetchSession(sessionId);
+        if (mounted.current) {
+          setState((prev) => ({
+            ...prev,
+            pendingApproval: reply.pendingApproval,
+            lastApproval: session.lastApproval,
+            justResolved:
+              !reply.pendingApproval && prev.pendingApproval && session.lastApproval
+                ? session.lastApproval
+                : null,
+            turns: session.conversation.turns,
+          }));
+        }
+        await speak(reply.reply, reply.kind, reply.pendingApproval);
       } catch (error) {
         patch({
           phase: "error",
@@ -210,14 +271,29 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         return;
       case "speaking":
         stopVoice();
-        patch({ phase: state.kasamaKind === "clarification" ? "clarify" : "idle" });
+        patch({
+          phase:
+            state.kasamaKind === "clarification"
+              ? "clarify"
+              : state.pendingApproval
+                ? "approving"
+                : "idle",
+        });
         return;
       case "thinking":
         return;
       default:
         await startListening();
     }
-  }, [patch, startListening, state.kasamaKind, state.phase, stopListening, stopVoice]);
+  }, [
+    patch,
+    startListening,
+    state.kasamaKind,
+    state.pendingApproval,
+    state.phase,
+    stopListening,
+    stopVoice,
+  ]);
 
   const submitText = useCallback(
     async (text: string) => {
@@ -228,9 +304,39 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     [sendTurn, state.phase, stopVoice],
   );
 
+  const decideApproval = useCallback(
+    async (decision: ApprovalChoice) => {
+      if (state.phase === "listening" || state.phase === "thinking") return;
+      stopVoice();
+      patch({ phase: "thinking", notice: null });
+      try {
+        const result = await postApproval(decision, sessionId);
+        const session = await fetchSession(sessionId);
+        if (mounted.current) {
+          setState((prev) => ({
+            ...prev,
+            pendingApproval: result.pendingApproval,
+            lastApproval: result.lastApproval ?? session.lastApproval,
+            justResolved: result.lastApproval ?? session.lastApproval,
+            turns: session.conversation.turns,
+          }));
+        }
+        await speak(result.reply, "answer", result.pendingApproval);
+      } catch {
+        patch({
+          phase: "error",
+          notice: "Kasama could not save that yes or no. Please try again.",
+        });
+      }
+    },
+    [patch, sessionId, speak, state.phase, stopVoice],
+  );
+
   const repeatLastReply = useCallback(() => {
-    if (state.kasamaText && state.kasamaKind) void speak(state.kasamaText, state.kasamaKind);
-  }, [speak, state.kasamaKind, state.kasamaText]);
+    if (state.kasamaText && state.kasamaKind) {
+      void speak(state.kasamaText, state.kasamaKind, state.pendingApproval);
+    }
+  }, [speak, state.kasamaKind, state.kasamaText, state.pendingApproval]);
 
   const openSettings = useCallback(() => {
     void Linking.openSettings();
@@ -246,6 +352,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     state,
     pressMic,
     submitText,
+    decideApproval,
     repeatLastReply,
     openSettings,
     recheckMic,
