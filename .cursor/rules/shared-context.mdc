@@ -1,0 +1,16 @@
+---
+description: Keep Kasama context identical for every agent
+alwaysApply: true
+---
+
+# Shared context
+
+Read `AGENTS.md` and `ARCHITECTURE.md` before changing this repo.
+
+All agents share one context. Put new facts in those canonical files (or `docs/CONVENTIONS.md` / `docs/SAFETY.md`). Do not add a second notes/architecture/agent markdown file.
+
+If you change packages, routes, tools, policy, or commands, update the same docs in the same change.
+
+Tool and permission source of truth is `packages/shared` (`tools.ts`, `policy.ts`). Docs must match the code.
+
+iOS-only Expo app. Uber for rides. No designed UI on `blocked:design` issues. Do not commit unless the user asks.
