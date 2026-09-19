@@ -6,8 +6,8 @@ Where to put work so every agent sees the same system.
 
 ```text
 apps/mobile/src/screens/    iOS screens (placeholders until design-ready)
-apps/api/src/               Hono app, tool invoke, in-memory audit
-packages/shared/src/        Zod + policy + audit types (source of truth)
+apps/api/src/               Hono app, tool invoke, in-memory session + audit
+packages/shared/src/        Zod + policy + audit + session types (source of truth)
 AGENTS.md                   Coding-agent operating manual
 ARCHITECTURE.md             System map
 docs/                       Extra canonical docs only (this folder)

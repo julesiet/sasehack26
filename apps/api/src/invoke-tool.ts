@@ -12,10 +12,12 @@ import {
   isKnownTool,
   notifyCaretakerInputSchema,
   notifyCaretakerResultSchema,
+  resolveSessionId,
   toolInputSchemas,
   type ToolName,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
+import { sessionStore } from "./session-store";
 
 export type ToolHttpResult = {
   status: 200 | 400 | 403 | 404;
@@ -137,6 +139,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     };
   }
 
+  const sessionId = resolveSessionId(request.data.sessionId);
   const decision = evaluateToolCall(name, {
     actor: request.data.actor,
     approvalToken: request.data.approvalToken,
@@ -158,7 +161,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     const event = auditLog.append({
       whoAsked: {
         actor: request.data.actor,
-        sessionId: request.data.sessionId,
+        sessionId,
       },
       proposed: { tool: name, input: parsedInput.data },
       approved: {
@@ -172,6 +175,15 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
         reason: decision.reason,
         summary: decision.summary,
       },
+    });
+    sessionStore.applyToolEvent({
+      sessionId,
+      tool: name,
+      input: parsedInput.data,
+      actor: request.data.actor,
+      consentGranted: request.data.consentGranted,
+      decision,
+      event,
     });
 
     return {
@@ -191,7 +203,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
   const event = auditLog.append({
     whoAsked: {
       actor: request.data.actor,
-      sessionId: request.data.sessionId,
+      sessionId,
     },
     proposed: { tool: name, input: parsedInput.data },
     approved: {
@@ -204,6 +216,16 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
       success: result.success,
       summary: result.summary,
     },
+  });
+  sessionStore.applyToolEvent({
+    sessionId,
+    tool: name,
+    input: parsedInput.data,
+    actor: request.data.actor,
+    consentGranted: request.data.consentGranted,
+    decision,
+    result,
+    event,
   });
 
   return { status: 200, body: { ...result, auditId: event.id } };

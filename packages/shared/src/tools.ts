@@ -22,6 +22,7 @@ export const appointmentSchema = z.object({
   end: z.string().optional(),
   location: z.string().optional(),
 });
+export type Appointment = z.infer<typeof appointmentSchema>;
 
 export const getAppointmentResultSchema = z.object({
   success: z.boolean(),

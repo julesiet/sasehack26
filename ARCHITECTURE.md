@@ -26,7 +26,7 @@ Senior speaks on iPhone → Kasama understands intent → Kasama gathers care co
 | Path | Name | Role |
 |---|---|---|
 | `apps/mobile` | `@kasama/mobile` | Expo iOS client. Placeholder Home / Senior / Caretaker. Hidden Dev toggle. |
-| `apps/api` | `@kasama/api` | Hono server. Health, tool invoke, audit. |
+| `apps/api` | `@kasama/api` | Hono server. Health, tool invoke, session, audit. |
 | `packages/shared` | `@kasama/shared` | Zod contracts, `POLICY_TABLE`, audit schema. Imported by API and mobile. |
 
 Do not add `apps/web` or an Android app. Do not move contracts out of `packages/shared`.
@@ -57,9 +57,13 @@ Entry: `apps/api/src/index.ts` listens on `PORT` (default 3001). App routes live
 }
 ```
 
-Flow: parse name → Zod input → `evaluateToolCall` → append audit → stub execute (or 403).
+Flow: parse name → Zod input → `evaluateToolCall` → stub execute if allowed → append audit → update session projection (or 403).
 
-`GET /audit` returns `{ events }` from the process-local log (`apps/api/src/audit-log.ts`). Not durable.
+Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/shared/src/session.ts`). Senior and caretaker clients share one `sessionId` and poll the same view.
+
+`GET /sessions/:sessionId` returns a `sessionViewSchema` projection from the process-local store (`apps/api/src/session-store.ts`): current request, pending approval, appointment, last Uber booking, caretaker activity, Maria-seed care signal (`"worth reviewing"`), consent, and that session's audit events in append order. Unknown ids return an empty pollable view (200), not 404.
+
+`GET /audit` returns `{ events }` from the process-local log (`apps/api/src/audit-log.ts`). Optional `?sessionId=` filters. Not durable.
 
 ## Shared contracts
 
@@ -67,10 +71,11 @@ Flow: parse name → Zod input → `evaluateToolCall` → append audit → stub 
 - `packages/shared/src/policy.ts` — `POLICY_TABLE`, `evaluateAction`, `evaluateToolCall`
 - `packages/shared/src/audit.ts` — event shape + `createAuditLog()`
 - `packages/shared/src/invoke.ts` — HTTP request schema
+- `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`)
 - `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
 - `packages/shared/src/index.ts` — re-exports
 
-If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in `apps/api/src/invoke-tool.ts`, add tests, and update this file.
+If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in `apps/api/src/invoke-tool.ts`, project any session fields in `apps/api/src/session-store.ts`, add tests, and update this file.
 
 ## Uber
 
@@ -80,7 +85,7 @@ Fallback if live Uber is blocked: a controlled Uber-shaped environment — still
 
 ## What is not built yet
 
-Agent harness / playground (`#5`, `#13`), live calendar + Uber (`#7`, `#14`), designed UI (`#4`, `#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`), session HTTP (`#18`).
+Agent harness / playground (`#5`, `#13`), live calendar + Uber (`#7`, `#14`), designed UI (`#4`, `#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
 
 Maria's seed data (`#2`) is built: `get_appointment` returns her real appointment (still a stub for every other date, since live calendar is `#7`).
 
