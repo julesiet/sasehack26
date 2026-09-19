@@ -170,6 +170,27 @@ function openNotifyCheckpoint(sessionId: string, summary: string): HarnessTurnRe
   };
 }
 
+function applySpokenProduct(
+  transcript: string,
+  decided: HarnessTurnResult,
+  previous: ActiveRequest | null,
+): HarnessTurnResult {
+  const product = spokenProduct(normalize(transcript));
+  const active = decided.activeRequest;
+  if (!product || active?.intent !== "ride") {
+    return decided;
+  }
+  const answeringProposal = previous?.intent === "ride" && previous.status === "proposed";
+  return {
+    ...decided,
+    activeRequest: {
+      ...active,
+      product,
+      status: answeringProposal && active.status === "proposed" ? "accepted" : active.status,
+    },
+  };
+}
+
 function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
   if (decided.activeRequest?.intent !== "ride" || decided.activeRequest.status !== "accepted") {
     return applyPendingPrompt(sessionId, decided);
@@ -455,24 +476,36 @@ export async function runConversationTurn(
     try {
       decided = maybeOpenBookingCheckpoint(
         sessionId,
-        await runHarnessTurn({
-          transcript: request.data.transcript,
-          sessionId,
-          state,
-          now,
-          complete,
-        }),
+        applySpokenProduct(
+          request.data.transcript,
+          await runHarnessTurn({
+            transcript: request.data.transcript,
+            sessionId,
+            state,
+            now,
+            complete,
+          }),
+          state.activeRequest,
+        ),
       );
     } catch {
       decided = maybeOpenBookingCheckpoint(
         sessionId,
-        runRulesTurn(sessionId, request.data.transcript, state, now),
+        applySpokenProduct(
+          request.data.transcript,
+          runRulesTurn(sessionId, request.data.transcript, state, now),
+          state.activeRequest,
+        ),
       );
     }
   } else {
     decided = maybeOpenBookingCheckpoint(
       sessionId,
-      runRulesTurn(sessionId, request.data.transcript, state, now),
+      applySpokenProduct(
+        request.data.transcript,
+        runRulesTurn(sessionId, request.data.transcript, state, now),
+        state.activeRequest,
+      ),
     );
   }
 

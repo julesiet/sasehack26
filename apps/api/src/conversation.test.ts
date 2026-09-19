@@ -308,4 +308,21 @@ describe("runConversationTurn", () => {
       "find_ride_options",
     ]);
   });
+
+  it("opens the UberX checkpoint when harness ignores the cheaper phrase", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    const result = await runConversationTurn(
+      { transcript: "the cheaper one", sessionId: "voice-1" },
+      {
+        complete: async () => ({
+          role: "assistant",
+          content: "I can set that Uber up for you.",
+        }),
+      },
+    );
+    expect(result.status).toBe(200);
+    const reply = conversationTurnResponseSchema.parse(result.body);
+    expect(reply.pendingApproval?.input).toEqual({ optionId: "uberx_1" });
+    expect(reply.pendingApproval?.estimate).toBe("$18.00");
+  });
 });
