@@ -29,6 +29,9 @@ export function parsePlaygroundArgs(argv: string[]): CliOptions {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    if (arg === "--") {
+      continue;
+    }
     if (arg === "--help" || arg === "-h") {
       help = true;
       continue;

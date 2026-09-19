@@ -149,6 +149,15 @@ describe("playground CLI", () => {
     });
   });
 
+  it("ignores a leftover pnpm -- separator", () => {
+    expect(parsePlaygroundArgs(["--", "--session-id", "cli-2"])).toEqual({
+      transcript: PLAYGROUND_DEMO_TRANSCRIPT,
+      sessionId: "cli-2",
+      until: "checkpoint",
+      help: false,
+    });
+  });
+
   it("prints JSON for the demo line without booking", async () => {
     const result = await runPlaygroundCli(["--session-id", "cli-demo"]);
     expect(result.status).toBe(0);
