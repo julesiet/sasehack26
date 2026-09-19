@@ -53,7 +53,13 @@ export type ConversationSpeaker = z.infer<typeof conversationSpeakerSchema>;
 export const conversationReplyKindSchema = z.enum(["answer", "clarification", "proposal"]);
 export type ConversationReplyKind = z.infer<typeof conversationReplyKindSchema>;
 
-export const conversationIntentSchema = z.enum(["ride", "appointment_info", "unknown"]);
+export const conversationIntentSchema = z.enum([
+  "ride",
+  "appointment_info",
+  "medication_reminder",
+  "hospital_schedule",
+  "unknown",
+]);
 export type ConversationIntent = z.infer<typeof conversationIntentSchema>;
 
 export const conversationTurnSchema = z.object({
@@ -73,6 +79,13 @@ export const activeRequestSchema = z.object({
   date: z.string().optional(),
   appointmentId: z.string().optional(),
   product: uberProductSchema.optional(),
+  medicationName: z.string().optional(),
+  frequency: z.string().optional(),
+  intervalDays: z.number().int().positive().optional(),
+  placeName: z.string().optional(),
+  distance: z.string().optional(),
+  reason: z.string().optional(),
+  timeLabel: z.string().optional(),
   status: z.enum(["gathering", "proposed", "accepted"]),
 });
 export type ActiveRequest = z.infer<typeof activeRequestSchema>;

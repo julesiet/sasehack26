@@ -5,6 +5,8 @@ export const toolNames = [
   "find_ride_options",
   "book_ride",
   "notify_caretaker",
+  "save_medication_reminder",
+  "save_hospital_visit",
 ] as const;
 
 export type ToolName = (typeof toolNames)[number];
@@ -95,11 +97,60 @@ export const notifyCaretakerResultSchema = z.object({
     .optional(),
 });
 
+/** Local task only — never a prescription change. */
+export const saveMedicationReminderInputSchema = z.object({
+  name: z.string().min(1),
+  frequency: z.string().min(1),
+  intervalDays: z.number().int().positive(),
+  /** Skip the (stub) health provider and keep the reminder on-device. */
+  saveLocally: z.boolean().optional(),
+});
+
+export const medicationReminderSchema = z.object({
+  name: z.string(),
+  frequency: z.string(),
+  intervalDays: z.number().int().positive(),
+});
+export type MedicationReminder = z.infer<typeof medicationReminderSchema>;
+
+export const saveMedicationReminderResultSchema = z.object({
+  success: z.boolean(),
+  confirmationId: z.string().optional(),
+  summary: z.string(),
+  savedLocally: z.boolean().optional(),
+  healthSyncError: z.boolean().optional(),
+  reminder: medicationReminderSchema.optional(),
+});
+
+export const saveHospitalVisitInputSchema = z.object({
+  placeName: z.string().min(1),
+  distance: z.string().min(1),
+  reason: z.string().min(1),
+  timeLabel: z.string().min(1),
+});
+
+export const hospitalVisitDetailsSchema = z.object({
+  placeName: z.string(),
+  distance: z.string(),
+  reason: z.string(),
+  timeLabel: z.string(),
+});
+export type HospitalVisitDetails = z.infer<typeof hospitalVisitDetailsSchema>;
+
+export const saveHospitalVisitResultSchema = z.object({
+  success: z.boolean(),
+  confirmationId: z.string().optional(),
+  summary: z.string(),
+  visit: hospitalVisitDetailsSchema.optional(),
+});
+
 export const toolInputSchemas = {
   get_appointment: getAppointmentInputSchema,
   find_ride_options: findRideOptionsInputSchema,
   book_ride: bookRideInputSchema,
   notify_caretaker: notifyCaretakerInputSchema,
+  save_medication_reminder: saveMedicationReminderInputSchema,
+  save_hospital_visit: saveHospitalVisitInputSchema,
 } as const;
 
 export const toolResultSchemas = {
@@ -107,6 +158,8 @@ export const toolResultSchemas = {
   find_ride_options: findRideOptionsResultSchema,
   book_ride: bookRideResultSchema,
   notify_caretaker: notifyCaretakerResultSchema,
+  save_medication_reminder: saveMedicationReminderResultSchema,
+  save_hospital_visit: saveHospitalVisitResultSchema,
 } as const;
 
 export type GetAppointmentInput = z.infer<typeof getAppointmentInputSchema>;
@@ -118,6 +171,10 @@ export type BookRideInput = z.infer<typeof bookRideInputSchema>;
 export type BookRideResult = z.infer<typeof bookRideResultSchema>;
 export type NotifyCaretakerInput = z.infer<typeof notifyCaretakerInputSchema>;
 export type NotifyCaretakerResult = z.infer<typeof notifyCaretakerResultSchema>;
+export type SaveMedicationReminderInput = z.infer<typeof saveMedicationReminderInputSchema>;
+export type SaveMedicationReminderResult = z.infer<typeof saveMedicationReminderResultSchema>;
+export type SaveHospitalVisitInput = z.infer<typeof saveHospitalVisitInputSchema>;
+export type SaveHospitalVisitResult = z.infer<typeof saveHospitalVisitResultSchema>;
 
 export type ToolInput<T extends ToolName> = z.infer<(typeof toolInputSchemas)[T]>;
 export type ToolResult<T extends ToolName> = z.infer<(typeof toolResultSchemas)[T]>;

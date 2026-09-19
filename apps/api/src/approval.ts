@@ -2,10 +2,15 @@ import {
   approvalRequestSchema,
   approvalResponseSchema,
   approvedBookingReply,
+  approvedHospitalVisitReply,
+  approvedMedicationReminderReply,
   approvedNotifyReply,
   declinedBookingReply,
+  declinedHospitalVisitReply,
+  declinedMedicationReminderReply,
   declinedNotifyReply,
   failedBookingReply,
+  healthSyncFailedReply,
   resolveSessionId,
   type ActiveRequest,
   type Actor,
@@ -54,8 +59,16 @@ export function resolvePendingApproval(input: {
   if (input.decision === "decline") {
     const before = auditLog.list().length;
     const view = sessionStore.declinePending({ sessionId, actor: input.actor });
+    const reply =
+      pending.tool === "notify_caretaker"
+        ? declinedNotifyReply()
+        : pending.tool === "save_medication_reminder"
+          ? declinedMedicationReminderReply()
+          : pending.tool === "save_hospital_visit"
+            ? declinedHospitalVisitReply()
+            : declinedBookingReply();
     return {
-      reply: pending.tool === "notify_caretaker" ? declinedNotifyReply() : declinedBookingReply(),
+      reply,
       activeRequest: view.conversation.activeRequest,
       plan: planFromAuditEvents(auditLog.list().slice(before)),
       failure: null,
@@ -74,6 +87,49 @@ export function resolvePendingApproval(input: {
   if (pending.tool === "notify_caretaker") {
     return {
       reply: approvedNotifyReply(),
+      activeRequest: view.conversation.activeRequest,
+      plan: planFromAuditEvents(auditLog.list().slice(before)),
+      failure: null,
+    };
+  }
+
+  if (pending.tool === "save_medication_reminder") {
+    const reminder =
+      pending.input && typeof pending.input === "object" && "name" in pending.input
+        ? String((pending.input as { name: unknown }).name)
+        : "this medication";
+    if (view.pendingApproval?.tool === "save_medication_reminder") {
+      return {
+        reply: healthSyncFailedReply(),
+        activeRequest: view.conversation.activeRequest,
+        plan: planFromAuditEvents(auditLog.list().slice(before)),
+        failure: {
+          kind: "retry",
+          tool: "save_medication_reminder",
+          summary: healthSyncFailedReply(),
+        },
+      };
+    }
+    return {
+      reply: approvedMedicationReminderReply({
+        name: reminder,
+        savedLocally: invoked.body.savedLocally === true,
+      }),
+      activeRequest: view.conversation.activeRequest,
+      plan: planFromAuditEvents(auditLog.list().slice(before)),
+      failure: invoked.body.success === false
+        ? { kind: "retry", tool: "save_medication_reminder", summary: String(invoked.body.summary ?? "") }
+        : null,
+    };
+  }
+
+  if (pending.tool === "save_hospital_visit") {
+    const placeName =
+      pending.input && typeof pending.input === "object" && "placeName" in pending.input
+        ? String((pending.input as { placeName: unknown }).placeName)
+        : "the hospital";
+    return {
+      reply: approvedHospitalVisitReply(placeName),
       activeRequest: view.conversation.activeRequest,
       plan: planFromAuditEvents(auditLog.list().slice(before)),
       failure: null,

@@ -61,6 +61,13 @@ export function getMariaAppointment(referenceDate: Date = new Date()): SeedAppoi
   });
 }
 
+/** Closest hospital in the senior-chat mock (#41). Not live EHR. */
+export const MARIA_NEARBY_HOSPITAL = {
+  id: "hospital_st_marys",
+  placeName: "St. Mary's Hospital",
+  distance: "0.8 miles away",
+} as const;
+
 /** Pickup time to arrive `leadMinutes` before the appointment (default 15). */
 export function computeArrivalTarget(
   appointment: SeedAppointment,

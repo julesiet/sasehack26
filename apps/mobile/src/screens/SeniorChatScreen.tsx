@@ -1,16 +1,21 @@
 import { useEffect, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
+  pendingHospitalVisit,
+  pendingMedicationReminder,
   selectedRideOption,
   type ActiveRequest,
   type ConversationTurn,
   type LastApproval,
   type PendingApproval,
   type SessionBooking,
+  type SessionHospitalVisit,
   type UberRideOption,
 } from "@kasama/shared";
 import { ChatBubble } from "../components/ChatBubble";
 import { ConfirmationCard, type ConfirmationStatus } from "../components/ConfirmationCard";
+import { HospitalAppointmentCard } from "../components/HospitalAppointmentCard";
+import { MedicationReminderCard } from "../components/MedicationReminderCard";
 import { RideOptionsCard } from "../components/RideOptionsCard";
 import { RideStatusCard } from "../components/RideStatusCard";
 import type { ConversationPhase, RideWork } from "../hooks/useKasamaConversation";
@@ -24,6 +29,7 @@ type Props = {
   justResolved: LastApproval | null;
   lastRideOptions: UberRideOption[];
   lastBooking: SessionBooking | null;
+  lastHospitalVisit: SessionHospitalVisit | null;
   activeRequest: ActiveRequest | null;
   rideWork: RideWork;
   notice: string | null;
@@ -59,6 +65,7 @@ export function SeniorChatScreen({
   justResolved,
   lastRideOptions,
   lastBooking,
+  lastHospitalVisit,
   activeRequest,
   rideWork,
   notice,
@@ -71,10 +78,25 @@ export function SeniorChatScreen({
   const card = confirmationFromPending(pendingApproval, justResolved, lastRideOptions, lastBooking);
   const cardStatus = confirmationStatus(pendingApproval, justResolved, lastBooking, rideWork);
   const selected = selectedRideOption(lastRideOptions, pendingApproval, activeRequest?.product);
+  const reminder = pendingMedicationReminder(pendingApproval);
+  const hospitalPending = pendingHospitalVisit(pendingApproval);
+  const hospitalSaved = lastHospitalVisit?.status === "saved" && !hospitalPending;
+  const hospitalCancelled =
+    lastHospitalVisit?.status === "cancelled" && justResolved?.tool === "save_hospital_visit";
   const rideFinished =
     lastBooking?.status === "booked" && !pendingApproval && activeRequest?.status !== "proposed";
   const showOptions =
-    lastRideOptions.length > 0 && justResolved?.decision !== "approved" && !rideFinished;
+    lastRideOptions.length > 0 &&
+    justResolved?.decision !== "approved" &&
+    !rideFinished &&
+    !reminder &&
+    !hospitalPending;
+  const showRideConfirmation =
+    Boolean(card && cardStatus && !reminder && !hospitalPending) &&
+    (pendingApproval?.tool === "book_ride" ||
+      pendingApproval?.tool === "notify_caretaker" ||
+      justResolved?.tool === "book_ride" ||
+      justResolved?.tool === "notify_caretaker");
   const busy = phase === "thinking" || rideWork !== "none";
 
   useEffect(() => {
@@ -82,7 +104,7 @@ export function SeniorChatScreen({
       scroll.current?.scrollToEnd({ animated: true });
     });
     return () => cancelAnimationFrame(id);
-  }, [turns.length, cardStatus, lastRideOptions.length, rideWork]);
+  }, [turns.length, cardStatus, lastRideOptions.length, rideWork, reminder, hospitalPending, lastHospitalVisit?.status]);
 
   return (
     <ScrollView
@@ -117,7 +139,53 @@ export function SeniorChatScreen({
         </View>
       ) : null}
 
-      {card && cardStatus ? (
+      {reminder ? (
+        <View style={styles.cardWrap}>
+          <MedicationReminderCard
+            reminder={reminder}
+            status={reminder.saveLocally ? "sync_failed" : "proposed"}
+            disabled={busy}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+          />
+        </View>
+      ) : null}
+
+      {hospitalPending ? (
+        <View style={styles.cardWrap}>
+          <HospitalAppointmentCard
+            visit={hospitalPending}
+            status="pending"
+            disabled={busy}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+          />
+        </View>
+      ) : null}
+
+      {hospitalSaved && lastHospitalVisit ? (
+        <View style={styles.cardWrap}>
+          <HospitalAppointmentCard
+            visit={lastHospitalVisit}
+            status="saved"
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+          />
+        </View>
+      ) : null}
+
+      {hospitalCancelled && lastHospitalVisit ? (
+        <View style={styles.cardWrap}>
+          <HospitalAppointmentCard
+            visit={lastHospitalVisit}
+            status="cancelled"
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+          />
+        </View>
+      ) : null}
+
+      {card && cardStatus && showRideConfirmation ? (
         <View style={styles.cardWrap}>
           <ConfirmationCard
             data={card}

@@ -11,6 +11,8 @@ export const policyActions = [
   "book_ride",
   "spend_money",
   "change_medication",
+  "save_medication_reminder",
+  "save_hospital_visit",
   "share_health_information",
   "diagnose",
 ] as const;
@@ -36,6 +38,8 @@ export const POLICY_TABLE = {
   book_ride: { requirement: "require_confirmation" },
   spend_money: { requirement: "require_confirmation" },
   change_medication: { requirement: "caretaker_doctor_only" },
+  save_medication_reminder: { requirement: "require_confirmation" },
+  save_hospital_visit: { requirement: "require_confirmation" },
   share_health_information: { requirement: "explicit_consent" },
   diagnose: { requirement: "never" },
 } as const satisfies Record<PolicyAction, { requirement: PolicyRequirement }>;
@@ -45,6 +49,8 @@ export const HIGH_RISK_ACTIONS = [
   "book_ride",
   "spend_money",
   "change_medication",
+  "save_medication_reminder",
+  "save_hospital_visit",
   "share_health_information",
   "diagnose",
 ] as const satisfies readonly PolicyAction[];
@@ -54,6 +60,8 @@ export const TOOL_ACTIONS = {
   find_ride_options: ["search_rides"],
   book_ride: ["book_ride", "spend_money"],
   notify_caretaker: ["draft_caretaker_message", "send_message"],
+  save_medication_reminder: ["save_medication_reminder"],
+  save_hospital_visit: ["save_hospital_visit"],
 } as const satisfies Record<ToolName, readonly PolicyAction[]>;
 
 export type ApprovalContext = {

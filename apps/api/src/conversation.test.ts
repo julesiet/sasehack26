@@ -432,4 +432,103 @@ describe("runConversationTurn", () => {
     expect(reply.reply).not.toMatch(/booked/i);
     expect(sessionStore.get("voice-1").lastBooking).toEqual(firstBooking);
   });
+
+  it("opens a medication reminder card without changing a prescription", async () => {
+    const reply = await turn("Remind me to take Lisinopril every 4 days");
+    expect(reply.kind).toBe("proposal");
+    expect(reply.reply).toContain("I'll set that up for you");
+    expect(reply.activeRequest).toMatchObject({
+      intent: "medication_reminder",
+      medicationName: "Lisinopril",
+      frequency: "Every 4 days",
+      status: "proposed",
+    });
+    expect(reply.pendingApproval?.tool).toBe("save_medication_reminder");
+    expect(reply.pendingApproval?.input).toMatchObject({
+      name: "Lisinopril",
+      frequency: "Every 4 days",
+      intervalDays: 4,
+    });
+    expect(sessionStore.get("voice-1").tasks).toEqual([]);
+  });
+
+  it("fails health sync on the first yes, then saves the reminder locally", async () => {
+    await turn("Remind me to take Lisinopril every 4 days");
+    const failed = await turn("Yes");
+    expect(failed.reply).toContain("health provider");
+    expect(failed.pendingApproval?.tool).toBe("save_medication_reminder");
+    expect(failed.pendingApproval?.input).toMatchObject({ saveLocally: true });
+    expect(sessionStore.get("voice-1").lastMedicationReminder?.status).toBe("sync_failed");
+    expect(sessionStore.get("voice-1").tasks).toEqual([]);
+
+    const saved = await turn("Yes");
+    expect(saved.pendingApproval).toBeNull();
+    expect(saved.reply).toMatch(/saved the Lisinopril reminder/i);
+    expect(saved.reply).toMatch(/did not change any medication/i);
+    const view = sessionStore.get("voice-1");
+    expect(view.lastMedicationReminder).toMatchObject({
+      name: "Lisinopril",
+      status: "saved",
+      savedLocally: true,
+    });
+    expect(view.tasks).toEqual([
+      expect.objectContaining({
+        kind: "medication_reminder",
+        title: "Lisinopril",
+        detail: "Every 4 days",
+        savedLocally: true,
+      }),
+    ]);
+  });
+
+  it("cancels a medication reminder without adding a task", async () => {
+    await turn("Remind me to take Lisinopril every 4 days");
+    const reply = await turn("No, cancel");
+    expect(reply.pendingApproval).toBeNull();
+    expect(sessionStore.get("voice-1").tasks).toEqual([]);
+    expect(sessionStore.get("voice-1").lastMedicationReminder?.status).toBe("cancelled");
+  });
+
+  it("walks the hospital scheduling thread then saves local details", async () => {
+    const first = await turn("Schedule an appointment at a hospital near me");
+    expect(first.kind).toBe("clarification");
+    expect(first.reply).toContain("What is this appointment for");
+    expect(first.activeRequest?.intent).toBe("hospital_schedule");
+    expect(sessionStore.get("voice-1").conversation.turns.map((turn) => turn.text)).toEqual([
+      "Schedule an appointment at a hospital near me",
+      "Looking for the closest hospital now.",
+      first.reply,
+    ]);
+
+    const reason = await turn("Annual physical. I want to discuss my blood pressure");
+    expect(reason.kind).toBe("clarification");
+    expect(reason.reply).toContain("What time works best");
+    expect(reason.activeRequest?.reason).toBe("Annual physical. Discuss blood pressure.");
+
+    const proposed = await turn("Thursday at 10 AM");
+    expect(proposed.kind).toBe("proposal");
+    expect(proposed.reply).toContain("closest hospital");
+    expect(proposed.pendingApproval?.tool).toBe("save_hospital_visit");
+    expect(proposed.pendingApproval?.input).toMatchObject({
+      placeName: "St. Mary's Hospital",
+      distance: "0.8 miles away",
+      reason: "Annual physical. Discuss blood pressure.",
+      timeLabel: "Thursday at 10:00 AM",
+    });
+
+    const saved = await turn("Yes");
+    expect(saved.pendingApproval).toBeNull();
+    expect(saved.reply).toContain("St. Mary's Hospital");
+    const view = sessionStore.get("voice-1");
+    expect(view.lastHospitalVisit).toMatchObject({
+      placeName: "St. Mary's Hospital",
+      status: "saved",
+    });
+    expect(view.tasks).toEqual([
+      expect.objectContaining({
+        kind: "hospital_visit",
+        title: "St. Mary's Hospital",
+      }),
+    ]);
+  });
 });
