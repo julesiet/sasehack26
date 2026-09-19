@@ -61,7 +61,7 @@ iOS Simulator:
 pnpm ios
 ```
 
-The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). Kasama speaks back with iOS speech.
+The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). After you say yes, Kasama asks "The Uber is $24.50. Should I book it?" — say yes or tap **Yes**. Nothing is booked until that second yes. Tap **Caretaker** to see the same pending or declined approval.
 
 Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env` (the key needs Speech to Text **and** Text to Speech). Without it the Senior screen asks you to type and uses iOS speech for replies. The Simulator uses your Mac's microphone.
 

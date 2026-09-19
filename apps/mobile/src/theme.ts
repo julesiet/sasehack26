@@ -29,6 +29,16 @@ export const colors = {
   micLiveIcon: "#FFFFFF",
   caret: "#1E88E5",
   danger: "#B3261E",
+  noFill: "#FFFFFF",
+  noBorder: "#D7CFC6",
+  userBubble: "#111111",
+  onUserBubble: "#FFFFFF",
+  chatCard: "#FFFFFF",
+  chatLine: "#EEF1EF",
+  mapWash: "#E7F6F1",
+  pin: "#0F6B5C",
+  saved: "#0F6B5C",
+  cancelFill: "#F2F2F2",
 } as const;
 
 export const type = {
@@ -37,7 +47,11 @@ export const type = {
   transcript: { fontSize: 28, lineHeight: 36 },
   label: { fontSize: 20, lineHeight: 26 },
   button: { fontSize: 22, lineHeight: 28 },
+  yesNo: { fontFamily: "Georgia", fontSize: 32, lineHeight: 38 },
+  price: { fontFamily: "Georgia", fontSize: 44, lineHeight: 50 },
   input: { fontSize: 24, lineHeight: 30 },
+  eyebrow: { fontSize: 13, lineHeight: 16, letterSpacing: 1.2, fontWeight: "700" as const },
+  cardTitle: { fontSize: 22, lineHeight: 28, fontWeight: "600" as const },
 } as const;
 
 export const size = {
@@ -45,6 +59,7 @@ export const size = {
   orbGlyph: 32,
   pillHeight: 84,
   micButton: 68,
+  yesNo: 76,
   overflowWidth: 68,
   iconLg: 32,
   iconMd: 26,
@@ -55,4 +70,7 @@ export const radius = {
   pill: 42,
   overflow: 34,
   button: 22,
+  card: 28,
+  bubble: 22,
+  chip: 18,
 } as const;

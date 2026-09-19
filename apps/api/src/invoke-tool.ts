@@ -81,8 +81,25 @@ function executeStub(name: ToolName, input: unknown) {
       const parsed = findRideOptionsInputSchema.parse(input);
       return findRideOptionsResultSchema.parse({
         success: true,
-        summary: `Uber ride search is not implemented yet from ${parsed.pickup} to ${parsed.destination}.`,
-        options: [],
+        summary: `Two Uber options from ${parsed.pickup} to ${parsed.destination}: UberX about $18.00, WAV about $24.50.`,
+        options: [
+          {
+            optionId: "uberx_1",
+            provider: "uber",
+            product: "UberX",
+            estimate: "$18.00",
+            etaMinutes: 8,
+            accessible: false,
+          },
+          {
+            optionId: "uber_wav_1",
+            provider: "uber",
+            product: "WAV",
+            estimate: "$24.50",
+            etaMinutes: 12,
+            accessible: true,
+          },
+        ],
       });
     }
     case "book_ride": {

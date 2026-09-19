@@ -1,11 +1,14 @@
 import {
+  DEMO_UBER_WAV_OPTION_ID,
   MAX_CLARIFICATIONS_PER_REQUEST,
   MARIA_PROFILE,
+  bookingApprovalPrompt,
   conversationTurnRequestSchema,
   conversationTurnResponseSchema,
   findRideOptionsResultSchema,
   getAppointmentResultSchema,
   getMariaAppointment,
+  notifyApprovalPrompt,
   resolveSessionId,
   type ActiveRequest,
   type Appointment,
@@ -13,6 +16,7 @@ import {
   type ConversationState,
   type ConversationTurnResponse,
 } from "@kasama/shared";
+import { resolvePendingApproval } from "./approval";
 import { planFromAuditEvents, runHarnessTurn, type HarnessTurnResult } from "./harness";
 import { invokeTool } from "./invoke-tool";
 import { openaiChatComplete, type ChatComplete } from "./model";
@@ -43,6 +47,8 @@ const RIDE = /\b(ride|uber|car|taxi|cab|drive|driver|take me|get me to|bring me|
 const DOCTOR = /\b(doctor'?s?|dr\.?|appointment|check ?up|clinic|chen|physician)\b/;
 const APPOINTMENT_INFO = /\b(what time|when is|when'?s|what day|do i have|remind me)\b/;
 const VAGUE_PLACE = /\b(somewhere|anywhere|i don'?t know|not sure|dunno|um+|uh+)\b/;
+const NOTIFY =
+  /\b(tell|text|message|notify|let (my )?(family|son|daughter|james|caretaker) know)\b/;
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^\p{L}\p{N}'\s.-]/gu, " ").replace(/\s+/g, " ").trim();
@@ -96,6 +102,94 @@ function lookupAppointment(sessionId: string, date: string): Appointment | null 
   });
   if (result.status !== 200) return null;
   return getAppointmentResultSchema.parse(result.body).appointment ?? null;
+}
+
+function pickBookingOption(sessionId: string): { optionId: string; estimate?: string } {
+  const wav = sessionStore
+    .get(sessionId)
+    .lastRideOptions.find((option) => option.product === "WAV" || option.accessible);
+  const option = wav ?? sessionStore.get(sessionId).lastRideOptions[0];
+  return {
+    optionId: option?.optionId ?? DEMO_UBER_WAV_OPTION_ID,
+    estimate: option?.estimate,
+  };
+}
+
+function openBookingCheckpoint(sessionId: string, active: ActiveRequest): HarnessTurnResult {
+  const before = auditLog.list().length;
+  const { optionId } = pickBookingOption(sessionId);
+  invokeTool("book_ride", {
+    input: { optionId },
+    actor: "model",
+    sessionId,
+  });
+  const pending = sessionStore.get(sessionId).pendingApproval;
+  return {
+    text: pending?.prompt ?? bookingApprovalPrompt(pending?.estimate),
+    kind: "proposal",
+    activeRequest: { ...active, status: "accepted" },
+    askedClarification: false,
+    plan: planFromAuditEvents(auditLog.list().slice(before)),
+    failure: null,
+  };
+}
+
+function draftNotifySummary(transcript: string): string {
+  if (DOCTOR.test(normalize(transcript))) {
+    return "Maria is going to her doctor's appointment.";
+  }
+  return `Maria asked me to let you know: ${transcript.trim()}`;
+}
+
+function openNotifyCheckpoint(sessionId: string, summary: string): HarnessTurnResult {
+  const before = auditLog.list().length;
+  invokeTool("notify_caretaker", {
+    input: { summary, urgency: "normal" },
+    actor: "model",
+    sessionId,
+  });
+  const pending = sessionStore.get(sessionId).pendingApproval;
+  const preview = pending?.preview ?? summary;
+  return {
+    text: `${preview} ${pending?.prompt ?? notifyApprovalPrompt()}`,
+    kind: "proposal",
+    activeRequest: sessionStore.getConversation(sessionId).activeRequest,
+    askedClarification: false,
+    plan: planFromAuditEvents(auditLog.list().slice(before)),
+    failure: null,
+  };
+}
+
+function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
+  if (decided.activeRequest?.intent !== "ride" || decided.activeRequest.status !== "accepted") {
+    return applyPendingPrompt(sessionId, decided);
+  }
+  if (sessionStore.get(sessionId).pendingApproval) {
+    return applyPendingPrompt(sessionId, decided);
+  }
+  const opened = openBookingCheckpoint(sessionId, decided.activeRequest);
+  return {
+    ...opened,
+    plan: { steps: [...decided.plan.steps, ...opened.plan.steps] },
+    failure: decided.failure,
+  };
+}
+
+function applyPendingPrompt(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
+  const pending = sessionStore.get(sessionId).pendingApproval;
+  if (!pending?.prompt) return decided;
+  const text =
+    pending.preview && pending.tool === "notify_caretaker"
+      ? `${pending.preview} ${pending.prompt}`
+      : pending.prompt;
+  return {
+    ...decided,
+    text,
+    kind: "proposal",
+    activeRequest:
+      decided.activeRequest ??
+      (pending.tool === "book_ride" ? { intent: "ride", status: "accepted" } : decided.activeRequest),
+  };
 }
 
 function searchRides(sessionId: string, destination: string, arriveBy: string): void {
@@ -182,6 +276,15 @@ function decide(
         activeRequest: { ...active, status: "accepted" },
       };
     }
+  }
+
+  if (NOTIFY.test(text) && !RIDE.test(text)) {
+    const opened = openNotifyCheckpoint(sessionId, draftNotifySummary(transcript));
+    return {
+      text: opened.text,
+      kind: opened.kind,
+      activeRequest: opened.activeRequest,
+    };
   }
 
   // Appointment question ("what time is my appointment").
@@ -316,21 +419,49 @@ export async function runConversationTurn(
   const complete =
     options.complete ?? (process.env.MODEL_API_KEY?.trim() ? openaiChatComplete : undefined);
 
+  const pending = sessionStore.get(sessionId).pendingApproval;
+  const spoken = normalize(request.data.transcript);
+  const saysYes = YES.test(spoken);
+  const saysNo = NO.test(spoken);
+
   let decided: HarnessTurnResult;
-  if (complete) {
+  if (pending && (saysYes || saysNo)) {
+    const resolved = resolvePendingApproval({
+      sessionId,
+      actor: request.data.actor,
+      decision: saysNo ? "decline" : "approve",
+    });
+    decided = {
+      text: resolved.reply,
+      kind: "answer",
+      activeRequest: resolved.activeRequest,
+      askedClarification: false,
+      plan: resolved.plan,
+      failure: null,
+    };
+  } else if (complete) {
     try {
-      decided = await runHarnessTurn({
-        transcript: request.data.transcript,
+      decided = maybeOpenBookingCheckpoint(
         sessionId,
-        state,
-        now,
-        complete,
-      });
+        await runHarnessTurn({
+          transcript: request.data.transcript,
+          sessionId,
+          state,
+          now,
+          complete,
+        }),
+      );
     } catch {
-      decided = runRulesTurn(sessionId, request.data.transcript, state, now);
+      decided = maybeOpenBookingCheckpoint(
+        sessionId,
+        runRulesTurn(sessionId, request.data.transcript, state, now),
+      );
     }
   } else {
-    decided = runRulesTurn(sessionId, request.data.transcript, state, now);
+    decided = maybeOpenBookingCheckpoint(
+      sessionId,
+      runRulesTurn(sessionId, request.data.transcript, state, now),
+    );
   }
 
   const view = sessionStore.applyConversationTurn({
@@ -353,6 +484,7 @@ export async function runConversationTurn(
     clarificationsAsked: view.conversation.clarificationsAsked,
     plan: view.conversation.plan,
     failure: view.conversation.failure,
+    pendingApproval: view.pendingApproval,
   });
   return { status: 200, body };
 }

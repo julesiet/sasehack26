@@ -1,7 +1,9 @@
 import {
   bookRideInputSchema,
   bookRideResultSchema,
+  describePendingApproval,
   emptyConversationState,
+  findRideOptionsResultSchema,
   getAppointmentResultSchema,
   getMariaSeedBundle,
   notifyCaretakerInputSchema,
@@ -16,12 +18,14 @@ import {
   type ConversationPlan,
   type ConversationReplyKind,
   type ConversationState,
+  type LastApproval,
   type PendingApproval,
   type PolicyDecision,
   type SessionBooking,
   type SessionRequest,
   type SessionView,
   type ToolName,
+  type UberRideOption,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 
@@ -29,6 +33,8 @@ type SessionState = {
   sessionId: string;
   currentRequest: SessionRequest | null;
   pendingApproval: PendingApproval | null;
+  lastApproval: LastApproval | null;
+  lastRideOptions: UberRideOption[];
   appointment: Appointment | null;
   lastBooking: SessionBooking | null;
   caretakerActivity: CaretakerActivityItem[];
@@ -83,6 +89,8 @@ function emptyState(sessionId: string): SessionState {
     sessionId,
     currentRequest: null,
     pendingApproval: null,
+    lastApproval: null,
+    lastRideOptions: [],
     appointment: null,
     lastBooking: null,
     caretakerActivity: [],
@@ -126,6 +134,7 @@ export type SessionStore = {
   getConversation: (sessionId: string) => ConversationState;
   applyToolEvent: (input: ApplyToolEventInput) => SessionView;
   applyConversationTurn: (input: ApplyConversationTurnInput) => SessionView;
+  declinePending: (input: { sessionId: string; actor: Actor }) => SessionView;
   clear: () => void;
 };
 
@@ -218,6 +227,13 @@ export function createSessionStore(): SessionStore {
         state.consentGranted = true;
       }
 
+      if (tool === "find_ride_options" && result) {
+        const rides = findRideOptionsResultSchema.safeParse(result);
+        if (rides.success) {
+          state.lastRideOptions = rides.data.options;
+        }
+      }
+
       if (!decision.allowed) {
         if (
           decision.reason === "confirmation_required" ||
@@ -229,6 +245,12 @@ export function createSessionStore(): SessionStore {
             reason: decision.reason,
             summary: decision.summary,
             timestamp: event.timestamp,
+            status: "pending",
+            ...describePendingApproval({
+              tool,
+              toolInput: input,
+              rideOptions: state.lastRideOptions,
+            }),
           };
         }
         if (tool === "notify_caretaker") {
@@ -238,7 +260,31 @@ export function createSessionStore(): SessionStore {
       }
 
       if (state.pendingApproval?.tool === tool) {
+        state.lastApproval = {
+          tool,
+          action: state.pendingApproval.action,
+          decision: "approved",
+          actor,
+          timestamp: event.timestamp,
+          summary: decision.summary,
+          prompt: state.pendingApproval.prompt,
+        };
         state.pendingApproval = null;
+      } else if (tool === "book_ride" || tool === "notify_caretaker") {
+        const described = describePendingApproval({
+          tool,
+          toolInput: input,
+          rideOptions: state.lastRideOptions,
+        });
+        state.lastApproval = {
+          tool,
+          action: described.action,
+          decision: "approved",
+          actor,
+          timestamp: event.timestamp,
+          summary: decision.summary,
+          prompt: described.prompt,
+        };
       }
 
       if (tool === "get_appointment" && result) {
@@ -261,12 +307,57 @@ export function createSessionStore(): SessionStore {
           consentGranted: consentGranted ?? true,
         };
         state.consentGranted = true;
+        state.conversation.activeRequest = null;
       }
 
       if (tool === "notify_caretaker") {
         appendCaretakerActivity(state, input, event, true);
       }
 
+      return toView(state);
+    },
+    declinePending({ sessionId, actor }) {
+      const state = getOrCreate(sessionId);
+      const pending = state.pendingApproval;
+      if (!pending) {
+        return toView(state);
+      }
+
+      const summary =
+        pending.tool === "notify_caretaker"
+          ? "The caretaker message was declined. Nothing was sent."
+          : "The Uber booking was declined. Nothing was booked.";
+
+      const event = auditLog.append({
+        whoAsked: { actor, sessionId },
+        proposed: { tool: pending.tool, input: pending.input },
+        approved: { allowed: false, by: actor, approvalTokenPresent: false },
+        executed: { tool: pending.tool, attempted: false },
+        outcome: {
+          success: false,
+          denied: true,
+          reason: "declined_by_human",
+          summary,
+        },
+      });
+
+      state.currentRequest = {
+        tool: pending.tool,
+        input: pending.input,
+        actor,
+        timestamp: event.timestamp,
+      };
+      state.lastApproval = {
+        tool: pending.tool,
+        action: pending.action,
+        decision: "declined",
+        actor,
+        timestamp: event.timestamp,
+        summary,
+        prompt: pending.prompt,
+      };
+      state.pendingApproval = null;
+      state.conversation.activeRequest = null;
       return toView(state);
     },
     clear() {
