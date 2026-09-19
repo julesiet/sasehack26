@@ -1,4 +1,4 @@
-import { MARIA_NEARBY_HOSPITAL } from "@kasama/shared";
+import { formatHospitalTimeLabel, formatIsoTimeLabel, MARIA_NEARBY_HOSPITAL } from "@kasama/shared";
 
 const STOP_MED_NAMES = new Set(["my", "the", "a", "an", "some", "this"]);
 
@@ -56,6 +56,8 @@ export function looksLikeHospitalSchedule(text: string, isRide: boolean): boolea
 }
 
 export function parseAppointmentTime(text: string): string | undefined {
+  const iso = formatIsoTimeLabel(text);
+  if (iso) return iso;
   const day = text.match(
     /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)\b/i,
   );
@@ -70,7 +72,13 @@ export function parseAppointmentTime(text: string): string | undefined {
   return `${weekday} at ${clock}`;
 }
 
+/** Never show a raw ISO stamp on the hospital card. */
+export function formatSpeakableTimeLabel(raw: string): string {
+  return parseAppointmentTime(raw) ?? formatHospitalTimeLabel(raw);
+}
+
 export function looksLikeMostlyTime(text: string): boolean {
+  if (formatIsoTimeLabel(text)) return true;
   return Boolean(parseAppointmentTime(text)) && text.trim().split(/\s+/).length <= 8;
 }
 

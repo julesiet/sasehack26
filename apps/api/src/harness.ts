@@ -9,6 +9,7 @@ import {
   MAX_CLARIFICATIONS_PER_REQUEST,
   MAX_TOOL_ROUNDS_PER_TURN,
   MARIA_PROFILE,
+  formatHospitalTimeLabel,
   getMariaAppointment,
   isKnownTool,
   type ActiveRequest,
@@ -119,7 +120,10 @@ export const KASAMA_CHAT_TOOLS = [
           placeName: { type: "string" },
           distance: { type: "string" },
           reason: { type: "string" },
-          timeLabel: { type: "string" },
+          timeLabel: {
+            type: "string",
+            description: "Speakable time like Thursday at 10:00 AM. Never an ISO timestamp.",
+          },
         },
         required: ["placeName", "distance", "reason", "timeLabel"],
       },
@@ -183,7 +187,7 @@ function systemPrompt(now: Date, state: ConversationState): string {
     "Never say an Uber was booked or a message was sent. Those need a human yes on the iPhone.",
     "Do not call book_ride or notify_caretaker. Propose the action and wait.",
     "Maria CAN set a medication reminder. That only adds a Task — it is not a prescription change. Never say you cannot set reminders. If she asks, gather the name and how often, then call save_medication_reminder (it waits for a human yes).",
-    "Maria CAN schedule a hospital visit as local appointment details (closest is St. Mary's Hospital). Never say you cannot schedule appointments. If she asks, gather the reason and time, then call save_hospital_visit (it waits for a human yes). This is not live EHR.",
+    "Maria CAN schedule a hospital visit as local appointment details (closest is St. Mary's Hospital). Never say you cannot schedule appointments. If she asks, gather the reason and time, then call save_hospital_visit (it waits for a human yes). This is not live EHR. timeLabel must be like Thursday at 10:00 AM — never an ISO datetime.",
     `Today is ${today}. Tomorrow is ${tomorrowDate}. Use those calendar dates — never a past year.`,
     `Maria lives at ${appointment.pickup}. Accessibility: ${MARIA_PROFILE.accessibilityNeeds.join(", ")}.`,
     `Her next doctor visit is ${appointment.title} at ${appointment.start}, at ${appointment.destination} (lookup date ${isoDate(new Date(appointment.start))}).`,
@@ -219,6 +223,9 @@ function executeKasamaTool(
   }
   if (name === "get_appointment") {
     input = coerceAppointmentDate(input);
+  }
+  if (name === "save_hospital_visit" && typeof input.timeLabel === "string") {
+    input = { ...input, timeLabel: formatHospitalTimeLabel(input.timeLabel) };
   }
 
   const result = invokeTool(name, {
@@ -333,7 +340,9 @@ function inferReply(
       typeof hospital.input.distance === "string" ? hospital.input.distance : previous?.distance;
     const reason = typeof hospital.input.reason === "string" ? hospital.input.reason : previous?.reason;
     const timeLabel =
-      typeof hospital.input.timeLabel === "string" ? hospital.input.timeLabel : previous?.timeLabel;
+      typeof hospital.input.timeLabel === "string"
+        ? formatHospitalTimeLabel(hospital.input.timeLabel)
+        : previous?.timeLabel;
     return {
       kind: "proposal",
       activeRequest: {

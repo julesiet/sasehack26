@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { actors } from "./policy";
+import { formatHospitalTimeLabel } from "./time-label";
 import {
   saveHospitalVisitInputSchema,
   saveMedicationReminderInputSchema,
@@ -249,7 +250,8 @@ export function describePendingApproval(input: {
         : {};
     const placeName = typeof visit.placeName === "string" ? visit.placeName : "the hospital";
     const reason = typeof visit.reason === "string" ? visit.reason : "";
-    const timeLabel = typeof visit.timeLabel === "string" ? visit.timeLabel : "";
+    const timeLabel =
+      typeof visit.timeLabel === "string" ? formatHospitalTimeLabel(visit.timeLabel) : "";
     return {
       action: "save_hospital_visit",
       prompt: hospitalVisitPrompt(placeName),

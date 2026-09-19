@@ -17,6 +17,7 @@ export const envKeys = [
 ] as const;
 
 export * from "./tools";
+export * from "./time-label";
 export * from "./policy";
 export * from "./audit";
 export * from "./invoke";

@@ -532,6 +532,17 @@ describe("runConversationTurn", () => {
     ]);
   });
 
+  it("shows an ISO hospital time as weekday and clock", async () => {
+    await turn("Schedule an appointment");
+    await turn("Annual physical");
+    const proposed = await turn("2026-09-20T10:00:00.000Z");
+    expect(proposed.pendingApproval?.tool).toBe("save_hospital_visit");
+    expect(proposed.pendingApproval?.input).toMatchObject({
+      timeLabel: "Sunday at 10:00 AM",
+    });
+    expect(proposed.activeRequest?.timeLabel).toBe("Sunday at 10:00 AM");
+  });
+
   it("starts a reminder when Maria just says set a reminder", async () => {
     const reply = await turn("Set a reminder");
     expect(reply.kind).toBe("clarification");

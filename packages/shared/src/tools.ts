@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatHospitalTimeLabel } from "./time-label";
 
 export const toolNames = [
   "get_appointment",
@@ -122,18 +123,20 @@ export const saveMedicationReminderResultSchema = z.object({
   reminder: medicationReminderSchema.optional(),
 });
 
+const speakableTimeLabelSchema = z.string().min(1).transform(formatHospitalTimeLabel);
+
 export const saveHospitalVisitInputSchema = z.object({
   placeName: z.string().min(1),
   distance: z.string().min(1),
   reason: z.string().min(1),
-  timeLabel: z.string().min(1),
+  timeLabel: speakableTimeLabelSchema,
 });
 
 export const hospitalVisitDetailsSchema = z.object({
   placeName: z.string(),
   distance: z.string(),
   reason: z.string(),
-  timeLabel: z.string(),
+  timeLabel: z.string().transform(formatHospitalTimeLabel),
 });
 export type HospitalVisitDetails = z.infer<typeof hospitalVisitDetailsSchema>;
 

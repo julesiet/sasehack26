@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { SeniorTask } from "@kasama/shared";
+import { replaceIsoTimeLabels, type SeniorTask } from "@kasama/shared";
 import { colors, radius, type } from "../theme";
 
 type Props = {
@@ -21,29 +21,32 @@ export function TasksScreen({ tasks }: Props) {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Tasks</Text>
-      {tasks.map((task) => (
-        <View
-          key={task.id}
-          style={styles.card}
-          accessibilityLabel={`${task.title}. ${task.detail}${task.savedLocally ? ". Saved on this phone." : ""}`}
-        >
-          <View style={styles.iconWrap}>
-            <Ionicons
-              name={task.kind === "medication_reminder" ? "medical-outline" : "business-outline"}
-              size={22}
-              color={task.kind === "medication_reminder" ? colors.careBlue : colors.pin}
-            />
+      {tasks.map((task) => {
+        const detail = replaceIsoTimeLabels(task.detail);
+        return (
+          <View
+            key={task.id}
+            style={styles.card}
+            accessibilityLabel={`${task.title}. ${detail}${task.savedLocally ? ". Saved on this phone." : ""}`}
+          >
+            <View style={styles.iconWrap}>
+              <Ionicons
+                name={task.kind === "medication_reminder" ? "medical-outline" : "business-outline"}
+                size={22}
+                color={task.kind === "medication_reminder" ? colors.careBlue : colors.pin}
+              />
+            </View>
+            <View style={styles.copy}>
+              <Text style={styles.eyebrow}>
+                {task.kind === "medication_reminder" ? "MEDICATION REMINDER" : "APPOINTMENT"}
+              </Text>
+              <Text style={styles.cardTitle}>{task.title}</Text>
+              <Text style={styles.detail}>{detail}</Text>
+              {task.savedLocally ? <Text style={styles.meta}>Saved on this phone</Text> : null}
+            </View>
           </View>
-          <View style={styles.copy}>
-            <Text style={styles.eyebrow}>
-              {task.kind === "medication_reminder" ? "MEDICATION REMINDER" : "APPOINTMENT"}
-            </Text>
-            <Text style={styles.cardTitle}>{task.title}</Text>
-            <Text style={styles.detail}>{task.detail}</Text>
-            {task.savedLocally ? <Text style={styles.meta}>Saved on this phone</Text> : null}
-          </View>
-        </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }

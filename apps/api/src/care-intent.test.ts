@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   looksLikeHospitalSchedule,
   looksLikeMedicationReminder,
+  formatSpeakableTimeLabel,
   parseAppointmentTime,
   parseMedicationReminder,
   tidyAppointmentReason,
@@ -20,6 +21,11 @@ describe("care intent", () => {
 
   it("formats Thursday at 10 AM like the hospital card", () => {
     expect(parseAppointmentTime("thursday at 10 am")).toBe("Thursday at 10:00 AM");
+  });
+
+  it("formats ISO timestamps as weekday and clock", () => {
+    expect(parseAppointmentTime("2026-09-20T10:00:00.000Z")).toBe("Sunday at 10:00 AM");
+    expect(formatSpeakableTimeLabel("2026-09-20T14:30:00-04:00")).toBe("Sunday at 2:30 PM");
   });
 
   it("tidies the annual physical reason", () => {

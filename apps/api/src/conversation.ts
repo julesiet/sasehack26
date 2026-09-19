@@ -33,6 +33,7 @@ import {
   looksLikeMostlyTime,
   nearbyHospital,
   parseAppointmentTime,
+  formatSpeakableTimeLabel,
   parseMedicationReminder,
   tidyAppointmentReason,
 } from "./care-intent";
@@ -229,7 +230,7 @@ function hospitalInputFromActive(active: ActiveRequest) {
     placeName: active.placeName ?? hospital.placeName,
     distance: active.distance ?? hospital.distance,
     reason: active.reason,
-    timeLabel: active.timeLabel,
+    timeLabel: formatSpeakableTimeLabel(active.timeLabel ?? ""),
   });
 }
 
@@ -531,7 +532,7 @@ function decide(
     if (time) {
       next.timeLabel = time;
     } else if (active.reason && !looksLikeMostlyTime(text) && text.length > 0) {
-      next.timeLabel = transcript.trim().replace(/[.!?]+$/, "");
+      next.timeLabel = formatSpeakableTimeLabel(transcript);
     }
     if (next.reason && next.timeLabel) {
       return {

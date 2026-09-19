@@ -121,5 +121,16 @@ describe("approval prompts", () => {
         },
       })?.placeName,
     ).toBe("St. Mary's Hospital");
+    expect(
+      pendingHospitalVisit({
+        tool: "save_hospital_visit",
+        input: {
+          placeName: "St. Mary's Hospital",
+          distance: "0.8 miles away",
+          reason: "Annual physical.",
+          timeLabel: "2026-09-20T10:00:00.000Z",
+        },
+      })?.timeLabel,
+    ).toBe("Sunday at 10:00 AM");
   });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { pendingApprovalSchema } from "./approval";
+import { formatHospitalTimeLabel } from "./time-label";
 import { toolNameSchema, uberProductSchema } from "./tools";
 
 /**
@@ -85,7 +86,10 @@ export const activeRequestSchema = z.object({
   placeName: z.string().optional(),
   distance: z.string().optional(),
   reason: z.string().optional(),
-  timeLabel: z.string().optional(),
+  timeLabel: z
+    .string()
+    .transform(formatHospitalTimeLabel)
+    .optional(),
   status: z.enum(["gathering", "proposed", "accepted"]),
 });
 export type ActiveRequest = z.infer<typeof activeRequestSchema>;

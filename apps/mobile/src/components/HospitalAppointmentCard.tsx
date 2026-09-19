@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { HospitalVisitDetails } from "@kasama/shared";
+import { formatHospitalTimeLabel, type HospitalVisitDetails } from "@kasama/shared";
 import { colors, radius, size, type } from "../theme";
 
 export type HospitalAppointmentStatus = "pending" | "saved" | "cancelled";
@@ -18,6 +18,7 @@ type Props = {
  * Not live EHR.
  */
 export function HospitalAppointmentCard({ visit, status, disabled, onConfirm, onCancel }: Props) {
+  const timeLabel = formatHospitalTimeLabel(visit.timeLabel);
   if (status === "saved") {
     return (
       <View style={[styles.card, styles.saved]} accessibilityLabel="Appointment details saved">
@@ -29,7 +30,7 @@ export function HospitalAppointmentCard({ visit, status, disabled, onConfirm, on
           </View>
         </View>
         <Text style={styles.savedReason}>Reason: {visit.reason}</Text>
-        <Text style={styles.savedTime}>{visit.timeLabel}</Text>
+        <Text style={styles.savedTime}>{timeLabel}</Text>
       </View>
     );
   }
@@ -78,7 +79,7 @@ export function HospitalAppointmentCard({ visit, status, disabled, onConfirm, on
           <Ionicons name="time-outline" size={22} color={colors.pin} />
           <View style={styles.detailCopy}>
             <Text style={styles.detailEyebrow}>SCHEDULED TIME</Text>
-            <Text style={styles.detailBody}>{visit.timeLabel}</Text>
+            <Text style={styles.detailBody}>{timeLabel}</Text>
           </View>
         </View>
       </View>

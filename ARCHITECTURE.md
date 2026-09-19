@@ -57,7 +57,7 @@ CI: GitHub Actions (`.github/workflows/ci.yml`) on pull requests and `main` runs
 | `micDenied` | Settings recovery | Settings recovery in the thread | text field stays usable |
 | `error` | large recoverable message | same, in the thread | text field, mic |
 
-Text Maria must act on stays large; chat bubbles are 22pt so a thread fits. Tap targets ≥ 68pt. Ride options (`#8`) are two large Uber rows (UberX and wheelchair WAV) with the price on the right; the selected row uses the orange border. Approval checkpoints (`#6`) are a descriptive card (place, reason, time, selected Uber product + price) with **Cancel** / **Confirm**. Finding / booking never looks idle — a current-action card stays on screen. After Confirm the booked card reads back the product, price, and confirmation id. Declined and failed bookings stay honest (nothing charged). Medication reminders (`#41`) are a blue **Add this to your tasks?** card (name, frequency, Cancel / Confirm). Confirming does not change a prescription. A health-sync miss shows a recoverable error (retry or save locally). Hospital scheduling is a chat thread plus an appointment card (St. Mary's Hospital, reason, time) with Cancel / Confirm and an **Appointment details saved** state. Confirmed reminders and saved visits land on **Tasks**.
+Text Maria must act on stays large; chat bubbles are 22pt so a thread fits. Tap targets ≥ 68pt. Ride options (`#8`) are two large Uber rows (UberX and wheelchair WAV) with the price on the right; the selected row uses the orange border. Approval checkpoints (`#6`) are a descriptive card (place, reason, time, selected Uber product + price) with **Cancel** / **Confirm**. Finding / booking never looks idle — a current-action card stays on screen. After Confirm the booked card reads back the product, price, and confirmation id. Declined and failed bookings stay honest (nothing charged). Medication reminders (`#41`) are a blue **Add this to your tasks?** card (name, frequency, Cancel / Confirm). Confirming does not change a prescription. A health-sync miss shows a recoverable error (retry or save locally). Hospital scheduling is a chat thread plus an appointment card (St. Mary's Hospital, reason, speakable time like Thursday at 10:00 AM) with Cancel / Confirm and an **Appointment details saved** state. Confirmed reminders and saved visits land on **Tasks**.
 
 Loop: mic → `expo-audio` records (≤ 15 s or tap) → `POST /speech/transcribe` → `POST /conversation/turn` → `POST /speech/speak` (ElevenLabs) → play on device. If STT is `501`, the screen tells Maria to type. If TTS is `501`, the device falls back to `expo-speech`. Session id is `DEFAULT_SESSION_ID` so the caretaker view polls the same conversation.
 
@@ -129,7 +129,8 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 
 ## Shared contracts
 
-- `packages/shared/src/tools.ts` — tool names, inputs, results (Uber products: `UberX`, `WAV`; local `save_medication_reminder` / `save_hospital_visit`)
+- `packages/shared/src/tools.ts` — tool names, inputs, results (Uber products: `UberX`, `WAV`; local `save_medication_reminder` / `save_hospital_visit`). Hospital `timeLabel` is speakable (`Thursday at 10:00 AM`); ISO stamps from ChatGPT are formatted before the card.
+- `packages/shared/src/time-label.ts` — ISO → weekday + clock for hospital times
 - `packages/shared/src/policy.ts` — `POLICY_TABLE`, `evaluateAction`, `evaluateToolCall`
 - `packages/shared/src/audit.ts` — event shape + `createAuditLog()`
 - `packages/shared/src/invoke.ts` — HTTP request schema

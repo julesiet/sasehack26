@@ -44,6 +44,10 @@ function coerceAppointmentInput(input: unknown): unknown {
   return parsed;
 }
 
+function coerceHospitalVisitInput(input: unknown): unknown {
+  return saveHospitalVisitInputSchema.parse(input);
+}
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "numeric",
@@ -181,7 +185,9 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
   const input =
     name === "get_appointment"
       ? coerceAppointmentInput(parsedInput.data)
-      : parsedInput.data;
+      : name === "save_hospital_visit"
+        ? coerceHospitalVisitInput(parsedInput.data)
+        : parsedInput.data;
 
   const sessionId = resolveSessionId(request.data.sessionId);
   const decision = evaluateToolCall(name, {
