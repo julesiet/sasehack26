@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   COMPOSIO_DEFAULT_TOOL,
+  COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+  COMPOSIO_GMAIL_SEND_TOOL,
   conversationTurnResponseSchema,
   sessionViewSchema,
 } from "@kasama/shared";
@@ -748,5 +750,94 @@ describe("POST /composio/connect and /composio/execute", () => {
     });
     expect(res.status).toBe(409);
     expect((await res.json()).needsAuth).toBe(true);
+  });
+
+  it("creates a Gmail draft when the caller asks for the documented draft tool", async () => {
+    const execute = async (input?: { toolSlug?: string }) => ({
+      userId: "senior_maria",
+      sessionId: "sess_1",
+      toolSlug: input?.toolSlug ?? COMPOSIO_DEFAULT_TOOL,
+      successful: true,
+      data: { draft_id: "r-draft-1" },
+      logId: "log_draft",
+    });
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new Error("unused");
+        },
+        execute,
+      },
+    });
+
+    const res = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ toolSlug: COMPOSIO_GMAIL_CREATE_DRAFT_TOOL }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      successful: true,
+      toolSlug: COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+      logId: "log_draft",
+      data: { draft_id: "r-draft-1" },
+    });
+  });
+
+  it("sends Gmail when the caller asks for the documented send tool", async () => {
+    const execute = async (input?: { toolSlug?: string }) => ({
+      userId: "senior_maria",
+      sessionId: "sess_1",
+      toolSlug: input?.toolSlug ?? COMPOSIO_DEFAULT_TOOL,
+      successful: true,
+      data: { id: "1a0bb8b230927c57" },
+      logId: "log_send",
+    });
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new Error("unused");
+        },
+        execute,
+      },
+    });
+
+    const res = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ toolSlug: COMPOSIO_GMAIL_SEND_TOOL }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      successful: true,
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      logId: "log_send",
+      data: { id: "1a0bb8b230927c57" },
+    });
+  });
+
+  it("rejects GMAIL_SEND_DRAFT so only the documented send slug can send", async () => {
+    const execute = async () => {
+      throw new Error("send draft must not reach Composio");
+    };
+    const testApp = createApp({
+      transcribe: unusedTranscribe,
+      composio: {
+        connect: async () => {
+          throw new Error("unused");
+        },
+        execute,
+      },
+    });
+
+    const res = await testApp.request("/composio/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ toolSlug: "GMAIL_SEND_DRAFT" }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("bad_request");
   });
 });

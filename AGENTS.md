@@ -74,7 +74,7 @@ There is no product website. `http://localhost:3001` is the API. The app is Expo
 - `POST /speech/transcribe` — multipart `file` → `{ transcript }` via ElevenLabs (needs `ELEVENLABS_API_KEY` in `apps/api/.env`; `501` otherwise)
 - `POST /speech/speak` — `{ text }` → MPEG audio of Kasama (same key, plus Text to Speech on the key; `501` otherwise, device falls back to iOS speech)
 - `POST /composio/connect` — `{ userId?, toolkit?, wait? }` → Gmail Connect Link or `{ connected: true }`. Session user is `senior_maria` (`MARIA_PROFILE.id`). Needs `COMPOSIO_API_KEY` in `apps/api/.env`; `501` otherwise
-- `POST /composio/execute` — `{ userId?, toolSlug?, arguments? }` → session tool result + `logId`. Defaults to `GMAIL_GET_PROFILE`. `409` with a Connect Link if Gmail is not connected
+- `POST /composio/execute` — `{ userId?, toolSlug?, arguments? }` → session tool result + `logId`. Defaults to `GMAIL_GET_PROFILE`. Pass `GMAIL_CREATE_EMAIL_DRAFT` for a caretaker draft or `GMAIL_SEND_EMAIL` to send to `juleselvandrade@gmail.com`. `409` with a Connect Link if Gmail is not connected. `GMAIL_SEND_DRAFT` is rejected. Not wired into `notify_caretaker` or conversation (`#16`)
 
 Omitted `sessionId` on a tool call is stored as `default`. Senior and caretaker clients poll the same `sessionId`.
 

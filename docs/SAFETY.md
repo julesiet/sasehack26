@@ -31,3 +31,5 @@ Every invoke writes: who asked, what was proposed, approval, whether execute was
 ## Language
 
 Signals are “worth reviewing.” Kasama must never diagnose, change a prescription, or book/charge without a human yes.
+
+`POST /composio/execute` may create a Gmail draft (`GMAIL_CREATE_EMAIL_DRAFT`) or send (`GMAIL_SEND_EMAIL`) when the HTTP caller asks. Default remains `GMAIL_GET_PROFILE`. Conversation and `notify_caretaker` still cannot send (`#16`). A model actor cannot self-approve a send.
