@@ -26,7 +26,7 @@ Senior speaks on iPhone → Kasama understands intent → Kasama gathers care co
 | Path | Name | Role |
 |---|---|---|
 | `apps/mobile` | `@kasama/mobile` | Expo iOS client. Home unchanged. Senior greeting, then chat + confirmation card. Caretaker shows pending/last approval. Hidden Dev toggle. |
-| `apps/api` | `@kasama/api` | Hono server. Health, tool invoke, session, audit. |
+| `apps/api` | `@kasama/api` | Hono server. Health, tool invoke, session, audit, text playground. |
 | `packages/shared` | `@kasama/shared` | Zod contracts, `POLICY_TABLE`, audit schema. Imported by API and mobile. |
 
 Do not add `apps/web` or an Android app. Do not move contracts out of `packages/shared`.
@@ -84,11 +84,21 @@ Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/sh
 
 `GET /sessions/:sessionId` returns a `sessionViewSchema` projection from the process-local store (`apps/api/src/session-store.ts`): current request, pending approval, last approval, last Uber options, appointment, last Uber booking, caretaker activity, Maria-seed care signal (`"worth reviewing"`), consent, and that session's audit events in append order. Unknown ids return an empty pollable view (200), not 404. The caretaker screen polls this for Maria's yes/no.
 
+### Playground (`#13`)
+
+`POST /playground` is the text / HTTP playground. Body `{ transcript, sessionId?, actor?: "senior" | "caretaker", until?: "checkpoint" | "turn" }` → `{ sessionId, reply, kind, plan, failure, pendingApproval, appointment, rideOptions, lastBooking, lastApproval, events, seed, until, acceptedPlan }` (`playgroundRequestSchema` / `playgroundResponseSchema`).
+
+Default `until` is `checkpoint`: one utterance of “Please get me a ride to my doctor tomorrow.” looks up Maria's seeded appointment, searches Uber, accepts the conversational plan, and returns the $24.50 WAV checkpoint as `pendingApproval`. It does **not** book. `until: "turn"` is a single conversation turn (same as `POST /conversation/turn`) plus the extra session fields. Failed tools still return `failure.kind` `retry` or `handoff`.
+
+Default `sessionId` is `playground` so curling it does not collide with the iOS `default` session. Same `invokeTool` path, so policy and audit apply. `pnpm playground` runs the same function in-process (no API required). Out of scope: any designed conversation UI.
+
 `GET /audit` returns `{ events }` from the process-local log (`apps/api/src/audit-log.ts`). Optional `?sessionId=` filters. Not durable.
 
 ### Conversation (`#4`) and harness (`#5`)
 
 `POST /conversation/turn` body `{ transcript, sessionId?, actor?: "senior" | "caretaker" }` → `{ sessionId, reply, kind: "answer" | "clarification" | "proposal", activeRequest, clarificationsAsked, plan, failure, pendingApproval }` (`conversationTurnRequestSchema` / `conversationTurnResponseSchema`).
+
+`POST /playground` is the text playground (`#13`). See [Playground](#playground-13).
 
 `POST /approvals` body `{ decision: "approve" | "decline", sessionId?, actor?: "senior" | "caretaker" }` → `{ sessionId, decision, reply, pendingApproval, lastApproval }`. Tap Yes / No on the iPhone. Voice yes/no uses the same resolver. Actor `model` is rejected.
 
@@ -123,6 +133,7 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 - `packages/shared/src/approval.ts` — pending/last approval, `POST /approvals` body/response, $24.50 demo prompt helpers
 - `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`, `pendingApproval`, `lastApproval`, `lastRideOptions`
 - `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `plan`, `failure`, `pendingApproval`, `MAX_CLARIFICATIONS_PER_REQUEST`, `MAX_TOOL_ROUNDS_PER_TURN`, transcribe response
+- `packages/shared/src/playground.ts` — text playground (`#13`): `POST /playground` request/response, `PLAYGROUND_DEFAULT_SESSION_ID`, `PLAYGROUND_DEMO_TRANSCRIPT`, `MAX_PLAYGROUND_ADVANCE_TURNS`
 - `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`, optional `GMAIL_CREATE_EMAIL_DRAFT` / `GMAIL_SEND_EMAIL`
 - `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
 - `packages/shared/src/index.ts` — re-exports
@@ -139,7 +150,7 @@ Live Uber (official API or Browserbase) is issue `#14`. A later adapter implemen
 
 ## What is not built yet
 
-Agent playground (`#13`), live Uber (`#14`), ride-option cards (`#8`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`. `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
+Live Uber (`#14`), ride-option cards (`#8`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
 
 Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
 

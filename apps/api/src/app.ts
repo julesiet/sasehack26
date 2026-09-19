@@ -11,6 +11,7 @@ import { ComposioNotConfiguredError, kasamaComposio, type KasamaComposio } from 
 import { decideApproval } from "./approval";
 import { runConversationTurn } from "./conversation";
 import { invokeTool } from "./invoke-tool";
+import { runPlaygroundTurn } from "./playground";
 import type { ChatComplete } from "./model";
 import { sessionStore } from "./session-store";
 import {
@@ -52,6 +53,7 @@ export function createApp({
       sessions: "GET /sessions/:sessionId",
       audit: "GET /audit",
       conversation: "POST /conversation/turn",
+      playground: "POST /playground",
       approvals: "POST /approvals",
       transcribe: "POST /speech/transcribe",
       speak: "POST /speech/speak",
@@ -117,6 +119,22 @@ export function createApp({
     }
 
     const result = await runConversationTurn(raw, complete ? { complete } : {});
+    return c.json(result.body, result.status);
+  });
+
+  /**
+   * Text playground (#13). Same harness + policy as conversation/turn, plus
+   * appointment, ride options, audit events, and the pending checkpoint.
+   */
+  app.post("/playground", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ success: false, summary: "Request body must be JSON." }, 400);
+    }
+
+    const result = await runPlaygroundTurn(raw, complete ? { complete } : {});
     return c.json(result.body, result.status);
   });
 

@@ -10,7 +10,7 @@ apps/mobile/src/components/ Reusable senior-mode pieces (orb, sun bowl, composer
 apps/mobile/src/hooks/      Conversation state machine (record → transcribe → turn → speak)
 apps/mobile/src/lib/        API client
 apps/mobile/src/theme.ts    Design tokens
-apps/api/src/               Hono app, tool invoke, conversation turn, harness (ChatGPT), approvals, speech, Composio session, in-memory session + audit
+apps/api/src/               Hono app, tool invoke, conversation turn, text playground, harness (ChatGPT), approvals, speech, Composio session, in-memory session + audit
 packages/shared/src/        Zod + policy + audit + session types (source of truth)
 .github/workflows/          GitHub Actions (`ci.yml` runs typecheck + tests)
 AGENTS.md                   Coding-agent operating manual

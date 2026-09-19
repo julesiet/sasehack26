@@ -54,6 +54,7 @@ pnpm start            # Expo Go QR only (own terminal)
 pnpm ios              # Expo → iOS Simulator (own terminal)
 pnpm typecheck
 pnpm test
+pnpm playground # text playground (no iOS). Optional: -- "Please get me a ride…"
 ```
 
 GitHub Actions on pull requests and `main` runs `pnpm typecheck` and `pnpm test` (`.github/workflows/ci.yml`). No `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY` is required.
@@ -70,6 +71,7 @@ There is no product website. `http://localhost:3001` is the API. The app is Expo
 - `GET /sessions/:sessionId` — in-memory session view (current request, pending approval, last approval, last Uber options, appointment, last Uber booking, caretaker activity, care signal, session events)
 - `GET /audit` — `{ events: [...] }` all process-local events; optional `?sessionId=` filters. Cleared on process restart
 - `POST /conversation/turn` — `{ transcript, sessionId? }` → Kasama's reply + `kind` + `plan` + `failure` + `pendingApproval`. ChatGPT plans when `MODEL_API_KEY` is set; otherwise the rules-based turn. Every tool still goes through policy + audit. ChatGPT is never allowed to book or send. A spoken yes after a ride plan opens the $24.50 checkpoint; a second yes (or tap) books as `senior`.
+- `POST /playground` — text playground (`#13`). `{ transcript, sessionId?, until?: "checkpoint" | "turn" }` → reply + `plan` + Maria seed + `appointment` + `rideOptions` + `pendingApproval` + `events`. Default `until` is `checkpoint`: it accepts a conversational ride plan so you can see the $24.50 prompt, then stops. It never books, sends, or spends. Default `sessionId` is `playground` (not the iOS `default`). Same policy + audit as conversation. Also `pnpm playground`.
 - `POST /approvals` — `{ decision: "approve" | "decline", sessionId?, actor?: "senior" | "caretaker" }` → resolve the pending checkpoint. Same policy + audit as tools. Model actors are rejected.
 - `POST /speech/transcribe` — multipart `file` → `{ transcript }` via ElevenLabs (needs `ELEVENLABS_API_KEY` in `apps/api/.env`; `501` otherwise)
 - `POST /speech/speak` — `{ text }` → MPEG audio of Kasama (same key, plus Text to Speech on the key; `501` otherwise, device falls back to iOS speech)
