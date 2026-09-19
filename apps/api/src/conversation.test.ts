@@ -7,17 +7,18 @@ import { sessionStore } from "./session-store";
 beforeEach(() => {
   auditLog.clear();
   sessionStore.clear();
+  process.env.MODEL_API_KEY = "";
 });
 
-function turn(transcript: string, sessionId = "voice-1") {
-  const result = runConversationTurn({ transcript, sessionId });
+async function turn(transcript: string, sessionId = "voice-1") {
+  const result = await runConversationTurn({ transcript, sessionId });
   expect(result.status).toBe(200);
   return conversationTurnResponseSchema.parse(result.body);
 }
 
 describe("runConversationTurn", () => {
-  it("turns the demo line into a ride proposal grounded in Maria's appointment", () => {
-    const reply = turn("Please get me a ride to my doctor tomorrow.");
+  it("turns the demo line into a ride proposal grounded in Maria's appointment", async () => {
+    const reply = await turn("Please get me a ride to my doctor tomorrow.");
 
     expect(reply.kind).toBe("proposal");
     expect(reply.reply).toContain("Dr. Chen");
@@ -30,10 +31,15 @@ describe("runConversationTurn", () => {
       status: "proposed",
     });
     expect(reply.clarificationsAsked).toBe(0);
+    expect(reply.plan.steps.map((step) => step.tool)).toEqual([
+      "get_appointment",
+      "find_ride_options",
+    ]);
+    expect(reply.failure).toBeNull();
   });
 
-  it("looks up the appointment and ride options through the audited tool path", () => {
-    turn("Get me a ride to my doctor tomorrow");
+  it("looks up the appointment and ride options through the audited tool path", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
 
     const tools = auditLog.list().map((event) => event.proposed.tool);
     expect(tools).toEqual(["get_appointment", "find_ride_options"]);
@@ -41,48 +47,48 @@ describe("runConversationTurn", () => {
     expect(auditLog.list().every((event) => event.whoAsked.sessionId === "voice-1")).toBe(true);
   });
 
-  it("never books a ride on its own", () => {
-    turn("Get me a ride to my doctor tomorrow");
-    turn("Yes please");
+  it("never books a ride on its own", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    await turn("Yes please");
 
     expect(auditLog.list().map((event) => event.proposed.tool)).not.toContain("book_ride");
     const view = sessionStore.get("voice-1");
     expect(view.lastBooking).toBeNull();
   });
 
-  it("remembers the proposal across turns so Maria can just say yes", () => {
-    turn("Get me a ride to my doctor tomorrow");
-    const reply = turn("Yes");
+  it("remembers the proposal across turns so Maria can just say yes", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    const reply = await turn("Yes");
 
     expect(reply.kind).toBe("answer");
     expect(reply.reply).toContain("confirm");
     expect(reply.activeRequest?.status).toBe("accepted");
   });
 
-  it("drops the request when Maria says no", () => {
-    turn("Get me a ride to my doctor tomorrow");
-    const reply = turn("No, never mind");
+  it("drops the request when Maria says no", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    const reply = await turn("No, never mind");
 
     expect(reply.kind).toBe("answer");
     expect(reply.activeRequest).toBeNull();
   });
 
-  it("asks exactly one clarification when the destination is missing", () => {
-    const first = turn("I need a ride");
+  it("asks exactly one clarification when the destination is missing", async () => {
+    const first = await turn("I need a ride");
     expect(first.kind).toBe("clarification");
     expect(first.reply).toContain("Where");
     expect(first.clarificationsAsked).toBe(1);
     expect(first.activeRequest?.status).toBe("gathering");
 
-    const second = turn("To the doctor");
+    const second = await turn("To the doctor");
     expect(second.kind).toBe("proposal");
     expect(second.reply).toContain("Dr. Chen");
     expect(second.clarificationsAsked).toBe(0);
   });
 
-  it("does not ask a second clarification for the same request", () => {
-    turn("I need a ride");
-    const reply = turn("Um, I want a ride somewhere");
+  it("does not ask a second clarification for the same request", async () => {
+    await turn("I need a ride");
+    const reply = await turn("Um, I want a ride somewhere");
 
     expect(reply.kind).toBe("answer");
     expect(reply.reply).toContain("ask again");
@@ -90,8 +96,8 @@ describe("runConversationTurn", () => {
     expect(reply.clarificationsAsked).toBe(0);
   });
 
-  it("answers an appointment question without proposing a ride", () => {
-    const reply = turn("What time is my doctor's appointment tomorrow?");
+  it("answers an appointment question without proposing a ride", async () => {
+    const reply = await turn("What time is my doctor's appointment tomorrow?");
 
     expect(reply.kind).toBe("answer");
     expect(reply.reply).toContain("Dr. Chen");
@@ -100,25 +106,25 @@ describe("runConversationTurn", () => {
     expect(auditLog.list().map((event) => event.proposed.tool)).toEqual(["get_appointment"]);
   });
 
-  it("redirects a same-day doctor ride to the real appointment", () => {
-    const reply = turn("Take me to the doctor today");
+  it("redirects a same-day doctor ride to the real appointment", async () => {
+    const reply = await turn("Take me to the doctor today");
 
     expect(reply.kind).toBe("proposal");
     expect(reply.reply).toContain("don't see a doctor's appointment today");
     expect(reply.reply).toContain("tomorrow");
   });
 
-  it("falls back gently when it does not understand", () => {
-    const reply = turn("What's the weather like?");
+  it("falls back gently when it does not understand", async () => {
+    const reply = await turn("What's the weather like?");
 
     expect(reply.kind).toBe("answer");
     expect(reply.reply).toContain("ride");
     expect(reply.activeRequest).toBeNull();
   });
 
-  it("records both sides of every turn in the session view", () => {
-    turn("Get me a ride to my doctor tomorrow");
-    turn("Yes");
+  it("records both sides of every turn in the session view", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    await turn("Yes");
 
     const view = sessionStore.get("voice-1");
     expect(view.conversation.turns.map((t) => t.speaker)).toEqual([
@@ -129,17 +135,37 @@ describe("runConversationTurn", () => {
     ]);
     expect(view.conversation.turns[1]?.kind).toBe("proposal");
     expect(view.conversation.turns[0]?.text).toBe("Get me a ride to my doctor tomorrow");
+    expect(view.conversation.plan.steps.map((step) => step.tool)).toEqual([]);
   });
 
-  it("uses the default session when none is given", () => {
-    const result = runConversationTurn({ transcript: "Get me a ride to the doctor" });
+  it("uses the default session when none is given", async () => {
+    const result = await runConversationTurn({ transcript: "Get me a ride to the doctor" });
     expect(result.status).toBe(200);
     expect(result.body.sessionId).toBe("default");
     expect(sessionStore.get("default").conversation.turns).toHaveLength(2);
   });
 
-  it("rejects an empty transcript", () => {
-    const result = runConversationTurn({ transcript: "   " });
+  it("rejects an empty transcript", async () => {
+    const result = await runConversationTurn({ transcript: "   " });
     expect(result.status).toBe(400);
+  });
+
+  it("falls back to rules when ChatGPT throws", async () => {
+    const result = await runConversationTurn(
+      { transcript: "Please get me a ride to my doctor tomorrow.", sessionId: "fallback-1" },
+      {
+        complete: async () => {
+          throw new Error("OpenAI chat failed (500).");
+        },
+      },
+    );
+    expect(result.status).toBe(200);
+    const body = conversationTurnResponseSchema.parse(result.body);
+    expect(body.kind).toBe("proposal");
+    expect(body.reply).toContain("Dr. Chen");
+    expect(body.plan.steps.map((step) => step.tool)).toEqual([
+      "get_appointment",
+      "find_ride_options",
+    ]);
   });
 });

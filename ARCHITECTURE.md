@@ -8,7 +8,7 @@ Kasama (Expo, iOS)
   Caretaker mode: activity, consent, care signals
         ↓
 Kasama API (Hono)
-  Intent / planning (later) · policy · tools · session · audit
+  Intent / planning (ChatGPT) · policy · tools · session · audit
         ↓
 Tools
   get_appointment · find_ride_options (Uber) · book_ride (Uber) · notify_caretaker
@@ -83,15 +83,18 @@ Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/sh
 
 `GET /audit` returns `{ events }` from the process-local log (`apps/api/src/audit-log.ts`). Optional `?sessionId=` filters. Not durable.
 
-### Conversation (`#4`)
+### Conversation (`#4`) and harness (`#5`)
 
-`POST /conversation/turn` body `{ transcript, sessionId?, actor?: "senior" | "caretaker" }` → `{ sessionId, reply, kind: "answer" | "clarification" | "proposal", activeRequest, clarificationsAsked }` (`conversationTurnRequestSchema` / `conversationTurnResponseSchema`).
+`POST /conversation/turn` body `{ transcript, sessionId?, actor?: "senior" | "caretaker" }` → `{ sessionId, reply, kind: "answer" | "clarification" | "proposal", activeRequest, clarificationsAsked, plan, failure }` (`conversationTurnRequestSchema` / `conversationTurnResponseSchema`).
 
-`apps/api/src/conversation.ts` is a deterministic, rules-based turn so the demo line works without a model key. It is the seam the harness (`#5`) replaces. Rules it must keep:
+When `MODEL_API_KEY` is set, `apps/api/src/harness.ts` asks ChatGPT (Chat Completions, default `gpt-4o-mini`, optional `MODEL_NAME`) to propose Kasama tools. Each call runs through `invokeTool` as `actor: "model"`. If the key is missing or OpenAI throws, `apps/api/src/conversation.ts` uses the original rules-based turn. Composio is not on this loop.
 
-- Every tool call goes through `invokeTool` as `actor: "model"`, so policy and audit apply (`get_appointment`, `find_ride_options`). It never calls `book_ride`; "yes" marks the request `accepted` and the ride card / approval is `#8`.
-- At most `MAX_CLARIFICATIONS_PER_REQUEST` (1) clarifying question per request. A second vague answer drops the request gracefully.
-- Session memory: `sessionView.conversation` = `{ turns, activeRequest, clarificationsAsked }`. Maria can say "yes" on the next turn without restating the appointment.
+Rules the harness keeps:
+
+- Every tool call goes through `invokeTool`, so policy and audit apply (`get_appointment`, `find_ride_options`). `book_ride` / `notify_caretaker` from the model are denied (`confirmation_required`) — not a failure. "Yes" marks the request `accepted`; the ride card / approval is `#8`.
+- At most `MAX_CLARIFICATIONS_PER_REQUEST` (1) clarifying question per request. At most `MAX_TOOL_ROUNDS_PER_TURN` (4) ChatGPT tool rounds; hitting the cap is a `handoff`.
+- `plan.steps` lists tools run this turn (`ok` / `denied` / `failed`). `failure` is `retry` or `handoff` when a tool actually failed — never a fake booking.
+- Session memory: `sessionView.conversation` = `{ turns, activeRequest, clarificationsAsked, plan, failure }`. Maria can say "yes" on the next turn without restating the appointment.
 
 `POST /speech/transcribe` — multipart `file` (m4a) → `{ transcript }` via ElevenLabs Scribe (`apps/api/src/speech.ts`, `ELEVENLABS_API_KEY`). `501 { error: "stt_not_configured" }` when no key; `502` on provider failure.
 
@@ -113,7 +116,7 @@ Calendar and Uber stay stubs. Do not send caretaker mail through Composio until 
 - `packages/shared/src/audit.ts` — event shape + `createAuditLog()`
 - `packages/shared/src/invoke.ts` — HTTP request schema
 - `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`
-- `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `MAX_CLARIFICATIONS_PER_REQUEST`, transcribe response
+- `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `plan`, `failure`, `MAX_CLARIFICATIONS_PER_REQUEST`, `MAX_TOOL_ROUNDS_PER_TURN`, transcribe response
 - `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`
 - `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
 - `packages/shared/src/index.ts` — re-exports
@@ -130,9 +133,9 @@ Fallback if live Uber is blocked: a controlled Uber-shaped environment — still
 
 ## What is not built yet
 
-Agent harness / playground (`#5`, `#13`), live calendar + Uber (`#7`, `#14`), designed UI (`#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
+Agent playground (`#13`), live calendar + Uber (`#7`, `#14`), designed UI (`#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
 
-Voice loop (`#4`) is built with a rules-based turn: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. The model-driven turn is `#5`.
+Voice loop (`#4`) and harness (`#5`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn` (ChatGPT when `MODEL_API_KEY` is set, rules otherwise), `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing.
 
 Composio Platform sessions are on `POST /composio/connect` and `POST /composio/execute` (Gmail / `GMAIL_GET_PROFILE` for `senior_maria`). They are not wired into the conversation turn or `notify_caretaker` yet.
 

@@ -10,6 +10,7 @@ export type Health = z.infer<typeof healthSchema>;
 export const envKeys = [
   "ELEVENLABS_API_KEY",
   "MODEL_API_KEY",
+  "MODEL_NAME",
   "BROWSERBASE_API_KEY",
   "BROWSERBASE_PROJECT_ID",
   "COMPOSIO_API_KEY",

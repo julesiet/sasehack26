@@ -32,6 +32,15 @@ function isSameCalendarDay(a: Date, b: Date): boolean {
   );
 }
 
+/** Date-only strings parse as UTC midnight; noon local keeps the calendar day. */
+function coerceAppointmentInput(input: unknown): unknown {
+  const parsed = getAppointmentInputSchema.parse(input);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) {
+    return { date: `${parsed.date}T12:00:00` };
+  }
+  return parsed;
+}
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "numeric",
@@ -139,6 +148,11 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     };
   }
 
+  const input =
+    name === "get_appointment"
+      ? coerceAppointmentInput(parsedInput.data)
+      : parsedInput.data;
+
   const sessionId = resolveSessionId(request.data.sessionId);
   const decision = evaluateToolCall(name, {
     actor: request.data.actor,
@@ -163,7 +177,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
         actor: request.data.actor,
         sessionId,
       },
-      proposed: { tool: name, input: parsedInput.data },
+      proposed: { tool: name, input },
       approved: {
         allowed: false,
         approvalTokenPresent: Boolean(request.data.approvalToken),
@@ -179,7 +193,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     sessionStore.applyToolEvent({
       sessionId,
       tool: name,
-      input: parsedInput.data,
+      input,
       actor: request.data.actor,
       consentGranted: request.data.consentGranted,
       decision,
@@ -199,13 +213,13 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     };
   }
 
-  const result = executeStub(name, parsedInput.data);
+  const result = executeStub(name, input);
   const event = auditLog.append({
     whoAsked: {
       actor: request.data.actor,
       sessionId,
     },
-    proposed: { tool: name, input: parsedInput.data },
+    proposed: { tool: name, input },
     approved: {
       allowed: true,
       by: request.data.actor,
@@ -220,7 +234,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
   sessionStore.applyToolEvent({
     sessionId,
     tool: name,
-    input: parsedInput.data,
+    input,
     actor: request.data.actor,
     consentGranted: request.data.consentGranted,
     decision,

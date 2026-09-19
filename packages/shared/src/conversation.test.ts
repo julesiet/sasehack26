@@ -24,11 +24,13 @@ describe("conversation contract", () => {
     expect(conversationTurnRequestSchema.safeParse({ transcript: "   " }).success).toBe(false);
   });
 
-  it("starts with no turns and no active request", () => {
+  it("starts with no turns, no active request, and an empty plan", () => {
     expect(emptyConversationState()).toEqual({
       turns: [],
       activeRequest: null,
       clarificationsAsked: 0,
+      plan: { steps: [] },
+      failure: null,
     });
   });
 
@@ -41,6 +43,41 @@ describe("conversation contract", () => {
       clarificationsAsked: 0,
     });
     expect(parsed.kind).toBe("proposal");
+    expect(parsed.plan).toEqual({ steps: [] });
+    expect(parsed.failure).toBeNull();
+  });
+
+  it("accepts a plan and a retry failure on the turn response", () => {
+    const parsed = conversationTurnResponseSchema.parse({
+      sessionId: "default",
+      reply: "I couldn't get ride options just now. We can try again.",
+      kind: "answer",
+      activeRequest: { intent: "ride", status: "proposed" },
+      clarificationsAsked: 0,
+      plan: {
+        steps: [
+          {
+            tool: "get_appointment",
+            status: "ok",
+            summary: "Dr. Chen tomorrow.",
+            auditId: "aud_1",
+          },
+          {
+            tool: "find_ride_options",
+            status: "failed",
+            summary: "Uber search failed.",
+            auditId: "aud_2",
+          },
+        ],
+      },
+      failure: {
+        kind: "retry",
+        tool: "find_ride_options",
+        summary: "Uber search failed.",
+      },
+    });
+    expect(parsed.plan.steps).toHaveLength(2);
+    expect(parsed.failure?.kind).toBe("retry");
   });
 
   it("requires reply text for Kasama's voice", () => {
