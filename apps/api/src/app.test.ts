@@ -45,25 +45,99 @@ describe("POST /tools/:name", () => {
     expect(events[0]?.outcome.denied).toBe(true);
   });
 
-  it("denies notify_caretaker send without approval and returns a preview draft", async () => {
+  it("drafts notify_caretaker without sending when approval is missing", async () => {
     const res = await app.request("/tools/notify_caretaker", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         input: { summary: "Maria is running late.", urgency: "high" },
         actor: "model",
+        sessionId: "notify-draft-1",
       }),
     });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.denied).toBe(true);
+    expect(body.success).toBe(true);
     expect(body.preview).toBe(true);
     expect(body.sent).toBe(false);
     expect(body.draft).toEqual({
       summary: "Maria is running late.",
       urgency: "high",
     });
+    expect(String(body.summary)).toMatch(/not sent/i);
+
+    const events = auditLog.list();
+    expect(events).toHaveLength(1);
+    expect(events[0]?.proposed.tool).toBe("notify_caretaker");
+    expect(events[0]?.approved?.allowed).toBe(true);
+    expect(events[0]?.executed?.attempted).toBe(true);
+    expect(events[0]?.outcome.reason).toBe("preview");
+    expect(events[0]?.outcome.denied).toBeUndefined();
+
+    const view = sessionViewSchema.parse(
+      await (await app.request("/sessions/notify-draft-1")).json(),
+    );
+    expect(view.pendingApproval?.tool).toBe("notify_caretaker");
+    expect(view.pendingApproval?.reason).toBe("confirmation_required");
+    expect(view.caretakerActivity).toHaveLength(1);
+    expect(view.caretakerActivity[0]?.sent).toBe(false);
+    expect(view.caretakerActivity[0]?.preview).toBe(true);
+  });
+
+  it("does not send notify_caretaker when a model presents its own token", async () => {
+    const res = await app.request("/tools/notify_caretaker", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { summary: "Maria is running late.", urgency: "high" },
+        actor: "model",
+        approvalToken: "tok_model",
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.denied).toBe(true);
+    expect(body.reason).toBe("model_cannot_self_approve");
+    expect(body.sent).toBe(false);
+    expect(auditLog.list()[0]?.executed?.attempted).toBe(false);
+  });
+
+  it("sends a mocked caretaker message with a human approval token", async () => {
+    const res = await app.request("/tools/notify_caretaker", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { summary: "Maria's Uber is booked.", urgency: "low" },
+        actor: "senior",
+        approvalToken: "tok_yes",
+        sessionId: "notify-send-1",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.sent).toBe(true);
+    expect(body.preview).toBe(false);
+    expect(String(body.summary)).toMatch(/email|sms/i);
+    expect(String(body.summary)).not.toMatch(/not implemented/i);
+
+    const events = auditLog.list();
+    expect(events[0]?.approved?.allowed).toBe(true);
+    expect(events[0]?.approved?.approvalTokenPresent).toBe(true);
+    expect(events[0]?.executed?.attempted).toBe(true);
+    expect(events[0]?.outcome.denied).toBeUndefined();
+
+    const view = sessionViewSchema.parse(
+      await (await app.request("/sessions/notify-send-1")).json(),
+    );
+    expect(view.pendingApproval).toBeNull();
+    expect(view.caretakerActivity).toHaveLength(1);
+    expect(view.caretakerActivity[0]?.sent).toBe(true);
+    expect(view.caretakerActivity[0]?.preview).toBe(false);
+    expect(view.caretakerActivity[0]?.summary).toBe("Maria's Uber is booked.");
   });
 
   it("allows get_appointment without approval and records the outcome", async () => {
@@ -480,6 +554,36 @@ describe("POST /approvals", () => {
     expect(body.reply).toContain("will not book");
     expect(sessionStore.get("tap-2").lastBooking).toBeNull();
     expect(sessionStore.get("tap-2").lastApproval?.decision).toBe("declined");
+    expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
+  });
+
+  it("cancels a drafted caretaker message and never sends it", async () => {
+    await app.request("/tools/notify_caretaker", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { summary: "Maria is going to the doctor.", urgency: "normal" },
+        actor: "model",
+        sessionId: "notify-cancel-1",
+      }),
+    });
+
+    const res = await app.request("/approvals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "notify-cancel-1",
+        decision: "decline",
+        actor: "senior",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.decision).toBe("declined");
+    expect(body.reply).toContain("will not send");
+    expect(sessionStore.get("notify-cancel-1").caretakerActivity.some((item) => item.sent)).toBe(
+      false,
+    );
     expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
   });
 
