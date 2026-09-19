@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { conversationTurnResponseSchema } from "@kasama/shared";
+import {
+  computeArrivalTarget,
+  conversationTurnResponseSchema,
+  getMariaAppointment,
+} from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { runConversationTurn } from "./conversation";
 import { sessionStore } from "./session-store";
@@ -209,6 +213,81 @@ describe("runConversationTurn", () => {
   it("rejects an empty transcript", async () => {
     const result = await runConversationTurn({ transcript: "   " });
     expect(result.status).toBe(400);
+  });
+
+  it("opens the WAV checkpoint when Maria chooses the accessible Uber", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    const reply = await turn("Choose the accessible one");
+    expect(reply.kind).toBe("proposal");
+    expect(reply.reply).toBe("The Uber is $24.50. Should I book it?");
+    expect(reply.pendingApproval?.input).toEqual({ optionId: "uber_wav_1" });
+    expect(reply.pendingApproval?.estimate).toBe("$24.50");
+  });
+
+  it("opens the UberX checkpoint when Maria chooses the cheaper one", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    const reply = await turn("the cheaper one");
+    expect(reply.kind).toBe("proposal");
+    expect(reply.reply).toBe("The Uber is $18.00. Should I book it?");
+    expect(reply.pendingApproval?.input).toEqual({ optionId: "uberx_1" });
+    expect(reply.pendingApproval?.estimate).toBe("$18.00");
+  });
+
+  it("reads the wheelchair confirmation id after a second human yes", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    await turn("Yes");
+    const reply = await turn("Yes, book it");
+    expect(reply.reply).toBe(
+      "I booked the wheelchair Uber for $24.50. Your confirmation is UBER-WAV-0001.",
+    );
+    expect(reply.failure).toBeNull();
+    expect(sessionStore.get("voice-1").lastBooking?.status).toBe("booked");
+    expect(sessionStore.get("voice-1").lastBooking?.confirmationId).toBe("UBER-WAV-0001");
+  });
+
+  it("does not say booked when the confirmation cannot be proven", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    await turn("Yes");
+    resetControlledUberProvider({ failNextVerify: true });
+    const reply = await turn("Yes, book it");
+    expect(reply.reply).toBe(
+      "I couldn't confirm that Uber booking. Nothing was charged. We can try again.",
+    );
+    expect(reply.reply).not.toMatch(/booked/i);
+    expect(reply.failure).toMatchObject({ kind: "retry", tool: "book_ride" });
+    expect(sessionStore.get("voice-1").lastBooking).toBeNull();
+  });
+
+  it("uses the 10:15 arrival window in the ride proposal", async () => {
+    const now = new Date();
+    const result = await runConversationTurn(
+      { transcript: "Please get me a ride to my doctor tomorrow.", sessionId: "time-1" },
+      now,
+    );
+    const body = conversationTurnResponseSchema.parse(result.body);
+    const target = new Date(computeArrivalTarget(getMariaAppointment(now))).toLocaleTimeString(
+      "en-US",
+      {
+        hour: "numeric",
+        minute: "2-digit",
+      },
+    );
+    const thirtyEarly = new Date(computeArrivalTarget(getMariaAppointment(now), 30)).toLocaleTimeString(
+      "en-US",
+      {
+        hour: "numeric",
+        minute: "2-digit",
+      },
+    );
+    expect(body.reply).toContain(target);
+    expect(body.reply).not.toContain(thirtyEarly);
+  });
+
+  it("remembers an accessible request until the checkpoint", async () => {
+    const proposed = await turn("Get me the accessible Uber to my doctor tomorrow");
+    expect(proposed.activeRequest?.product).toBe("WAV");
+    const reply = await turn("Yes");
+    expect(reply.pendingApproval?.input).toEqual({ optionId: "uber_wav_1" });
   });
 
   it("falls back to rules when ChatGPT throws", async () => {

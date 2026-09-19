@@ -104,11 +104,21 @@ function lookupAppointment(sessionId: string, date: string): Appointment | null 
   return getAppointmentResultSchema.parse(result.body).appointment ?? null;
 }
 
-function pickBookingOption(sessionId: string): { optionId: string; estimate?: string } {
-  const wav = sessionStore
-    .get(sessionId)
-    .lastRideOptions.find((option) => option.product === "WAV" || option.accessible);
-  const option = wav ?? sessionStore.get(sessionId).lastRideOptions[0];
+function spokenProduct(text: string): "UberX" | "WAV" | undefined {
+  if (/\b(accessible|wav|wheelchair)\b/.test(text)) return "WAV";
+  if (/\b(cheaper|uberx|uber x|regular)\b/.test(text)) return "UberX";
+  return undefined;
+}
+
+function pickBookingOption(
+  sessionId: string,
+  product?: "UberX" | "WAV",
+): { optionId: string; estimate?: string } {
+  const options = sessionStore.get(sessionId).lastRideOptions;
+  const preferred = product
+    ? options.find((option) => option.product === product)
+    : options.find((option) => option.product === "WAV" || option.accessible);
+  const option = preferred ?? options[0];
   return {
     optionId: option?.optionId ?? DEMO_UBER_WAV_OPTION_ID,
     estimate: option?.estimate,
@@ -117,7 +127,7 @@ function pickBookingOption(sessionId: string): { optionId: string; estimate?: st
 
 function openBookingCheckpoint(sessionId: string, active: ActiveRequest): HarnessTurnResult {
   const before = auditLog.list().length;
-  const { optionId } = pickBookingOption(sessionId);
+  const { optionId } = pickBookingOption(sessionId, active.product);
   invokeTool("book_ride", {
     input: { optionId },
     actor: "model",
@@ -220,10 +230,9 @@ function proposeRideToAppointment(
   appointment: Appointment,
   now: Date,
   preface = "",
+  spoken = "",
 ): Reply {
   const start = new Date(appointment.start);
-  const pickupAt = new Date(start);
-  pickupAt.setMinutes(pickupAt.getMinutes() - 30);
   const arriveBy = new Date(start);
   arriveBy.setMinutes(arriveBy.getMinutes() - 15);
   const destination = appointment.location ?? "your appointment";
@@ -233,7 +242,7 @@ function proposeRideToAppointment(
   const day = describeDay(appointment.start, now);
   const text =
     `${preface}Your ${describeAppointment(appointment)} is ${day} at ${formatTime(appointment.start)}. ` +
-    `I can have an Uber pick you up at home around ${formatTime(pickupAt.toISOString())} so you arrive with time to spare. ` +
+    `I can have an Uber pick you up at home around ${formatTime(arriveBy.toISOString())} so you arrive with time to spare. ` +
     "Should I set that up?";
 
   return {
@@ -244,6 +253,7 @@ function proposeRideToAppointment(
       destination,
       date: isoDate(start),
       appointmentId: appointment.id,
+      product: spokenProduct(spoken),
       status: "proposed",
     },
   };
@@ -269,11 +279,12 @@ function decide(
         activeRequest: null,
       };
     }
-    if (saysYes) {
+    const product = spokenProduct(text) ?? (saysYes ? (active.product ?? "WAV") : undefined);
+    if (product) {
       return {
         text: "Okay. I'll get the Uber ready. You'll see it on screen and confirm before anything is booked.",
         kind: "answer",
-        activeRequest: { ...active, status: "accepted" },
+        activeRequest: { ...active, product, status: "accepted" },
       };
     }
   }
@@ -325,7 +336,7 @@ function decide(
       const requestedDate = dateFromWords(text, now) ?? active?.date ?? isoDate(new Date(seed.start));
       const appointment = lookupAppointment(sessionId, requestedDate);
       if (appointment) {
-        return proposeRideToAppointment(sessionId, appointment, now);
+        return proposeRideToAppointment(sessionId, appointment, now, "", text);
       }
       const next = lookupAppointment(sessionId, isoDate(new Date(seed.start)));
       if (next) {
@@ -334,6 +345,7 @@ function decide(
           next,
           now,
           `I don't see a doctor's appointment ${describeDay(`${requestedDate}T12:00:00`, now)}. `,
+          text,
         );
       }
     }
@@ -437,7 +449,7 @@ export async function runConversationTurn(
       activeRequest: resolved.activeRequest,
       askedClarification: false,
       plan: resolved.plan,
-      failure: null,
+      failure: resolved.failure,
     };
   } else if (complete) {
     try {
