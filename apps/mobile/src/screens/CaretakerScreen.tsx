@@ -1,22 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { DEFAULT_SESSION_ID, type SessionView } from "@kasama/shared";
+import { buildCaretakerDashboard, DEFAULT_SESSION_ID, type SessionView } from "@kasama/shared";
+import { ActivitySummary } from "../components/caretaker/ActivitySummary";
+import { CareNotesCard } from "../components/caretaker/CareNotesCard";
+import { ConsentRecord } from "../components/caretaker/ConsentRecord";
+import { ContactsRow } from "../components/caretaker/ContactsRow";
+import { OverviewCards } from "../components/caretaker/OverviewCards";
 import { fetchSession } from "../lib/api";
-import { colors, radius, type } from "../theme";
+import { colors } from "../theme";
 
 type Props = {
   onBack: () => void;
+  onOpenSenior: () => void;
 };
 
 /**
- * Family view of the same session Maria is on. #6 only needs pending and
- * decided approvals here — the full dashboard is #9.
+ * Designed caretaker dashboard (#9). Polls the same session Maria uses so a
+ * booking shows up here without a manual refresh.
  */
-export function CaretakerScreen({ onBack }: Props) {
+export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<SessionView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +36,7 @@ export function CaretakerScreen({ onBack }: Props) {
           setError(null);
         }
       } catch {
-        if (!cancelled) setError("Could not reach Kasama.");
+        if (!cancelled) setError("Could not reach Kasama. Seeded details still show.");
       }
     };
     void load();
@@ -39,153 +47,165 @@ export function CaretakerScreen({ onBack }: Props) {
     };
   }, []);
 
-  const pending = view?.pendingApproval;
-  const last = view?.lastApproval;
+  const dashboard = useMemo(() => buildCaretakerDashboard({ view }), [view]);
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
-      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
-        <Text style={styles.kicker}>James · Caretaker</Text>
-        <Text style={styles.title}>Maria's activity</Text>
-        <Text style={styles.meta}>Same session as Maria. Approvals show up here.</Text>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Waiting for Maria</Text>
-          {pending ? (
-            <>
-              <Text style={styles.cardTitle}>{pending.prompt ?? pending.summary}</Text>
-              {pending.preview ? <Text style={styles.preview}>{pending.preview}</Text> : null}
-              {pending.estimate ? <Text style={styles.amount}>{pending.estimate}</Text> : null}
-              <Text style={styles.status}>Not booked or sent yet.</Text>
-            </>
-          ) : (
-            <Text style={styles.cardTitle}>Nothing waiting.</Text>
-          )}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Last yes or no</Text>
-          {last ? (
-            <>
-              <Text style={styles.cardTitle}>
-                {last.decision === "approved" ? "Approved" : "Declined"}
-              </Text>
-              <Text style={styles.meta}>
-                {last.actor === "senior" ? "Maria" : "Family"} · {formatWhen(last.timestamp)}
-              </Text>
-              <Text style={styles.status}>{last.summary}</Text>
-            </>
-          ) : (
-            <Text style={styles.cardTitle}>No decision yet.</Text>
-          )}
-        </View>
-
-        {view?.events.length ? (
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>Audit</Text>
-            {view.events
-              .slice()
-              .reverse()
-              .slice(0, 8)
-              .map((event) => (
-                <Text key={event.id} style={styles.event}>
-                  {event.proposed.tool} · {event.outcome.reason ?? (event.approved?.allowed ? "allowed" : "denied")}
-                </Text>
-              ))}
+    <View style={styles.screen}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.body,
+          { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 36 },
+        ]}
+      >
+        <View style={styles.sky}>
+          <View style={styles.dateRow}>
+            <Text style={styles.date}>{dashboard.dateLabel}</Text>
+            <Pressable
+              onPress={onOpenSenior}
+              accessibilityRole="button"
+              accessibilityLabel="Switch to Maria"
+              hitSlop={12}
+              style={({ pressed }) => [pressed ? styles.pressed : null]}
+            >
+              <Text style={styles.switch}>Maria</Text>
+            </Pressable>
           </View>
-        ) : null}
+          <Text style={styles.hello}>Hello, {dashboard.viewerFirstName}</Text>
+          <Text style={styles.subtitle}>{dashboard.subtitle}</Text>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Pressable
-          onPress={onBack}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.back, pressed ? styles.pressed : null]}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
+          <CareNotesCard notes={dashboard.careNotes} />
+          <ContactsRow contacts={dashboard.contacts} />
+        </View>
+
+        <LinearGradient colors={[colors.bowlTop, colors.bowlBottom]} style={styles.bowl}>
+          <View style={styles.overviewHeader}>
+            <Text style={styles.overviewTitle}>Overview</Text>
+            {dashboard.overviewBadge ? (
+              <View style={styles.badge}>
+                <View style={styles.badgeDot} />
+                <Text style={styles.badgeLabel}>{dashboard.overviewBadge}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <OverviewCards appointment={dashboard.appointment} ride={dashboard.ride} />
+          <ConsentRecord items={dashboard.consentItems} />
+          <ActivitySummary
+            items={dashboard.activity}
+            expanded={expanded}
+            onToggle={() => setExpanded((current) => !current)}
+          />
+
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Home"
+            style={({ pressed }) => [styles.home, pressed ? styles.pressed : null]}
+          >
+            <Text style={styles.homeLabel}>Back to Home</Text>
+          </Pressable>
+        </LinearGradient>
       </ScrollView>
     </View>
   );
 }
 
-function formatWhen(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.sky,
+    backgroundColor: colors.caretakerSky,
   },
   body: {
-    paddingHorizontal: 24,
-    gap: 16,
+    flexGrow: 1,
   },
-  kicker: {
-    ...type.label,
-    color: colors.inkSoft,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+  sky: {
+    paddingHorizontal: 24,
+    gap: 22,
+    paddingBottom: 28,
+  },
+  dateRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  date: {
+    color: colors.caretakerMuted,
     fontSize: 16,
   },
-  title: {
-    ...type.greeting,
-    color: colors.ink,
+  switch: {
+    color: colors.caretakerLabel,
+    fontSize: 16,
+    fontWeight: "600",
   },
-  meta: {
-    ...type.label,
-    color: colors.inkSoft,
+  hello: {
+    fontFamily: "Georgia",
+    fontSize: 40,
+    lineHeight: 46,
+    color: colors.caretakerInk,
+    marginTop: -8,
+  },
+  subtitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    color: colors.caretakerMuted,
+    marginTop: -12,
   },
   error: {
-    ...type.label,
+    fontSize: 15,
     color: colors.danger,
   },
-  card: {
-    backgroundColor: colors.pill,
-    borderRadius: radius.button,
-    padding: 20,
+  bowl: {
+    borderTopLeftRadius: 88,
+    borderTopRightRadius: 88,
+    paddingHorizontal: 20,
+    paddingTop: 28,
+    paddingBottom: 16,
+    gap: 16,
+    minHeight: 520,
+  },
+  overviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+  },
+  overviewTitle: {
+    fontFamily: "Georgia",
+    fontSize: 32,
+    lineHeight: 38,
+    color: colors.caretakerInk,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
+    backgroundColor: colors.caretakerCard,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  cardLabel: {
-    ...type.label,
-    color: colors.inkSoft,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    fontSize: 15,
-  },
-  cardTitle: {
-    ...type.transcript,
-    color: colors.ink,
-  },
-  preview: {
-    ...type.label,
-    color: colors.ink,
-  },
-  amount: {
-    ...type.reply,
-    color: colors.ink,
-  },
-  status: {
-    ...type.label,
-    color: colors.inkSoft,
-  },
-  event: {
-    ...type.label,
-    color: colors.ink,
-  },
-  back: {
-    minHeight: 68,
-    borderRadius: radius.button,
+  badgeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: colors.bowlTop,
+  },
+  badgeLabel: {
+    fontSize: 11,
+    letterSpacing: 1.2,
+    fontWeight: "700",
+    color: colors.caretakerInk,
+  },
+  home: {
+    minHeight: 56,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 8,
   },
-  backLabel: {
-    ...type.button,
+  homeLabel: {
     color: colors.onOrange,
+    fontSize: 16,
     fontWeight: "600",
   },
   pressed: {

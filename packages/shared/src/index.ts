@@ -23,6 +23,7 @@ export * from "./invoke";
 export * from "./seed";
 export * from "./approval";
 export * from "./session";
+export * from "./caretaker-dashboard";
 export * from "./conversation";
 export * from "./playground";
 export * from "./composio";

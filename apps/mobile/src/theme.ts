@@ -44,6 +44,20 @@ export const colors = {
   statusTrack: "#EEF1EF",
   failWash: "#FDECEC",
   cancelFill: "#F2F2F2",
+  caretakerSky: "#FAF7F2",
+  caretakerInk: "#111111",
+  caretakerMuted: "#8A8680",
+  caretakerNotes: "#161513",
+  caretakerNotesLabel: "#C8C3BB",
+  caretakerCard: "#FFFFFF",
+  caretakerLabel: "#FF6A00",
+  caretakerAvatarSarah: "#EDE6DC",
+  caretakerAvatarJames: "#D7E4F2",
+  caretakerAvatarEmily: "#F3EDE4",
+  caretakerConsentOk: "#EEF8F1",
+  caretakerConsentPending: "#FFF6E8",
+  caretakerConsentNeutral: "#F4F4F4",
+  caretakerOk: "#1B8A4A",
 } as const;
 
 export const type = {

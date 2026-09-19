@@ -25,7 +25,7 @@ Senior speaks on iPhone → Kasama understands intent → Kasama gathers care co
 
 | Path | Name | Role |
 |---|---|---|
-| `apps/mobile` | `@kasama/mobile` | Expo iOS client. Home unchanged. Senior greeting, then chat + confirmation card. Caretaker shows pending/last approval. Hidden Dev toggle. |
+| `apps/mobile` | `@kasama/mobile` | Expo iOS client. Home unchanged. Senior greeting, then chat + confirmation card. Caretaker dashboard (#9) polls the same session. Hidden Dev toggle. |
 | `apps/api` | `@kasama/api` | Hono server. Health, tool invoke, session, audit, text playground. |
 | `packages/shared` | `@kasama/shared` | Zod contracts, `POLICY_TABLE`, audit schema. Imported by API and mobile. |
 
@@ -38,8 +38,12 @@ CI: GitHub Actions (`.github/workflows/ci.yml`) on pull requests and `main` runs
 - Expo SDK in `apps/mobile`, Expo Go via `pnpm start` / `pnpm dev` or Simulator via `pnpm ios` (no dev client, so no native speech-to-text modules)
 - `EXPO_PUBLIC_API_URL` defaults to `http://localhost:3001` (Simulator). On a phone, set it to `http://<mac-lan-ip>:3001` in `apps/mobile/.env` — that host is also used for the Expo QR (`REACT_NATIVE_PACKAGER_HOSTNAME`). The API listens on `0.0.0.0`.
 - StyleSheet + tokens in `apps/mobile/src/theme.ts`
-- Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`. `HomeScreen` is unchanged. Senior tabs: **Home** (sun welcome), **Chat** (last started conversation), **Tasks** (empty). Chat is disabled until Kasama has replied. Active tab is sun orange. Composer stays on Home and Chat, above a compact tab bar. On Home the bar overlays the sun at 80% opacity so the bowl is not hard-cropped; Chat and Tasks stay solid. Spacing vs the home indicator is interim — polish is [#27](https://github.com/julesiet/sasehack26/issues/27).
+- Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`. `HomeScreen` is unchanged. Senior tabs: **Home** (sun welcome), **Chat** (last started conversation), **Tasks** (empty). Chat is disabled until Kasama has replied. Active tab is sun orange. Composer stays on Home and Chat, above a compact tab bar. On Home the bar overlays the sun at 80% opacity so the bowl is not hard-cropped; Chat and Tasks stay solid. Spacing vs the home indicator is interim — polish is [#27](https://github.com/julesiet/sasehack26/issues/27). Demo role switch: Home **Dev** → Senior / Caretaker; Caretaker **Maria** opens Senior on the same phone.
 - Designed UI replaces those screens; it does not replace the API
+
+### Caretaker dashboard (`#9`)
+
+`apps/mobile/src/screens/CaretakerScreen.tsx`. Family view of Maria's same `DEFAULT_SESSION_ID`. Polls `GET /sessions/:sessionId` every 2s so a senior booking appears without a refresh. Projection is `buildCaretakerDashboard()` in `packages/shared/src/caretaker-dashboard.ts` (session wins; `getMariaSeedBundle()` fills appointment, pickup, Margaret, and Sarah / James / Emily). Layout matches the designed iPhone: date + “Hello, Margaret”, care notes (worth reviewing, 15-minute lead, “No diagnosis noted”), contacts, then an orange Overview bowl with appointment, selected ride, consent / approval record, and activity summary. Badge is `CONFIRMED` / `WAITING` / `DECLINED` from the live booking. Care notes never diagnose. Invites are not sent.
 
 ### Senior conversation screen (`#4`)
 
@@ -137,7 +141,8 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 - `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `plan`, `failure`, `pendingApproval`, `MAX_CLARIFICATIONS_PER_REQUEST`, `MAX_TOOL_ROUNDS_PER_TURN`, transcribe response
 - `packages/shared/src/playground.ts` — text playground (`#13`): `POST /playground` request/response, `PLAYGROUND_DEFAULT_SESSION_ID`, `PLAYGROUND_DEMO_TRANSCRIPT`, `MAX_PLAYGROUND_ADVANCE_TURNS`
 - `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`, optional `GMAIL_CREATE_EMAIL_DRAFT` / `GMAIL_SEND_EMAIL`
-- `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
+- `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers, dashboard viewer (Margaret) and family contacts. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
+- `packages/shared/src/caretaker-dashboard.ts` — caretaker screen projection from `SessionView` + seed (overview status, care notes, appointment, selected ride, consent rows, activity).
 - `packages/shared/src/index.ts` — re-exports
 
 If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in `apps/api/src/invoke-tool.ts`, project any session fields in `apps/api/src/session-store.ts`, add tests, and update this file.
@@ -152,7 +157,7 @@ Live Uber (official API or Browserbase) is issue `#14`. A later adapter implemen
 
 ## What is not built yet
 
-Live Uber (`#14`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. Ride-option cards (`#8`) are built on Chat (UberX + WAV from `lastRideOptions`). `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
+Live Uber (`#14`), care-signal UI (`#10`), notify UI (`#11`). Caretaker dashboard (`#9`) is built: designed family screen polls `GET /sessions/:sessionId`. Session HTTP (`#18`) is built. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. Ride-option cards (`#8`) are built on Chat (UberX + WAV from `lastRideOptions`). `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
 
 Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
 

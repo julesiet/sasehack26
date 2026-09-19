@@ -102,6 +102,8 @@ Expo Go only (`pnpm start` or `pnpm ios`). Add only Expo Go–compatible package
 
 Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Senior tabs: Home (sun welcome), Chat (last started conversation), Tasks (empty). Active tab is sun orange. On Home the compact tab bar is 80% opaque over the sun. After a ride search, Chat shows two Uber option cards (UberX and wheelchair WAV). Tapping a card selects that product through the conversation turn (same as saying "the wheelchair Uber" / "the UberX"). Confirmation is a descriptive Cancel / Confirm card for the selected option. Finding and booking show a current-action card so the screen never looks idle. Tap targets ≥ 68pt on senior actions.
 
+Caretaker dashboard (`#9`): Home **Dev** → **Caretaker**. Same `default` session as Maria, polled every 2s. Designed screen shows care notes (never a diagnosis), contacts, appointment, selected Uber, consent / approval record, and a short activity summary. **Maria** switches to Senior mode on the same phone. See [ARCHITECTURE.md](ARCHITECTURE.md#caretaker-dashboard-9).
+
 ## Safety (non-negotiable)
 
 Kasama may request tools. The harness decides. Encode policy in `packages/shared/src/policy.ts`, not comments.

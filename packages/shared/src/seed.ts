@@ -199,6 +199,32 @@ export function getMariaPriorRequests(
   ];
 }
 
+export const familyContactSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  initial: z.string().min(1),
+});
+export type FamilyContact = z.infer<typeof familyContactSchema>;
+
+export const dashboardViewerSchema = z.object({
+  firstName: z.string(),
+  relationship: z.string(),
+});
+export type DashboardViewer = z.infer<typeof dashboardViewerSchema>;
+
+/** Person signed into caretaker mode on the designed dashboard (#9). */
+export const MARIA_DASHBOARD_VIEWER: DashboardViewer = dashboardViewerSchema.parse({
+  firstName: "Margaret",
+  relationship: "family",
+});
+
+/** Family row on the caretaker dashboard. James is also the policy caretaker. */
+export const MARIA_FAMILY_CONTACTS: FamilyContact[] = [
+  familyContactSchema.parse({ id: "contact_sarah", name: "Sarah", initial: "S" }),
+  familyContactSchema.parse({ id: "contact_james", name: "James", initial: "J" }),
+  familyContactSchema.parse({ id: "contact_emily", name: "Emily", initial: "E" }),
+];
+
 export const mariaSeedBundleSchema = z.object({
   profile: seniorProfileSchema,
   appointment: seedAppointmentSchema,
@@ -206,6 +232,8 @@ export const mariaSeedBundleSchema = z.object({
   caretakerPreferences: caretakerPreferencesSchema,
   wearableReadings: z.array(wearableReadingSchema),
   priorRequests: z.array(priorRequestSchema),
+  dashboardViewer: dashboardViewerSchema,
+  familyContacts: z.array(familyContactSchema),
 });
 export type MariaSeedBundle = z.infer<typeof mariaSeedBundleSchema>;
 
@@ -219,5 +247,7 @@ export function getMariaSeedBundle(referenceDate: Date = new Date()): MariaSeedB
     caretakerPreferences: MARIA_CARETAKER_PREFERENCES,
     wearableReadings: getMariaWearableReadings(referenceDate),
     priorRequests: getMariaPriorRequests(referenceDate),
+    dashboardViewer: MARIA_DASHBOARD_VIEWER,
+    familyContacts: MARIA_FAMILY_CONTACTS,
   });
 }
