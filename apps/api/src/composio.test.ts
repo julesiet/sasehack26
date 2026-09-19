@@ -219,6 +219,36 @@ describe("createKasamaComposio", () => {
     expect(result.logId).toBe("log_draft_2");
   });
 
+  it("exposes draft_id when Composio only returns id on a successful draft", async () => {
+    const execute = vi.fn(async () => ({
+      data: {
+        id: "r-draft-live",
+        display_url: "https://mail.google.com/mail/u/0/#drafts",
+        message: { id: "msg_1" },
+      },
+      error: null,
+      logId: "log_draft_live",
+    }));
+    const client = fakeClient({
+      toolkits: [{ slug: "gmail", connection: { isActive: true } }],
+      execute,
+    });
+    const composio = createKasamaComposio({
+      readApiKey: () => "ak_test",
+      getClient: () => client,
+    });
+
+    const result = await composio.execute({
+      toolSlug: COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+    });
+
+    expect(result.successful).toBe(true);
+    expect(result.data).toMatchObject({
+      id: "r-draft-live",
+      draft_id: "r-draft-live",
+    });
+  });
+
   it("returns a Connect Link instead of drafting when Gmail is not connected", async () => {
     const execute = vi.fn();
     const client = fakeClient({
