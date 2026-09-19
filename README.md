@@ -39,7 +39,21 @@ API:
 pnpm dev:api
 ```
 
-Listens on `http://localhost:3001`. Check `GET /health`. Poll a session with `GET /sessions/:sessionId` (omit `sessionId` on tool calls to use `default`).
+Listens on `http://localhost:3001` and on your LAN. Check `GET /health`. Poll a session with `GET /sessions/:sessionId` (omit `sessionId` on tool calls to use `default`).
+
+Expo Go on a phone (same Wi-Fi as the Mac):
+
+```sh
+# apps/mobile/.env — this Mac's IP, not localhost
+# ipconfig getifaddr en0
+EXPO_PUBLIC_API_URL=http://192.168.x.x:3001
+```
+
+```sh
+pnpm start
+```
+
+Or `pnpm dev` (API + Expo). Scan the QR in Expo Go. Restart Expo after changing `.env`.
 
 iOS Simulator:
 
@@ -47,7 +61,7 @@ iOS Simulator:
 pnpm ios
 ```
 
-The Simulator can reach the API at `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). Kasama speaks back with iOS speech.
+The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). Kasama speaks back with iOS speech.
 
 Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env` (the key needs Speech to Text **and** Text to Speech). Without it the Senior screen asks you to type and uses iOS speech for replies. The Simulator uses your Mac's microphone.
 
@@ -58,6 +72,7 @@ Copy `.env.example` into `apps/api/.env` and `apps/mobile/.env` when you add key
 ```text
 PORT=3001
 EXPO_PUBLIC_API_URL=http://localhost:3001
+# Expo Go: http://<mac-lan-ip>:3001
 ELEVENLABS_API_KEY=
 MODEL_API_KEY=
 BROWSERBASE_API_KEY=

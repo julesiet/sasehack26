@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "turbo dev",
     "dev:api": "turbo dev --filter=@kasama/api",
+    "start": "turbo start --filter=@kasama/mobile",
     "ios": "turbo ios --filter=@kasama/mobile",
     "build": "turbo build",
     "typecheck": "turbo typecheck",

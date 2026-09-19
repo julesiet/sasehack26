@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { healthSchema } from "@kasama/shared";
-
-const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
+import { apiUrl } from "../lib/api";
 
 type Props = {
   onOpenSenior: () => void;
