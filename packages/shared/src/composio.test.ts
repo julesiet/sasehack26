@@ -11,6 +11,7 @@ import {
   composioConnectResponseSchema,
   composioExecuteRequestSchema,
   composioExecuteResponseSchema,
+  normalizeComposioExecuteData,
   resolveComposioExecuteArguments,
 } from "./composio";
 
@@ -87,6 +88,35 @@ describe("composio contract", () => {
       recipient_email: COMPOSIO_CARETAKER_RECIPIENT,
       subject: "Ride booked",
       body: "Maria's WAV is confirmed.",
+    });
+  });
+
+  it("copies Composio's Gmail draft id onto draft_id without changing other tools", () => {
+    expect(
+      normalizeComposioExecuteData(COMPOSIO_GMAIL_CREATE_DRAFT_TOOL, {
+        id: "r-draft-live",
+        display_url: "https://mail.google.com/mail/u/0/#drafts",
+        message: { id: "msg_1" },
+      }),
+    ).toMatchObject({
+      id: "r-draft-live",
+      draft_id: "r-draft-live",
+      display_url: "https://mail.google.com/mail/u/0/#drafts",
+    });
+    expect(
+      normalizeComposioExecuteData(COMPOSIO_GMAIL_CREATE_DRAFT_TOOL, {
+        draft_id: "r-already",
+        id: "r-already",
+      }),
+    ).toMatchObject({ draft_id: "r-already" });
+    expect(
+      normalizeComposioExecuteData(COMPOSIO_DEFAULT_TOOL, {
+        emailAddress: "maria@example.com",
+        id: "not-a-draft",
+      }),
+    ).toEqual({
+      emailAddress: "maria@example.com",
+      id: "not-a-draft",
     });
   });
 });

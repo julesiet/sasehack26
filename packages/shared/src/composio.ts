@@ -73,6 +73,28 @@ export function resolveComposioExecuteArguments(
   return arguments_ ?? { user_id: "me" };
 }
 
+/**
+ * Gmail's documented create-draft result includes `draft_id`. Live Composio
+ * often returns that value as `id` only — copy it so callers can keep the id.
+ */
+export function normalizeComposioExecuteData(toolSlug: string, data: unknown): unknown {
+  if (toolSlug !== COMPOSIO_GMAIL_CREATE_DRAFT_TOOL) {
+    return data;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return data;
+  }
+  const record = data as Record<string, unknown>;
+  const draftId =
+    (typeof record.draft_id === "string" && record.draft_id) ||
+    (typeof record.id === "string" && record.id) ||
+    undefined;
+  if (!draftId) {
+    return data;
+  }
+  return { ...record, draft_id: draftId };
+}
+
 /** `POST /composio/connect` body. */
 export const composioConnectRequestSchema = z.object({
   userId: z.string().min(1).optional(),

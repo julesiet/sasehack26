@@ -110,7 +110,7 @@ Rules the harness keeps:
 Live provider tools go through Composio Platform sessions (`apps/api/src/composio.ts`), not a parallel agent. Identity is Maria's existing id (`senior_maria`). The SDK reads `COMPOSIO_API_KEY` from the environment.
 
 - `POST /composio/connect` — create or resume a session and return a Gmail Connect Link when the account is not connected
-- `POST /composio/execute` — `session.execute`. Default remains `GMAIL_GET_PROFILE` (`user_id: "me"`). Pass `toolSlug: "GMAIL_CREATE_EMAIL_DRAFT"` or `GMAIL_SEND_EMAIL` (documented at https://docs.composio.dev/toolkits/gmail.md). Omitted caretaker fields fill `GMAIL_CARETAKER_DRAFT_ARGUMENTS` / `GMAIL_CARETAKER_SEND_ARGUMENTS` (`juleselvandrade@gmail.com`). `GMAIL_SEND_DRAFT` is rejected. `409` + Connect Link if Gmail is not authorized
+- `POST /composio/execute` — `session.execute`. Default remains `GMAIL_GET_PROFILE` (`user_id: "me"`). Pass `toolSlug: "GMAIL_CREATE_EMAIL_DRAFT"` or `GMAIL_SEND_EMAIL` (documented at https://docs.composio.dev/toolkits/gmail.md). Omitted caretaker fields fill `GMAIL_CARETAKER_DRAFT_ARGUMENTS` / `GMAIL_CARETAKER_SEND_ARGUMENTS` (`juleselvandrade@gmail.com`). Successful drafts always include `data.draft_id` (copied from Composio's `id` when needed). `GMAIL_SEND_DRAFT` is rejected. `409` + Connect Link if Gmail is not authorized
 
 Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` drafts without a token and mocks email/SMS after a human yes. Do not send caretaker mail through Composio until that same policy still gates it.
 
@@ -123,7 +123,7 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 - `packages/shared/src/approval.ts` — pending/last approval, `POST /approvals` body/response, $24.50 demo prompt helpers
 - `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`, `pendingApproval`, `lastApproval`, `lastRideOptions`
 - `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `plan`, `failure`, `pendingApproval`, `MAX_CLARIFICATIONS_PER_REQUEST`, `MAX_TOOL_ROUNDS_PER_TURN`, transcribe response
-- `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`, optional `GMAIL_CREATE_EMAIL_DRAFT` / `GMAIL_SEND_EMAIL`
+- `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`, optional `GMAIL_CREATE_EMAIL_DRAFT` / `GMAIL_SEND_EMAIL`; `normalizeComposioExecuteData` copies a Gmail draft `id` onto `draft_id`
 - `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
 - `packages/shared/src/index.ts` — re-exports
 
