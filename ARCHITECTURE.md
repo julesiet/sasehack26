@@ -110,7 +110,7 @@ Live provider tools go through Composio Platform sessions (`apps/api/src/composi
 - `POST /composio/connect` — create or resume a session and return a Gmail Connect Link when the account is not connected
 - `POST /composio/execute` — `session.execute`. First verified tool is `GMAIL_GET_PROFILE` (`user_id: "me"`). `409` + Connect Link if Gmail is not authorized
 
-Calendar and Uber stay stubs. Do not send caretaker mail through Composio until `notify_caretaker` policy still gates it.
+Calendar stays seeded; Uber uses the controlled provider. Do not send caretaker mail through Composio until `notify_caretaker` policy still gates it.
 
 ## Shared contracts
 
@@ -131,19 +131,19 @@ Composio session tools (`GMAIL_GET_PROFILE` and later Gmail writes) live on `POS
 
 ## Uber
 
-Booking is through Uber. `find_ride_options` / `book_ride` are Uber-shaped. Live Uber (API or Browserbase) is issue `#14` / `#7`. Until then stubs return structured `{ success, summary, ... }` and still go through policy.
+Booking is through Uber. `find_ride_options` / `book_ride` go through `apps/api/src/uber-provider.ts` (`UberProvider.findOptions` / `book`). This issue ships a controlled in-process implementation: two products (UberX ~$18, WAV ~$24.50), speakable confirmation ids (`UBER-WAV-0001`), and `success: true` only when the provider can re-read the booking it just wrote. Policy still requires a human token to book.
 
-Fallback if live Uber is blocked: a controlled Uber-shaped environment — still presented as Uber, not a generic cab.
+Live Uber (official API or Browserbase) is issue `#14`. A later adapter implements the same `UberProvider` interface. Until then the product names and confirmation still read as Uber, not a generic cab.
 
 ## What is not built yet
 
-Agent playground (`#13`), live calendar + Uber (`#7`, `#14`), ride-option cards (`#8`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
+Agent playground (`#13`), live Uber (`#14`), ride-option cards (`#8`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`.
 
-Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` returns stub UberX + WAV ($24.50) so the checkpoint has a real price; live Uber is still `#14`.
+Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
 
 Composio Platform sessions are on `POST /composio/connect` and `POST /composio/execute` (Gmail / `GMAIL_GET_PROFILE` for `senior_maria`). They are not wired into the conversation turn or `notify_caretaker` yet.
 
-Maria's seed data (`#2`) is built: `get_appointment` returns her real appointment (still a stub for every other date, since live calendar is `#7`).
+Maria's seed data (`#2`) is built: `get_appointment` still uses Maria's seed (live calendar is out of scope; Composio later if cheap).
 
 ## Keeping architecture context shared
 
