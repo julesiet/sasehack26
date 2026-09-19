@@ -67,6 +67,7 @@ Flow: parse name → Zod input → `evaluateToolCall` → append audit → stub 
 - `packages/shared/src/policy.ts` — `POLICY_TABLE`, `evaluateAction`, `evaluateToolCall`
 - `packages/shared/src/audit.ts` — event shape + `createAuditLog()`
 - `packages/shared/src/invoke.ts` — HTTP request schema
+- `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
 - `packages/shared/src/index.ts` — re-exports
 
 If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in `apps/api/src/invoke-tool.ts`, add tests, and update this file.
@@ -79,7 +80,9 @@ Fallback if live Uber is blocked: a controlled Uber-shaped environment — still
 
 ## What is not built yet
 
-Kasama harness / playground (`#5`, `#13`), Maria seed (`#2`), live calendar + Uber (`#7`, `#14`), designed UI (`#4`, `#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`), session HTTP (`#18`).
+Agent harness / playground (`#5`, `#13`), live calendar + Uber (`#7`, `#14`), designed UI (`#4`, `#6`, `#8`, `#9`), care-signal UI (`#10`), notify UI (`#11`), session HTTP (`#18`).
+
+Maria's seed data (`#2`) is built: `get_appointment` returns her real appointment (still a stub for every other date, since live calendar is `#7`).
 
 ## Keeping architecture context shared
 
