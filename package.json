@@ -1,0 +1,16 @@
+{
+  "name": "kasama",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:api": "turbo dev --filter=@kasama/api",
+    "ios": "turbo ios --filter=@kasama/mobile",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.2"
+  }
+}
