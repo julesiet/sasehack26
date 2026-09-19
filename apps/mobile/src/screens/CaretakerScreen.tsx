@@ -20,11 +20,15 @@ type Props = {
  * Designed caretaker dashboard (#9). Polls the same session Maria uses so a
  * booking shows up here without a manual refresh.
  */
+const BOWL_FADE_HEIGHT = 72;
+
 export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<SessionView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [bowlHeight, setBowlHeight] = useState(0);
+  const deepStart = bowlHeight > 0 ? Math.min(BOWL_FADE_HEIGHT / bowlHeight, 0.35) : 0.14;
 
   useEffect(() => {
     let cancelled = false;
@@ -76,44 +80,45 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
           <ContactsRow contacts={dashboard.contacts} />
         </View>
 
-        <View style={styles.bowl}>
-          <LinearGradient
-            colors={[colors.caretakerSky, colors.skyGlowSoft, colors.skyGlowWarm, colors.bowlTop]}
-            locations={[0, 0.35, 0.7, 1]}
-            style={styles.bowlFade}
+        <LinearGradient
+          colors={[
+            colors.caretakerSky,
+            colors.skyGlowSoft,
+            colors.skyGlowWarm,
+            colors.bowlTop,
+            colors.bowlBottom,
+          ]}
+          locations={[0, deepStart * 0.4, deepStart * 0.75, deepStart, 1]}
+          onLayout={(event) => setBowlHeight(event.nativeEvent.layout.height)}
+          style={[styles.bowl, { paddingBottom: Math.max(insets.bottom, 20) }]}
+        >
+          <View style={styles.overviewHeader}>
+            <Text style={styles.overviewTitle}>Overview</Text>
+            {dashboard.overviewBadge ? (
+              <View style={styles.badge}>
+                <View style={styles.badgeDot} />
+                <Text style={styles.badgeLabel}>{dashboard.overviewBadge}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <OverviewCards appointment={dashboard.appointment} ride={dashboard.ride} />
+          <ConsentRecord items={dashboard.consentItems} />
+          <ActivitySummary
+            items={dashboard.activity}
+            expanded={expanded}
+            onToggle={() => setExpanded((current) => !current)}
           />
-          <LinearGradient
-            colors={[colors.bowlTop, colors.bowlBottom]}
-            style={[styles.bowlBody, { paddingBottom: Math.max(insets.bottom, 20) }]}
+
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Home"
+            style={({ pressed }) => [styles.home, pressed ? styles.pressed : null]}
           >
-            <View style={styles.overviewHeader}>
-              <Text style={styles.overviewTitle}>Overview</Text>
-              {dashboard.overviewBadge ? (
-                <View style={styles.badge}>
-                  <View style={styles.badgeDot} />
-                  <Text style={styles.badgeLabel}>{dashboard.overviewBadge}</Text>
-                </View>
-              ) : null}
-            </View>
-
-            <OverviewCards appointment={dashboard.appointment} ride={dashboard.ride} />
-            <ConsentRecord items={dashboard.consentItems} />
-            <ActivitySummary
-              items={dashboard.activity}
-              expanded={expanded}
-              onToggle={() => setExpanded((current) => !current)}
-            />
-
-            <Pressable
-              onPress={onBack}
-              accessibilityRole="button"
-              accessibilityLabel="Back to Home"
-              style={({ pressed }) => [styles.home, pressed ? styles.pressed : null]}
-            >
-              <Text style={styles.homeLabel}>Back to Home</Text>
-            </Pressable>
-          </LinearGradient>
-        </View>
+            <Text style={styles.homeLabel}>Back to Home</Text>
+          </Pressable>
+        </LinearGradient>
       </ScrollView>
     </View>
   );
@@ -166,15 +171,8 @@ const styles = StyleSheet.create({
   bowl: {
     borderTopLeftRadius: 88,
     borderTopRightRadius: 88,
-    overflow: "hidden",
-    flexGrow: 1,
-  },
-  bowlFade: {
-    height: 72,
-  },
-  bowlBody: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: BOWL_FADE_HEIGHT,
     gap: 16,
     flexGrow: 1,
   },
