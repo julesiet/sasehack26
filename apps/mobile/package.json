@@ -4,8 +4,9 @@
   "private": true,
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
-    "ios": "expo start --ios",
+    "dev": "node ./scripts/start-expo.cjs",
+    "start": "node ./scripts/start-expo.cjs",
+    "ios": "node ./scripts/start-expo.cjs --ios",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

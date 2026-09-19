@@ -33,8 +33,8 @@ Do not add `apps/web` or an Android app. Do not move contracts out of `packages/
 
 ## Mobile
 
-- Expo SDK in `apps/mobile`, iOS Simulator via `pnpm ios` (Expo Go — no dev client, so no native speech-to-text modules)
-- `EXPO_PUBLIC_API_URL` defaults to `http://localhost:3001` (Simulator can use localhost)
+- Expo SDK in `apps/mobile`, Expo Go via `pnpm start` / `pnpm dev` or Simulator via `pnpm ios` (no dev client, so no native speech-to-text modules)
+- `EXPO_PUBLIC_API_URL` defaults to `http://localhost:3001` (Simulator). On a phone, set it to `http://<mac-lan-ip>:3001` in `apps/mobile/.env` — that host is also used for the Expo QR (`REACT_NATIVE_PACKAGER_HOSTNAME`). The API listens on `0.0.0.0`.
 - StyleSheet + tokens in `apps/mobile/src/theme.ts`
 - Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`
 - Designed UI replaces those screens; it does not replace the API
@@ -59,7 +59,7 @@ Loop: mic → `expo-audio` records (≤ 15 s or tap) → `POST /speech/transcrib
 
 ## API
 
-Entry: `apps/api/src/index.ts` listens on `PORT` (default 3001). App routes live in `apps/api/src/app.ts`.
+Entry: `apps/api/src/index.ts` listens on `0.0.0.0` / `PORT` (default 3001) so a phone can use the Mac's LAN IP. App routes live in `apps/api/src/app.ts`.
 
 `POST /tools/:name` body:
 

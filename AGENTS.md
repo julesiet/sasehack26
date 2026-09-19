@@ -48,15 +48,17 @@ pnpm workspaces + Turborepo. Node 20. Package manager `pnpm@9.15.9`.
 
 ```sh
 pnpm install
-pnpm dev:api          # API — keep running in its own terminal
+pnpm dev              # API + Expo LAN (QR for Expo Go)
+pnpm dev:api          # API only
+pnpm start            # Expo Go QR only (own terminal)
 pnpm ios              # Expo → iOS Simulator (own terminal)
 pnpm typecheck
 pnpm test
 ```
 
-`pnpm dev:api` and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy.
+`pnpm dev`, `pnpm start`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy.
 
-There is no product website. `http://localhost:3001` is the API. The app is the Simulator.
+There is no product website. `http://localhost:3001` is the API. The app is Expo Go (`pnpm start` / `pnpm dev`) or the Simulator (`pnpm ios`). For a phone, put this Mac's LAN IP in `apps/mobile/.env` as `EXPO_PUBLIC_API_URL=http://<ip>:3001` (`ipconfig getifaddr en0`) so the QR is not localhost. Restart Expo after changing `.env`.
 
 ## Current API
 
@@ -79,7 +81,7 @@ Calendar and Uber are **stubs**. Policy and audit are real. Live Uber is later (
 
 ## Mobile
 
-Expo Go only (`pnpm ios`). Add only Expo Go–compatible packages; no native speech-to-text modules and no `expo prebuild`. Speech-to-text and Kasama's voice run on the API via ElevenLabs. The device falls back to `expo-speech` if TTS is not configured.
+Expo Go only (`pnpm start` or `pnpm ios`). Add only Expo Go–compatible packages; no native speech-to-text modules and no `expo prebuild`. Speech-to-text and Kasama's voice run on the API via ElevenLabs. The device falls back to `expo-speech` if TTS is not configured.
 
 Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Keep text ≥ 28pt and tap targets ≥ 68pt on senior screens.
 
