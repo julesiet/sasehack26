@@ -38,6 +38,11 @@ export const colors = {
   mapWash: "#E7F6F1",
   pin: "#0F6B5C",
   saved: "#0F6B5C",
+  bookedWash: "#E8F6F1",
+  selectedFill: "#FFF4E8",
+  selectedLine: "#FF6A00",
+  statusTrack: "#EEF1EF",
+  failWash: "#FDECEC",
   cancelFill: "#F2F2F2",
 } as const;
 

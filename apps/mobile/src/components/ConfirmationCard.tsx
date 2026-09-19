@@ -4,11 +4,11 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ConfirmationCardData } from "../lib/mvp-confirmation";
 import { colors, radius, size, type } from "../theme";
 
-type Status = "pending" | "approved" | "declined";
+export type ConfirmationStatus = "pending" | "booking" | "approved" | "declined" | "failed";
 
 type Props = {
   data: ConfirmationCardData;
-  status: Status;
+  status: ConfirmationStatus;
   disabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -16,22 +16,25 @@ type Props = {
 
 /**
  * Descriptive checkpoint from the chat mock: place, reason, time, then
- * Cancel / Confirm. Saved and declined are the same card without buttons.
+ * Cancel / Confirm. Saved, booking, failed, and declined are the same card
+ * without (or with disabled) buttons.
  */
 export function ConfirmationCard({ data, status, disabled, onConfirm, onCancel }: Props) {
+  const productLine = [data.productLabel ?? data.product, data.estimate].filter(Boolean).join(" · ");
+
   if (status === "approved") {
     return (
-      <View style={styles.card} accessibilityLabel={`${data.eyebrow} details saved`}>
+      <View style={[styles.card, styles.booked]} accessibilityLabel={`${data.eyebrow} booked`}>
         <View style={styles.savedRow}>
           <Ionicons name="checkmark-circle" size={28} color={colors.saved} />
-          <Text style={styles.savedTitle}>{data.kind === "notify" ? "Message sent" : "Ride details saved"}</Text>
+          <Text style={styles.savedTitle}>{data.kind === "notify" ? "Message sent" : "Ride booked"}</Text>
         </View>
-        <Text style={styles.savedPlace}>{data.placeName}</Text>
-        <Text style={styles.savedMeta}>
-          {data.reasonLabel}: {data.reason}
-        </Text>
+        {data.kind === "ride" && productLine ? <Text style={styles.savedPlace}>{productLine}</Text> : null}
+        <Text style={styles.savedMeta}>{data.placeName}</Text>
         <Text style={styles.savedMeta}>{data.time}</Text>
-        {data.estimate ? <Text style={styles.savedMeta}>{data.estimate}</Text> : null}
+        {data.confirmationId ? (
+          <Text style={styles.confirmation}>Confirmation {data.confirmationId}</Text>
+        ) : null}
       </View>
     );
   }
@@ -45,24 +48,40 @@ export function ConfirmationCard({ data, status, disabled, onConfirm, onCancel }
     );
   }
 
+  if (status === "failed") {
+    return (
+      <View style={[styles.card, styles.failed]} accessibilityLabel="Uber could not be booked">
+        <View style={styles.savedRow}>
+          <Ionicons name="alert-circle" size={28} color={colors.danger} />
+          <Text style={styles.savedTitle}>Uber could not be booked</Text>
+        </View>
+        <Text style={styles.savedMeta}>
+          {productLine || "Nothing was charged."} We can try again.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.card} accessibilityLabel={`${data.eyebrow} confirmation`}>
       <Row icon="location-outline" label={data.eyebrow} body={data.intro} />
       <MapStub data={data} />
       <Row icon="clipboard-outline" label={data.reasonLabel} body={data.reason} />
       <Row icon="time-outline" label={data.timeLabel} body={data.time} />
-      {data.estimate ? <Row icon="car-outline" label="Uber" body={`${data.estimate} · WAV`} /> : null}
+      {productLine ? <Row icon="car-outline" label="Uber" body={productLine} /> : null}
+
+      {status === "booking" ? <Text style={styles.booking}>Booking your Uber…</Text> : null}
 
       <View style={styles.actions}>
         <Pressable
           onPress={onCancel}
-          disabled={disabled}
+          disabled={disabled || status === "booking"}
           accessibilityRole="button"
           accessibilityLabel="Cancel"
           style={({ pressed }) => [
             styles.button,
             styles.cancel,
-            disabled ? styles.disabled : null,
+            disabled || status === "booking" ? styles.disabled : null,
             pressed ? styles.pressed : null,
           ]}
         >
@@ -70,13 +89,13 @@ export function ConfirmationCard({ data, status, disabled, onConfirm, onCancel }
         </Pressable>
         <Pressable
           onPress={onConfirm}
-          disabled={disabled}
+          disabled={disabled || status === "booking"}
           accessibilityRole="button"
           accessibilityLabel="Confirm"
           style={({ pressed }) => [
             styles.button,
             styles.confirm,
-            disabled ? styles.disabled : null,
+            disabled || status === "booking" ? styles.disabled : null,
             pressed ? styles.pressed : null,
           ]}
         >
@@ -122,6 +141,14 @@ const styles = StyleSheet.create({
     gap: 16,
     borderWidth: 1,
     borderColor: colors.chatLine,
+  },
+  booked: {
+    backgroundColor: colors.bookedWash,
+    borderColor: colors.bookedWash,
+  },
+  failed: {
+    backgroundColor: colors.failWash,
+    borderColor: colors.failWash,
   },
   row: {
     flexDirection: "row",
@@ -220,6 +247,14 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
   savedMeta: {
+    ...type.label,
+    color: colors.inkSoft,
+  },
+  confirmation: {
+    ...type.cardTitle,
+    color: colors.ink,
+  },
+  booking: {
     ...type.label,
     color: colors.inkSoft,
   },

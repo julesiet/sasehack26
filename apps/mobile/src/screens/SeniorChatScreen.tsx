@@ -1,9 +1,19 @@
 import { useEffect, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import type { ConversationTurn, LastApproval, PendingApproval } from "@kasama/shared";
+import {
+  selectedRideOption,
+  type ActiveRequest,
+  type ConversationTurn,
+  type LastApproval,
+  type PendingApproval,
+  type SessionBooking,
+  type UberRideOption,
+} from "@kasama/shared";
 import { ChatBubble } from "../components/ChatBubble";
-import { ConfirmationCard } from "../components/ConfirmationCard";
-import type { ConversationPhase } from "../hooks/useKasamaConversation";
+import { ConfirmationCard, type ConfirmationStatus } from "../components/ConfirmationCard";
+import { RideOptionsCard } from "../components/RideOptionsCard";
+import { RideStatusCard } from "../components/RideStatusCard";
+import type { ConversationPhase, RideWork } from "../hooks/useKasamaConversation";
 import { confirmationFromPending } from "../lib/mvp-confirmation";
 import { colors, type } from "../theme";
 
@@ -12,11 +22,31 @@ type Props = {
   turns: ConversationTurn[];
   pendingApproval: PendingApproval | null;
   justResolved: LastApproval | null;
+  lastRideOptions: UberRideOption[];
+  lastBooking: SessionBooking | null;
+  activeRequest: ActiveRequest | null;
+  rideWork: RideWork;
   notice: string | null;
+  onSelectRide: (option: UberRideOption) => void;
   onConfirm: () => void;
   onCancel: () => void;
   onOpenSettings: () => void;
 };
+
+function confirmationStatus(
+  pendingApproval: PendingApproval | null,
+  justResolved: LastApproval | null,
+  lastBooking: SessionBooking | null,
+  rideWork: RideWork,
+): ConfirmationStatus | null {
+  if (pendingApproval) return rideWork === "booking" ? "booking" : "pending";
+  if (justResolved?.decision === "approved") {
+    if (justResolved.tool === "book_ride" && lastBooking?.status !== "booked") return "failed";
+    return "approved";
+  }
+  if (justResolved) return "declined";
+  return null;
+}
 
 /**
  * Chat thread after Kasama's first reply. The composer and tab bar stay
@@ -27,27 +57,32 @@ export function SeniorChatScreen({
   turns,
   pendingApproval,
   justResolved,
+  lastRideOptions,
+  lastBooking,
+  activeRequest,
+  rideWork,
   notice,
+  onSelectRide,
   onConfirm,
   onCancel,
   onOpenSettings,
 }: Props) {
   const scroll = useRef<ScrollView>(null);
-  const card = confirmationFromPending(pendingApproval, justResolved);
-  const cardStatus = pendingApproval
-    ? "pending"
-    : justResolved?.decision === "approved"
-      ? "approved"
-      : justResolved
-        ? "declined"
-        : null;
+  const card = confirmationFromPending(pendingApproval, justResolved, lastRideOptions, lastBooking);
+  const cardStatus = confirmationStatus(pendingApproval, justResolved, lastBooking, rideWork);
+  const selected = selectedRideOption(lastRideOptions, pendingApproval, activeRequest?.product);
+  const rideFinished =
+    lastBooking?.status === "booked" && !pendingApproval && activeRequest?.status !== "proposed";
+  const showOptions =
+    lastRideOptions.length > 0 && justResolved?.decision !== "approved" && !rideFinished;
+  const busy = phase === "thinking" || rideWork !== "none";
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       scroll.current?.scrollToEnd({ animated: true });
     });
     return () => cancelAnimationFrame(id);
-  }, [turns.length, cardStatus]);
+  }, [turns.length, cardStatus, lastRideOptions.length, rideWork]);
 
   return (
     <ScrollView
@@ -62,15 +97,32 @@ export function SeniorChatScreen({
         <ChatBubble key={turn.id} speaker={turn.speaker} text={turn.text} />
       ))}
 
-      {phase === "thinking" ? <Text style={styles.hint}>Thinking…</Text> : null}
+      {rideWork === "finding" || rideWork === "booking" ? (
+        <View style={styles.cardWrap}>
+          <RideStatusCard work={rideWork} />
+        </View>
+      ) : null}
+
+      {phase === "thinking" && rideWork === "none" ? <Text style={styles.hint}>Thinking…</Text> : null}
       {phase === "listening" ? <Text style={styles.hint}>I'm listening.</Text> : null}
+
+      {showOptions ? (
+        <View style={styles.cardWrap}>
+          <RideOptionsCard
+            options={lastRideOptions}
+            selectedOptionId={selected?.optionId}
+            disabled={busy}
+            onSelect={onSelectRide}
+          />
+        </View>
+      ) : null}
 
       {card && cardStatus ? (
         <View style={styles.cardWrap}>
           <ConfirmationCard
             data={card}
             status={cardStatus}
-            disabled={cardStatus === "pending" && phase === "thinking"}
+            disabled={cardStatus === "pending" && busy}
             onConfirm={onConfirm}
             onCancel={onCancel}
           />

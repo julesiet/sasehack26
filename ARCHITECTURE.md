@@ -49,14 +49,14 @@ CI: GitHub Actions (`.github/workflows/ci.yml`) on pull requests and `main` runs
 |---|---|---|---|
 | `idle` | sun + "Good morning / afternoon / evening" | last bubbles | text field, white mic |
 | `listening` | "I'm listening." | hint in the thread | waveform, orange stop |
-| `thinking` | Maria's words quoted | "Thinking…" in the thread | `• • •`, mic disabled |
+| `thinking` | Maria's words quoted; "Finding Ubers…" / "Booking your Uber…" when that work is running | "Thinking…" or the current-action ride card | `• • •`, mic disabled |
 | `speaking` | — | new Kasama bubble | text field, stop (interrupt) |
 | `clarify` | — | bubble + type/speak | placeholder "Your answer" |
 | `approving` | — | confirmation card in the thread | mic still works |
 | `micDenied` | Settings recovery | Settings recovery in the thread | text field stays usable |
 | `error` | large recoverable message | same, in the thread | text field, mic |
 
-Text Maria must act on stays large; chat bubbles are 22pt so a thread fits. Tap targets ≥ 68pt. Approval checkpoints (`#6`) are a descriptive card (place, reason, time, $24.50 WAV) with **Cancel** / **Confirm**. The saved/declined card shows only for that decision, then the thread continues. Ride option cards are still `#8`.
+Text Maria must act on stays large; chat bubbles are 22pt so a thread fits. Tap targets ≥ 68pt. Ride options (`#8`) are two large Uber rows (UberX and wheelchair WAV) with the price on the right; the selected row uses the orange border. Approval checkpoints (`#6`) are a descriptive card (place, reason, time, selected Uber product + price) with **Cancel** / **Confirm**. Finding / booking never looks idle — a current-action card stays on screen. After Confirm the booked card reads back the product, price, and confirmation id. Declined and failed bookings stay honest (nothing charged).
 
 Loop: mic → `expo-audio` records (≤ 15 s or tap) → `POST /speech/transcribe` → `POST /conversation/turn` → `POST /speech/speak` (ElevenLabs) → play on device. If STT is `501`, the screen tells Maria to type. If TTS is `501`, the device falls back to `expo-speech`. Session id is `DEFAULT_SESSION_ID` so the caretaker view polls the same conversation.
 
@@ -152,7 +152,7 @@ Live Uber (official API or Browserbase) is issue `#14`. A later adapter implemen
 
 ## What is not built yet
 
-Live Uber (`#14`), ride-option cards (`#8`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
+Live Uber (`#14`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. Ride-option cards (`#8`) are built on Chat (UberX + WAV from `lastRideOptions`). `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
 
 Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
 

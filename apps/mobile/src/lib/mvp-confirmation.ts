@@ -1,8 +1,17 @@
-import { getMariaAppointment, type LastApproval, type PendingApproval } from "@kasama/shared";
+import {
+  getMariaAppointment,
+  rideProductTitle,
+  selectedRideOption,
+  type LastApproval,
+  type PendingApproval,
+  type SessionBooking,
+  type UberProduct,
+  type UberRideOption,
+} from "@kasama/shared";
 
 /**
- * Structured confirmation card (#6). Values are Maria's demo fixtures
- * so the MVP card always has a place, reason, time, and price.
+ * Structured confirmation card (#6 / #8). Values are Maria's demo fixtures
+ * plus the Uber option she selected so the price and product stay honest.
  */
 export type ConfirmationCardData = {
   kind: "ride" | "notify";
@@ -16,16 +25,24 @@ export type ConfirmationCardData = {
   timeLabel: string;
   time: string;
   estimate?: string;
+  product?: UberProduct;
+  productLabel?: string;
+  confirmationId?: string;
 };
 
 export function formatClock(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-export function rideConfirmationData(now: Date = new Date()): ConfirmationCardData {
+export function rideConfirmationData(
+  now: Date = new Date(),
+  selected?: UberRideOption,
+  lastBooking?: SessionBooking | null,
+): ConfirmationCardData {
   const appointment = getMariaAppointment(now);
   const pickup = new Date(appointment.start);
   pickup.setMinutes(pickup.getMinutes() - 30);
+  const product = selected?.product;
   return {
     kind: "ride",
     eyebrow: "Ride",
@@ -37,7 +54,10 @@ export function rideConfirmationData(now: Date = new Date()): ConfirmationCardDa
     reason: "Annual checkup with Dr. Chen",
     timeLabel: "Pickup time",
     time: `Tomorrow at ${formatClock(pickup.toISOString())}`,
-    estimate: "$24.50",
+    estimate: selected?.estimate ?? "$24.50",
+    product,
+    productLabel: product ? rideProductTitle(product) : undefined,
+    confirmationId: lastBooking?.confirmationId,
   };
 }
 
@@ -58,6 +78,8 @@ export function notifyConfirmationData(preview: string): ConfirmationCardData {
 export function confirmationFromPending(
   pending: PendingApproval | null,
   justResolved: LastApproval | null,
+  options: UberRideOption[] = [],
+  lastBooking: SessionBooking | null = null,
   now: Date = new Date(),
 ): ConfirmationCardData | null {
   const tool = pending?.tool ?? justResolved?.tool;
@@ -68,7 +90,8 @@ export function confirmationFromPending(
     );
   }
   if (tool === "book_ride") {
-    const ride = rideConfirmationData(now);
+    const selected = selectedRideOption(options, pending);
+    const ride = rideConfirmationData(now, selected, lastBooking);
     if (pending?.estimate) ride.estimate = pending.estimate;
     return ride;
   }

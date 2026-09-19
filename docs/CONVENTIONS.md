@@ -6,7 +6,7 @@ Where to put work so every agent sees the same system.
 
 ```text
 apps/mobile/src/screens/    iOS screens (app Home unchanged; Senior Home / Chat / Tasks; caretaker shows approvals)
-apps/mobile/src/components/ Reusable senior-mode pieces (orb, sun bowl, composer pill, chat bubble, confirmation card, compact tab bar)
+apps/mobile/src/components/ Reusable senior-mode pieces (orb, sun bowl, composer pill, chat bubble, ride option cards, ride status card, confirmation card, compact tab bar)
 apps/mobile/src/hooks/      Conversation state machine (record → transcribe → turn → speak)
 apps/mobile/src/lib/        API client
 apps/mobile/src/theme.ts    Design tokens

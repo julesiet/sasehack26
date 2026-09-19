@@ -4,6 +4,10 @@ import {
   failedBookingReply,
   bookingApprovalPrompt,
   describePendingApproval,
+  pendingRideOptionId,
+  rideProductTitle,
+  selectedRideOption,
+  spokenRideChoice,
   DEMO_UBER_WAV_ESTIMATE,
 } from "./approval";
 
@@ -49,6 +53,18 @@ describe("approval prompts", () => {
     expect(failedBookingReply()).toBe(
       "I couldn't confirm that Uber booking. Nothing was charged. We can try again.",
     );
+  });
+
+  it("picks the pending Uber option for the ride cards", () => {
+    const options = [
+      { optionId: "uberx_1", provider: "uber" as const, product: "UberX" as const, estimate: "$18.00", accessible: false },
+      { optionId: "uber_wav_1", provider: "uber" as const, product: "WAV" as const, estimate: "$24.50", accessible: true },
+    ];
+    expect(pendingRideOptionId({ tool: "book_ride", input: { optionId: "uberx_1" } })).toBe("uberx_1");
+    expect(selectedRideOption(options, { tool: "book_ride", input: { optionId: "uberx_1" } })?.product).toBe("UberX");
+    expect(selectedRideOption(options, null, "WAV")?.optionId).toBe("uber_wav_1");
+    expect(rideProductTitle("WAV")).toBe("Wheelchair Uber");
+    expect(spokenRideChoice("UberX")).toBe("the UberX");
   });
 
   it("marks a caretaker draft as preview only", () => {
