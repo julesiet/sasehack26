@@ -20,15 +20,11 @@ type Props = {
  * Designed caretaker dashboard (#9). Polls the same session Maria uses so a
  * booking shows up here without a manual refresh.
  */
-const BOWL_FADE_HEIGHT = 72;
-
 export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<SessionView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [bowlHeight, setBowlHeight] = useState(0);
-  const deepStart = bowlHeight > 0 ? Math.min(BOWL_FADE_HEIGHT / bowlHeight, 0.35) : 0.14;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,12 +81,11 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
             colors.caretakerSky,
             colors.skyGlowSoft,
             colors.skyGlowWarm,
-            colors.bowlTop,
             colors.bowlBottom,
+            colors.bowlTop,
           ]}
-          locations={[0, deepStart * 0.4, deepStart * 0.75, deepStart, 1]}
-          onLayout={(event) => setBowlHeight(event.nativeEvent.layout.height)}
-          style={[styles.bowl, { paddingBottom: Math.max(insets.bottom, 20) }]}
+          locations={[0, 0.18, 0.4, 0.7, 1]}
+          style={[styles.wash, { paddingBottom: Math.max(insets.bottom, 20) }]}
         >
           <View style={styles.overviewHeader}>
             <Text style={styles.overviewTitle}>Overview</Text>
@@ -168,11 +163,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.danger,
   },
-  bowl: {
-    borderTopLeftRadius: 88,
-    borderTopRightRadius: 88,
+  wash: {
     paddingHorizontal: 20,
-    paddingTop: BOWL_FADE_HEIGHT,
+    paddingTop: 28,
     gap: 16,
     flexGrow: 1,
   },
