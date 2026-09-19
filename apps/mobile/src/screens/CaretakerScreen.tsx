@@ -76,44 +76,44 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
           <ContactsRow contacts={dashboard.contacts} />
         </View>
 
-        <LinearGradient
-          colors={[
-            colors.caretakerSky,
-            colors.skyGlowSoft,
-            colors.skyGlowWarm,
-            colors.bowlTop,
-            colors.bowlBottom,
-          ]}
-          locations={[0, 0.1, 0.28, 0.52, 1]}
-          style={[styles.bowl, { paddingBottom: Math.max(insets.bottom, 20) }]}
-        >
-          <View style={styles.overviewHeader}>
-            <Text style={styles.overviewTitle}>Overview</Text>
-            {dashboard.overviewBadge ? (
-              <View style={styles.badge}>
-                <View style={styles.badgeDot} />
-                <Text style={styles.badgeLabel}>{dashboard.overviewBadge}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          <OverviewCards appointment={dashboard.appointment} ride={dashboard.ride} />
-          <ConsentRecord items={dashboard.consentItems} />
-          <ActivitySummary
-            items={dashboard.activity}
-            expanded={expanded}
-            onToggle={() => setExpanded((current) => !current)}
+        <View style={styles.bowl}>
+          <LinearGradient
+            colors={[colors.caretakerSky, colors.skyGlowSoft, colors.skyGlowWarm, colors.bowlTop]}
+            locations={[0, 0.35, 0.7, 1]}
+            style={styles.bowlFade}
           />
-
-          <Pressable
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel="Back to Home"
-            style={({ pressed }) => [styles.home, pressed ? styles.pressed : null]}
+          <LinearGradient
+            colors={[colors.bowlTop, colors.bowlBottom]}
+            style={[styles.bowlBody, { paddingBottom: Math.max(insets.bottom, 20) }]}
           >
-            <Text style={styles.homeLabel}>Back to Home</Text>
-          </Pressable>
-        </LinearGradient>
+            <View style={styles.overviewHeader}>
+              <Text style={styles.overviewTitle}>Overview</Text>
+              {dashboard.overviewBadge ? (
+                <View style={styles.badge}>
+                  <View style={styles.badgeDot} />
+                  <Text style={styles.badgeLabel}>{dashboard.overviewBadge}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <OverviewCards appointment={dashboard.appointment} ride={dashboard.ride} />
+            <ConsentRecord items={dashboard.consentItems} />
+            <ActivitySummary
+              items={dashboard.activity}
+              expanded={expanded}
+              onToggle={() => setExpanded((current) => !current)}
+            />
+
+            <Pressable
+              onPress={onBack}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Home"
+              style={({ pressed }) => [styles.home, pressed ? styles.pressed : null]}
+            >
+              <Text style={styles.homeLabel}>Back to Home</Text>
+            </Pressable>
+          </LinearGradient>
+        </View>
       </ScrollView>
     </View>
   );
@@ -166,8 +166,15 @@ const styles = StyleSheet.create({
   bowl: {
     borderTopLeftRadius: 88,
     borderTopRightRadius: 88,
+    overflow: "hidden",
+    flexGrow: 1,
+  },
+  bowlFade: {
+    height: 72,
+  },
+  bowlBody: {
     paddingHorizontal: 20,
-    paddingTop: 64,
+    paddingTop: 8,
     gap: 16,
     flexGrow: 1,
   },
