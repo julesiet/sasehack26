@@ -26,7 +26,7 @@ A token from `actor: "model"` is **not** approval (`model_cannot_self_approve`).
 
 ## Audit
 
-Every invoke writes: who asked, what was proposed, approval, whether execute was attempted, outcome. See `GET /audit`.
+Every invoke writes: who asked, what was proposed, approval, whether execute was attempted, outcome. See `GET /audit` (all events, or `?sessionId=`) and `GET /sessions/:sessionId` (session-scoped events plus the current request, pending approval, last booking, and consent).
 
 ## Language
 

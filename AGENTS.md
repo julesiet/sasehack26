@@ -62,8 +62,11 @@ There is no product website. `http://localhost:3001` is the API. The app is the 
 
 - `GET /` — service hint
 - `GET /health` — `{ ok: true, service: "kasama-api" }`
-- `POST /tools/:name` — validate → policy → audit → stub execute
-- `GET /audit` — `{ events: [...] }` in-memory, cleared on process restart
+- `POST /tools/:name` — validate → policy → audit → session projection → stub execute
+- `GET /sessions/:sessionId` — in-memory session view (current request, pending approval, appointment, last Uber booking, caretaker activity, care signal, session events)
+- `GET /audit` — `{ events: [...] }` all process-local events; optional `?sessionId=` filters. Cleared on process restart
+
+Omitted `sessionId` on a tool call is stored as `default`. Senior and caretaker clients poll the same `sessionId`.
 
 Tools: `get_appointment`, `find_ride_options`, `book_ride`, `notify_caretaker`.
 

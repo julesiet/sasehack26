@@ -39,7 +39,7 @@ API:
 pnpm dev:api
 ```
 
-Listens on `http://localhost:3001`. Check `GET /health`.
+Listens on `http://localhost:3001`. Check `GET /health`. Poll a session with `GET /sessions/:sessionId` (omit `sessionId` on tool calls to use `default`).
 
 iOS Simulator:
 
