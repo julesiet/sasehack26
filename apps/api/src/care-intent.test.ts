@@ -34,4 +34,18 @@ describe("care intent", () => {
     ).toBe(true);
     expect(looksLikeHospitalSchedule("get me a ride to the hospital", true)).toBe(false);
   });
+
+  it("starts from ordinary reminder phrasing", () => {
+    expect(looksLikeMedicationReminder("set a reminder")).toBe(true);
+    expect(looksLikeMedicationReminder("can you set reminders")).toBe(true);
+    expect(looksLikeMedicationReminder("remind me")).toBe(true);
+    expect(looksLikeMedicationReminder("remind me about my appointment")).toBe(false);
+  });
+
+  it("starts from ordinary appointment-scheduling phrasing", () => {
+    expect(looksLikeHospitalSchedule("schedule an appointment", false)).toBe(true);
+    expect(looksLikeHospitalSchedule("i want to schedule an appointment", false)).toBe(true);
+    expect(looksLikeHospitalSchedule("can you schedule appointments", false)).toBe(true);
+    expect(looksLikeHospitalSchedule("what time is my appointment", false)).toBe(false);
+  });
 });

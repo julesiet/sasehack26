@@ -3,11 +3,16 @@ import { MARIA_NEARBY_HOSPITAL } from "@kasama/shared";
 const STOP_MED_NAMES = new Set(["my", "the", "a", "an", "some", "this"]);
 
 export function looksLikeMedicationReminder(text: string): boolean {
-  return (
+  const medWords =
     /\b(medication|lisinopril|pill|pills|tablet)\b/.test(text) ||
-    /\bremind me to take\b/.test(text) ||
-    (/\btake\b/.test(text) && /\b(remind|every)\b/.test(text))
-  );
+    (/\btake\b/.test(text) && /\b(remind|every)\b/.test(text));
+  if (medWords) return true;
+  const reminderWords =
+    /\bremind(er|ers)?\b/.test(text) || /\bset (a |me a |up a )?reminder\b/.test(text);
+  if (reminderWords && /\b(appointment|ride|uber|doctor|hospital)\b/.test(text)) {
+    return false;
+  }
+  return reminderWords;
 }
 
 export function parseMedicationReminder(text: string): {
@@ -37,9 +42,16 @@ function frequencyLabel(intervalDays: number): string {
 
 export function looksLikeHospitalSchedule(text: string, isRide: boolean): boolean {
   if (isRide) return false;
-  return (
+  if (/\b(what time|when is|when'?s|do i have)\b/.test(text)) return false;
+  if (
     /\bhospital\b/.test(text) &&
     /\b(schedule|book|make|set up|appointment|near me|closest|nearest)\b/.test(text)
+  ) {
+    return true;
+  }
+  return (
+    /\b(schedule|book|make|set up)\b/.test(text) &&
+    /\b(appointment|appointments|hospital|visit|checkup)\b/.test(text)
   );
 }
 

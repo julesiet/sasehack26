@@ -531,4 +531,70 @@ describe("runConversationTurn", () => {
       }),
     ]);
   });
+
+  it("starts a reminder when Maria just says set a reminder", async () => {
+    const reply = await turn("Set a reminder");
+    expect(reply.kind).toBe("clarification");
+    expect(reply.reply).toMatch(/what medication/i);
+    expect(reply.activeRequest?.intent).toBe("medication_reminder");
+    expect(reply.pendingApproval).toBeNull();
+
+    const details = await turn("Lisinopril every 4 days");
+    expect(details.pendingApproval?.tool).toBe("save_medication_reminder");
+    expect(details.pendingApproval?.input).toMatchObject({
+      name: "Lisinopril",
+      frequency: "Every 4 days",
+    });
+  });
+
+  it("starts hospital scheduling when Maria asks to schedule an appointment", async () => {
+    const reply = await turn("I want to schedule an appointment");
+    expect(reply.kind).toBe("clarification");
+    expect(reply.reply).toContain("What is this appointment for");
+    expect(reply.activeRequest?.intent).toBe("hospital_schedule");
+    expect(reply.activeRequest?.placeName).toBe("St. Mary's Hospital");
+  });
+
+  it("does not treat an appointment lookup as a new reminder", async () => {
+    const reply = await turn("Remind me what time my doctor's appointment is");
+    expect(reply.kind).toBe("answer");
+    expect(reply.reply).toContain("Dr. Chen");
+    expect(reply.activeRequest?.intent).not.toBe("medication_reminder");
+  });
+
+  it("still opens a reminder when ChatGPT says it cannot set reminders", async () => {
+    const result = await runConversationTurn(
+      { transcript: "Can you set reminders?", sessionId: "chatgpt-reminder" },
+      {
+        complete: async () => ({
+          role: "assistant",
+          content: "I can't set reminders or change medication.",
+        }),
+      },
+    );
+    expect(result.status).toBe(200);
+    const reply = conversationTurnResponseSchema.parse(result.body);
+    expect(reply.kind).toBe("clarification");
+    expect(reply.reply).toMatch(/what medication/i);
+    expect(reply.reply).not.toMatch(/can't set reminders/i);
+    expect(reply.activeRequest?.intent).toBe("medication_reminder");
+  });
+
+  it("still opens hospital scheduling when ChatGPT says it cannot schedule", async () => {
+    const result = await runConversationTurn(
+      { transcript: "Can you schedule appointments?", sessionId: "chatgpt-hosp" },
+      {
+        complete: async () => ({
+          role: "assistant",
+          content: "I cannot schedule appointments.",
+        }),
+      },
+    );
+    expect(result.status).toBe(200);
+    const reply = conversationTurnResponseSchema.parse(result.body);
+    expect(reply.kind).toBe("clarification");
+    expect(reply.reply).toContain("What is this appointment for");
+    expect(reply.reply).not.toMatch(/cannot schedule/i);
+    expect(reply.activeRequest?.intent).toBe("hospital_schedule");
+  });
 });
