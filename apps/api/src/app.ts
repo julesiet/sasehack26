@@ -221,7 +221,7 @@ export function createApp({
     }
   });
 
-  /** Execute a session tool. Defaults to GMAIL_GET_PROFILE; GMAIL_CREATE_EMAIL_DRAFT when asked. */
+  /** Execute a session tool. Defaults to GMAIL_GET_PROFILE; draft or send when asked. */
   app.post("/composio/execute", async (c) => {
     let raw: unknown = {};
     try {

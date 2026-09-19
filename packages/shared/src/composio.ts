@@ -8,26 +8,47 @@ export const COMPOSIO_DEFAULT_TOOL = "GMAIL_GET_PROFILE";
 
 /**
  * Documented create-draft slug at https://docs.composio.dev/toolkits/gmail.md
- * (`Create email draft`). Prefer this over `GMAIL_SEND_EMAIL` / `GMAIL_SEND_DRAFT`.
+ * (`Create email draft`).
  */
 export const COMPOSIO_GMAIL_CREATE_DRAFT_TOOL = "GMAIL_CREATE_EMAIL_DRAFT";
 
-/** Tools this route may execute. Send slugs are rejected at the request boundary. */
+/**
+ * Documented send slug at https://docs.composio.dev/toolkits/gmail.md
+ * (`Send email`). Only when the caller asks — default remains the profile read.
+ */
+export const COMPOSIO_GMAIL_SEND_TOOL = "GMAIL_SEND_EMAIL";
+
+/** Tools this route may execute. `GMAIL_SEND_DRAFT` stays rejected. */
 export const composioToolSlugSchema = z.enum([
   COMPOSIO_DEFAULT_TOOL,
   COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+  COMPOSIO_GMAIL_SEND_TOOL,
 ]);
 export type ComposioToolSlug = z.infer<typeof composioToolSlugSchema>;
 
-/** Demo inbox for James. Draft only — `POST /composio/execute` never sends. */
-export const COMPOSIO_CARETAKER_DRAFT_RECIPIENT = "james.alvarez@example.com";
+/** Caretaker inbox for Maria's Gmail session. */
+export const COMPOSIO_CARETAKER_RECIPIENT = "juleselvandrade@gmail.com";
+
+function caretakerUserId(arguments_?: Record<string, unknown>): string {
+  return typeof arguments_?.user_id === "string" && arguments_.user_id.length > 0
+    ? arguments_.user_id
+    : "me";
+}
 
 /** Documented `GMAIL_CREATE_EMAIL_DRAFT` fields for a caretaker note. */
 export const GMAIL_CARETAKER_DRAFT_ARGUMENTS = {
   user_id: "me",
-  recipient_email: COMPOSIO_CARETAKER_DRAFT_RECIPIENT,
+  recipient_email: COMPOSIO_CARETAKER_RECIPIENT,
   subject: "Note from Kasama about Maria",
-  body: "Kasama drafted this note for James. It has not been sent.",
+  body: "Kasama drafted this note for Jules. It has not been sent.",
+} as const;
+
+/** Documented `GMAIL_SEND_EMAIL` fields for a caretaker note. */
+export const GMAIL_CARETAKER_SEND_ARGUMENTS = {
+  user_id: "me",
+  recipient_email: COMPOSIO_CARETAKER_RECIPIENT,
+  subject: "Note from Kasama about Maria",
+  body: "Kasama sent this note to Jules.",
 } as const;
 
 /** Merge caller overrides onto the documented Gmail arguments for this slug. */
@@ -36,14 +57,17 @@ export function resolveComposioExecuteArguments(
   arguments_?: Record<string, unknown>,
 ): Record<string, unknown> {
   if (toolSlug === COMPOSIO_GMAIL_CREATE_DRAFT_TOOL) {
-    const userId =
-      typeof arguments_?.user_id === "string" && arguments_.user_id.length > 0
-        ? arguments_.user_id
-        : "me";
     return {
       ...GMAIL_CARETAKER_DRAFT_ARGUMENTS,
       ...arguments_,
-      user_id: userId,
+      user_id: caretakerUserId(arguments_),
+    };
+  }
+  if (toolSlug === COMPOSIO_GMAIL_SEND_TOOL) {
+    return {
+      ...GMAIL_CARETAKER_SEND_ARGUMENTS,
+      ...arguments_,
+      user_id: caretakerUserId(arguments_),
     };
   }
   return arguments_ ?? { user_id: "me" };

@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  COMPOSIO_CARETAKER_DRAFT_RECIPIENT,
+  COMPOSIO_CARETAKER_RECIPIENT,
   COMPOSIO_DEFAULT_TOOL,
   COMPOSIO_DEFAULT_TOOLKIT,
   COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
+  COMPOSIO_GMAIL_SEND_TOOL,
   GMAIL_CARETAKER_DRAFT_ARGUMENTS,
+  GMAIL_CARETAKER_SEND_ARGUMENTS,
 } from "@kasama/shared";
 import { ComposioNotConfiguredError, createKasamaComposio } from "./composio";
 
@@ -186,7 +188,7 @@ describe("createKasamaComposio", () => {
     const execute = vi.fn(async (_toolSlug: string, args?: Record<string, unknown>) => {
       expect(args).toMatchObject({
         user_id: "me",
-        recipient_email: COMPOSIO_CARETAKER_DRAFT_RECIPIENT,
+        recipient_email: COMPOSIO_CARETAKER_RECIPIENT,
         subject: "Ride booked",
         body: "Maria's WAV is confirmed.",
       });
@@ -234,6 +236,62 @@ describe("createKasamaComposio", () => {
     expect(result.successful).toBe(false);
     expect(result.needsAuth).toBe(true);
     expect(result.toolSlug).toBe(COMPOSIO_GMAIL_CREATE_DRAFT_TOOL);
+    expect(result.redirectUrl).toMatch(/^https:\/\/connect\.composio\.dev\//);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("sends a Gmail message for senior_maria to the caretaker inbox", async () => {
+    const execute = vi.fn(async (toolSlug: string, args?: Record<string, unknown>) => {
+      expect(toolSlug).toBe(COMPOSIO_GMAIL_SEND_TOOL);
+      expect(args).toEqual(GMAIL_CARETAKER_SEND_ARGUMENTS);
+      return {
+        data: { id: "1a0bb8b230927c57", threadId: "thread_1", labelIds: ["SENT"] },
+        error: null,
+        logId: "log_send",
+      };
+    });
+    const client = fakeClient({
+      toolkits: [{ slug: "gmail", connection: { isActive: true } }],
+      execute,
+    });
+    const composio = createKasamaComposio({
+      readApiKey: () => "ak_test",
+      getClient: () => client,
+    });
+
+    const result = await composio.execute({
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+    });
+
+    expect(result.successful).toBe(true);
+    expect(result.userId).toBe("senior_maria");
+    expect(result.toolSlug).toBe(COMPOSIO_GMAIL_SEND_TOOL);
+    expect(result.logId).toBe("log_send");
+    expect(result.data).toEqual({
+      id: "1a0bb8b230927c57",
+      threadId: "thread_1",
+      labelIds: ["SENT"],
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a Connect Link instead of sending when Gmail is not connected", async () => {
+    const execute = vi.fn();
+    const client = fakeClient({
+      toolkits: [{ slug: "gmail", connection: { isActive: false } }],
+      execute,
+    });
+    const composio = createKasamaComposio({
+      readApiKey: () => "ak_test",
+      getClient: () => client,
+    });
+
+    const result = await composio.execute({
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+    });
+    expect(result.successful).toBe(false);
+    expect(result.needsAuth).toBe(true);
+    expect(result.toolSlug).toBe(COMPOSIO_GMAIL_SEND_TOOL);
     expect(result.redirectUrl).toMatch(/^https:\/\/connect\.composio\.dev\//);
     expect(execute).not.toHaveBeenCalled();
   });
