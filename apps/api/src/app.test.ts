@@ -4,6 +4,7 @@ import {
   COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
   COMPOSIO_GMAIL_SEND_TOOL,
   PLAYGROUND_DEMO_TRANSCRIPT,
+  buildCaretakerDashboard,
   conversationTurnResponseSchema,
   playgroundResponseSchema,
   sessionViewSchema,
@@ -340,6 +341,23 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.careSignal?.label).toBe("worth reviewing");
   });
 
+  it("seeds the iOS default session with Maria's ride thread so Chat and caretaker share it", async () => {
+    const res = await app.request("/sessions/default");
+    expect(res.status).toBe(200);
+    const body = sessionViewSchema.parse(await res.json());
+    expect(body.conversation.turns).toHaveLength(3);
+    expect(body.conversation.turns[0]?.text).toBe(
+      "Please get me a ride to my doctor tomorrow.",
+    );
+    expect(body.appointment?.id).toBe("appt_maria_doctor_01");
+    expect(body.lastBooking?.confirmationId).toBe("UBER-WAV-SEED");
+    expect(body.lastApproval?.decision).toBe("approved");
+
+    const dashboard = buildCaretakerDashboard({ view: body });
+    expect(dashboard.overviewStatus).toBe("confirmed");
+    expect(dashboard.activity).toHaveLength(3);
+  });
+
   it("uses the documented default session when sessionId is omitted", async () => {
     await postTool("get_appointment", {
       input: { date: "2020-01-01" },
@@ -391,6 +409,18 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.consentGranted).toBe(true);
     expect(body.pendingApproval).toBeNull();
     expect(body.currentRequest?.tool).toBe("book_ride");
+
+    const dashboard = buildCaretakerDashboard({ view: body });
+    expect(dashboard.overviewStatus).toBe("confirmed");
+    expect(dashboard.overviewBadge).toBe("CONFIRMED");
+    expect(dashboard.ride?.title).toBe("UberX");
+    expect(dashboard.ride?.booked).toBe(true);
+    expect(dashboard.ride?.confirmationId).toMatch(/^UBER-UBERX-\d{4}$/);
+    expect(dashboard.consentItems[0]).toMatchObject({
+      tone: "approved",
+      title: "Ride booking approved",
+    });
+    expect(dashboard.careNotes).toMatch(/No diagnosis noted/);
   });
 
   it("lets senior and caretaker clients share the same sessionId", async () => {

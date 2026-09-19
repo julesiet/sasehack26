@@ -1,10 +1,12 @@
 import {
   bookRideInputSchema,
   bookRideResultSchema,
+  DEFAULT_SESSION_ID,
   describePendingApproval,
   emptyConversationState,
   findRideOptionsResultSchema,
   getAppointmentResultSchema,
+  getMariaDemoSession,
   getMariaSeedBundle,
   notifyCaretakerInputSchema,
   sessionViewSchema,
@@ -85,7 +87,7 @@ function seedCareSignal(): CareSignal {
 }
 
 function emptyState(sessionId: string): SessionState {
-  return {
+  const blank: SessionState = {
     sessionId,
     currentRequest: null,
     pendingApproval: null,
@@ -97,6 +99,20 @@ function emptyState(sessionId: string): SessionState {
     careSignal: seedCareSignal(),
     consentGranted: false,
     conversation: emptyConversationState(),
+  };
+  if (sessionId !== DEFAULT_SESSION_ID) {
+    return blank;
+  }
+  const demo = getMariaDemoSession();
+  return {
+    ...blank,
+    appointment: demo.appointment,
+    lastRideOptions: demo.lastRideOptions,
+    lastBooking: demo.lastBooking,
+    lastApproval: demo.lastApproval,
+    caretakerActivity: demo.caretakerActivity,
+    consentGranted: demo.consentGranted,
+    conversation: demo.conversation,
   };
 }
 

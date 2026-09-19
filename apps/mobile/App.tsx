@@ -22,7 +22,7 @@ export default function App() {
         <SeniorScreen onBack={() => setScreen("home")} />
       ) : null}
       {screen === "caretaker" ? (
-        <CaretakerScreen onBack={() => setScreen("home")} />
+        <CaretakerScreen onBack={() => setScreen("home")} onOpenSenior={() => setScreen("senior")} />
       ) : null}
       <StatusBar style="dark" />
     </SafeAreaProvider>
