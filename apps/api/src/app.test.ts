@@ -69,6 +69,37 @@ describe("POST /tools/:name", () => {
     expect(auditLog.list()[0]?.executed?.attempted).toBe(true);
   });
 
+  it("returns Maria's seeded appointment for tomorrow and null for other dates", async () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toISOString().slice(0, 10);
+
+    const res = await app.request("/tools/get_appointment", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { date: dateStr },
+        actor: "model",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.appointment?.id).toBe("appt_maria_doctor_01");
+    expect(body.appointment?.location).toContain("Springfield Family Medicine");
+
+    const other = await app.request("/tools/get_appointment", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { date: "2020-01-01" },
+        actor: "model",
+      }),
+    });
+    const otherBody = await other.json();
+    expect(otherBody.appointment).toBeNull();
+  });
+
   it("executes book_ride only when a human approval token is present", async () => {
     const res = await app.request("/tools/book_ride", {
       method: "POST",

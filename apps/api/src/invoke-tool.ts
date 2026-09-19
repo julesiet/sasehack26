@@ -1,11 +1,13 @@
 import {
   bookRideInputSchema,
   bookRideResultSchema,
+  computeArrivalTarget,
   evaluateToolCall,
   findRideOptionsInputSchema,
   findRideOptionsResultSchema,
   getAppointmentInputSchema,
   getAppointmentResultSchema,
+  getMariaAppointment,
   invokeToolRequestSchema,
   isKnownTool,
   notifyCaretakerInputSchema,
@@ -20,13 +22,47 @@ export type ToolHttpResult = {
   body: Record<string, unknown>;
 };
 
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function executeStub(name: ToolName, input: unknown) {
   switch (name) {
     case "get_appointment": {
       const { date } = getAppointmentInputSchema.parse(input);
+      const requested = new Date(date);
+      const seedAppointment = getMariaAppointment();
+
+      if (!Number.isNaN(requested.getTime()) && isSameCalendarDay(requested, new Date(seedAppointment.start))) {
+        const arrivalTarget = computeArrivalTarget(seedAppointment);
+        return getAppointmentResultSchema.parse({
+          success: true,
+          confirmationId: seedAppointment.id,
+          summary: `${seedAppointment.title} at ${formatTime(seedAppointment.start)}. Pickup by ${formatTime(arrivalTarget)} at ${seedAppointment.pickup}.`,
+          appointment: {
+            id: seedAppointment.id,
+            title: seedAppointment.title,
+            start: seedAppointment.start,
+            end: seedAppointment.end,
+            location: seedAppointment.destination,
+          },
+        });
+      }
+
       return getAppointmentResultSchema.parse({
         success: true,
-        summary: `Calendar lookup is not implemented yet for ${date}.`,
+        summary: `No appointment found for ${date}.`,
         appointment: null,
       });
     }
