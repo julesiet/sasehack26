@@ -3,6 +3,7 @@ import {
   MAX_CLARIFICATIONS_PER_REQUEST,
   MARIA_PROFILE,
   bookingApprovalPrompt,
+  pendingRideOptionId,
   conversationTurnRequestSchema,
   conversationTurnResponseSchema,
   findRideOptionsResultSchema,
@@ -203,21 +204,13 @@ function applySpokenProduct(
   };
 }
 
-function pendingBookOptionId(pending: { tool?: string; input?: unknown } | null): string | undefined {
-  if (pending?.tool !== "book_ride" || !pending.input || typeof pending.input !== "object") {
-    return undefined;
-  }
-  if (!("optionId" in pending.input)) return undefined;
-  return String((pending.input as { optionId: unknown }).optionId);
-}
-
 function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
   if (decided.activeRequest?.intent !== "ride" || decided.activeRequest.status !== "accepted") {
     return applyPendingPrompt(sessionId, decided);
   }
   const pending = sessionStore.get(sessionId).pendingApproval;
   const spokenOptionId = pickBookingOption(sessionId, decided.activeRequest.product).optionId;
-  if (pending && pendingBookOptionId(pending) === spokenOptionId) {
+  if (pending && pendingRideOptionId(pending) === spokenOptionId) {
     return applyPendingPrompt(sessionId, decided);
   }
   if (pending && pending.tool !== "book_ride") {

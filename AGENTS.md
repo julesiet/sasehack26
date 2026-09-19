@@ -54,11 +54,24 @@ pnpm start            # Expo Go QR only (own terminal)
 pnpm ios              # Expo → iOS Simulator (own terminal)
 pnpm typecheck
 pnpm test
+pnpm playground # text playground (no iOS). Optional: -- "Please get me a ride…"
 ```
 
 GitHub Actions on pull requests and `main` runs `pnpm typecheck` and `pnpm test` (`.github/workflows/ci.yml`). No `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY` is required.
 
-`pnpm dev`, `pnpm start`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy.
+`pnpm dev`, `pnpm start`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy. `pnpm playground` is not long-running.
+
+## Test with the playground (no iOS)
+
+When you change conversation, harness, tools, policy, approvals, Uber, session projection, or audit, **use the playground** — do not wait for the Simulator or Expo Go.
+
+```sh
+pnpm playground
+pnpm playground -- "Please get me a ride to my doctor tomorrow."
+pnpm playground -- --until turn "I need a ride"
+```
+
+Or `POST /playground` on a running API (`pnpm dev:api`). Same policy + audit as the voice loop. Default `until` is `checkpoint` (stops at the $24.50 prompt, never books). Use a unique `--session-id` so you do not collide with the iOS `default` session. Confirm the JSON has appointment context, ride options, `pendingApproval`, and `lastBooking: null` for the demo line. Failed tools must still return `failure.kind` `retry` or `handoff`.
 
 There is no product website. `http://localhost:3001` is the API. The app is Expo Go (`pnpm start` / `pnpm dev`) or the Simulator (`pnpm ios`). For a phone, put this Mac's LAN IP in `apps/mobile/.env` as `EXPO_PUBLIC_API_URL=http://<ip>:3001` (`ipconfig getifaddr en0`) so the QR is not localhost. Restart Expo after changing `.env`.
 
@@ -70,6 +83,7 @@ There is no product website. `http://localhost:3001` is the API. The app is Expo
 - `GET /sessions/:sessionId` — in-memory session view (current request, pending approval, last approval, last Uber options, appointment, last Uber booking, caretaker activity, care signal, session events)
 - `GET /audit` — `{ events: [...] }` all process-local events; optional `?sessionId=` filters. Cleared on process restart
 - `POST /conversation/turn` — `{ transcript, sessionId? }` → Kasama's reply + `kind` + `plan` + `failure` + `pendingApproval`. ChatGPT plans when `MODEL_API_KEY` is set; otherwise the rules-based turn. Every tool still goes through policy + audit. ChatGPT is never allowed to book or send. A spoken yes after a ride plan opens the $24.50 checkpoint; a second yes (or tap) books as `senior`.
+- `POST /playground` — text playground (`#13`). `{ transcript, sessionId?, until?: "checkpoint" | "turn" }` → reply + `plan` + Maria seed + `appointment` + `rideOptions` + `pendingApproval` + `events`. Default `until` is `checkpoint`: it accepts a conversational ride plan so you can see the $24.50 prompt, then stops. It never books, sends, or spends. Default `sessionId` is `playground` (not the iOS `default`). Same policy + audit as conversation. Also `pnpm playground`.
 - `POST /approvals` — `{ decision: "approve" | "decline", sessionId?, actor?: "senior" | "caretaker" }` → resolve the pending checkpoint. Same policy + audit as tools. Model actors are rejected.
 - `POST /speech/transcribe` — multipart `file` → `{ transcript }` via ElevenLabs (needs `ELEVENLABS_API_KEY` in `apps/api/.env`; `501` otherwise)
 - `POST /speech/speak` — `{ text }` → MPEG audio of Kasama (same key, plus Text to Speech on the key; `501` otherwise, device falls back to iOS speech)
@@ -86,7 +100,7 @@ Calendar is **seeded** (`get_appointment` for Maria's tomorrow appointment). Ube
 
 Expo Go only (`pnpm start` or `pnpm ios`). Add only Expo Go–compatible packages; no native speech-to-text modules and no `expo prebuild`. Speech-to-text and Kasama's voice run on the API via ElevenLabs. The device falls back to `expo-speech` if TTS is not configured.
 
-Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Senior tabs: Home (sun welcome), Chat (last started conversation), Tasks (empty). Active tab is sun orange. On Home the compact tab bar is 80% opaque over the sun. Confirmation is a descriptive Cancel / Confirm card that only appears for a pending (or just-finished) decision. Tap targets ≥ 68pt on senior actions.
+Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Senior tabs: Home (sun welcome), Chat (last started conversation), Tasks (empty). Active tab is sun orange. On Home the compact tab bar is 80% opaque over the sun. After a ride search, Chat shows two Uber option cards (UberX and wheelchair WAV). Tapping a card selects that product through the conversation turn (same as saying "the wheelchair Uber" / "the UberX"). Confirmation is a descriptive Cancel / Confirm card for the selected option. Finding and booking show a current-action card so the screen never looks idle. Tap targets ≥ 68pt on senior actions.
 
 ## Safety (non-negotiable)
 
@@ -124,3 +138,4 @@ Do not implement diagnosis, full EHR, unsupervised payments, or Android.
 2. Shared types/policy updated in `packages/shared` if you touched contracts
 3. Canonical docs updated if behavior or structure changed
 4. `pnpm typecheck` and `pnpm test` pass
+5. If you touched conversation, harness, tools, policy, approvals, or Uber, run `pnpm playground` (or `POST /playground`) and check the demo line — do not treat iOS as the only way to verify

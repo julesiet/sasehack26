@@ -9,7 +9,8 @@
     "ios": "turbo ios --filter=@kasama/mobile",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
-    "test": "turbo test"
+    "test": "turbo test",
+    "playground": "pnpm --filter @kasama/api playground"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

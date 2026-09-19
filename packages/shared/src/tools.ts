@@ -39,6 +39,7 @@ export const findRideOptionsInputSchema = z.object({
 });
 
 export const uberProductSchema = z.enum(["UberX", "WAV"]);
+export type UberProduct = z.infer<typeof uberProductSchema>;
 
 export const uberRideOptionSchema = z.object({
   optionId: z.string(),
