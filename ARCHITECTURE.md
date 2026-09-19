@@ -108,7 +108,7 @@ Rules the harness keeps:
 Live provider tools go through Composio Platform sessions (`apps/api/src/composio.ts`), not a parallel agent. Identity is Maria's existing id (`senior_maria`). The SDK reads `COMPOSIO_API_KEY` from the environment.
 
 - `POST /composio/connect` — create or resume a session and return a Gmail Connect Link when the account is not connected
-- `POST /composio/execute` — `session.execute`. First verified tool is `GMAIL_GET_PROFILE` (`user_id: "me"`). `409` + Connect Link if Gmail is not authorized
+- `POST /composio/execute` — `session.execute`. Default remains `GMAIL_GET_PROFILE` (`user_id: "me"`). Pass `toolSlug: "GMAIL_CREATE_EMAIL_DRAFT"` (documented at https://docs.composio.dev/toolkits/gmail.md) to create a caretaker draft for James; omitted draft fields fill `GMAIL_CARETAKER_DRAFT_ARGUMENTS`. Send slugs (`GMAIL_SEND_EMAIL`, `GMAIL_SEND_DRAFT`) are rejected. `409` + Connect Link if Gmail is not authorized
 
 Calendar stays seeded; Uber uses the controlled provider. Do not send caretaker mail through Composio until `notify_caretaker` policy still gates it.
 
@@ -121,13 +121,13 @@ Calendar stays seeded; Uber uses the controlled provider. Do not send caretaker 
 - `packages/shared/src/approval.ts` — pending/last approval, `POST /approvals` body/response, $24.50 demo prompt helpers
 - `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`, `pendingApproval`, `lastApproval`, `lastRideOptions`
 - `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `plan`, `failure`, `pendingApproval`, `MAX_CLARIFICATIONS_PER_REQUEST`, `MAX_TOOL_ROUNDS_PER_TURN`, transcribe response
-- `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`
+- `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`, optional `GMAIL_CREATE_EMAIL_DRAFT`
 - `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-signal work (`#10`/`#15`).
 - `packages/shared/src/index.ts` — re-exports
 
 If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in `apps/api/src/invoke-tool.ts`, project any session fields in `apps/api/src/session-store.ts`, add tests, and update this file.
 
-Composio session tools (`GMAIL_GET_PROFILE` and later Gmail writes) live on `POST /composio/*` until a Kasama tool is wired through `invokeTool` + policy.
+Composio session tools (`GMAIL_GET_PROFILE` and `GMAIL_CREATE_EMAIL_DRAFT`) live on `POST /composio/*` until a Kasama tool is wired through `invokeTool` + policy. Draft is not send.
 
 ## Uber
 
@@ -141,7 +141,7 @@ Agent playground (`#13`), live Uber (`#14`), ride-option cards (`#8`), caretaker
 
 Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
 
-Composio Platform sessions are on `POST /composio/connect` and `POST /composio/execute` (Gmail / `GMAIL_GET_PROFILE` for `senior_maria`). They are not wired into the conversation turn or `notify_caretaker` yet.
+Composio Platform sessions are on `POST /composio/connect` and `POST /composio/execute` (Gmail / `GMAIL_GET_PROFILE` default; `GMAIL_CREATE_EMAIL_DRAFT` when asked) for `senior_maria`. They are not wired into the conversation turn or `notify_caretaker` yet.
 
 Maria's seed data (`#2`) is built: `get_appointment` still uses Maria's seed (live calendar is out of scope; Composio later if cheap).
 
