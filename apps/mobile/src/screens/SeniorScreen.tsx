@@ -105,11 +105,11 @@ export function SeniorScreen({ onBack }: Props) {
   }, [onTasks, state.notice, state.phase]);
 
   useEffect(() => {
-    if (chatStarted && !openedChat.current) {
+    if (state.kasamaText && !openedChat.current) {
       openedChat.current = true;
       setTab("chat");
     }
-  }, [chatStarted]);
+  }, [state.kasamaText]);
 
   const handleSubmit = () => {
     const text = draft.trim();

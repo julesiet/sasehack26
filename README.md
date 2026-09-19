@@ -18,7 +18,7 @@ Kasama API (Hono / TypeScript)
 ```
 
 ```text
-apps/mobile     Expo iOS app (senior + caretaker placeholders)
+apps/mobile     Expo iOS app (senior mode + caretaker dashboard)
 apps/api        Hono agent API
 packages/shared Zod schemas and inferred types
 ```
@@ -61,7 +61,7 @@ iOS Simulator:
 pnpm ios
 ```
 
-The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). After you say yes, Kasama asks "The Uber is $24.50. Should I book it?" — say yes or tap **Yes**. Nothing is booked until that second yes. Tap **Caretaker** to see the same pending or declined approval.
+The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, then **Senior** to talk to Kasama (tap the mic, say "Please get me a ride to my doctor tomorrow", tap again). After you say yes, Kasama asks "The Uber is $24.50. Should I book it?" — say yes or tap **Yes**. Nothing is booked until that second yes. Tap **Caretaker** for Margaret's dashboard of the same session (appointment, selected Uber, consent, activity). The `default` session already has Maria's seeded ride thread, so the dashboard is not empty on first open. It updates on its own after Maria confirms a new booking. **Maria** on that screen opens Senior mode. Senior **Chat** shows those same turns.
 
 Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env` (the key needs Speech to Text **and** Text to Speech). Without it the Senior screen asks you to type and uses iOS speech for replies. The Simulator uses your Mac's microphone.
 
@@ -93,7 +93,7 @@ BROWSERBASE_PROJECT_ID=
 COMPOSIO_API_KEY=
 ```
 
-Composio (Gmail for Maria / `senior_maria`): `POST /composio/connect` then `POST /composio/execute` (defaults to `GMAIL_GET_PROFILE`; pass `GMAIL_CREATE_EMAIL_DRAFT` or `GMAIL_SEND_EMAIL` for Jules). The key stays in `apps/api/.env`.
+Composio (Gmail for Maria / `senior_maria`): `POST /composio/connect` then `POST /composio/execute` (defaults to `GMAIL_GET_PROFILE`; pass `GMAIL_CREATE_EMAIL_DRAFT` or `GMAIL_SEND_EMAIL` for Jules). Draft results include `data.draft_id`. The key stays in `apps/api/.env`.
 
 ## CI
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conversationTurnSchema, type ConversationTurn } from "./conversation";
 import { caretakerUrgencySchema } from "./tools";
 
 /**
@@ -206,6 +207,69 @@ export function getMariaPriorRequests(
   ];
 }
 
+export const familyContactSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  initial: z.string().min(1),
+});
+export type FamilyContact = z.infer<typeof familyContactSchema>;
+
+export const dashboardViewerSchema = z.object({
+  firstName: z.string(),
+  relationship: z.string(),
+});
+export type DashboardViewer = z.infer<typeof dashboardViewerSchema>;
+
+/** Person signed into caretaker mode on the designed dashboard (#9). */
+export const MARIA_DASHBOARD_VIEWER: DashboardViewer = dashboardViewerSchema.parse({
+  firstName: "Margaret",
+  relationship: "family",
+});
+
+/** Family row on the caretaker dashboard. James is also the policy caretaker. */
+export const MARIA_FAMILY_CONTACTS: FamilyContact[] = [
+  familyContactSchema.parse({ id: "contact_sarah", name: "Sarah", initial: "S" }),
+  familyContactSchema.parse({ id: "contact_james", name: "James", initial: "J" }),
+  familyContactSchema.parse({ id: "contact_emily", name: "Emily", initial: "E" }),
+];
+
+/** Same-day times for the seeded Maria ↔ Kasama ride thread. */
+function atTime(referenceDate: Date, hours: number, minutes: number): string {
+  const d = new Date(referenceDate);
+  d.setHours(hours, minutes, 0, 0);
+  return d.toISOString();
+}
+
+/**
+ * Seeded Chat / caretaker activity for the iOS `default` session.
+ * Chat history UI must read these turns from the session — do not fork a second store.
+ */
+export function getMariaDemoConversationTurns(
+  referenceDate: Date = new Date(),
+): ConversationTurn[] {
+  return [
+    conversationTurnSchema.parse({
+      id: "seed_turn_1",
+      timestamp: atTime(referenceDate, 8, 42),
+      speaker: "senior",
+      text: "Please get me a ride to my doctor tomorrow.",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_turn_2",
+      timestamp: atTime(referenceDate, 8, 47),
+      speaker: "kasama",
+      text: "I booked the wheelchair Uber for $24.50. Your confirmation is UBER-WAV-SEED.",
+      kind: "answer",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_turn_3",
+      timestamp: atTime(referenceDate, 9, 5),
+      speaker: "senior",
+      text: "Thanks Kasama, that helps a lot. I'll be ready by 2:00.",
+    }),
+  ];
+}
+
 export const mariaSeedBundleSchema = z.object({
   profile: seniorProfileSchema,
   appointment: seedAppointmentSchema,
@@ -213,6 +277,9 @@ export const mariaSeedBundleSchema = z.object({
   caretakerPreferences: caretakerPreferencesSchema,
   wearableReadings: z.array(wearableReadingSchema),
   priorRequests: z.array(priorRequestSchema),
+  dashboardViewer: dashboardViewerSchema,
+  familyContacts: z.array(familyContactSchema),
+  conversationTurns: z.array(conversationTurnSchema),
 });
 export type MariaSeedBundle = z.infer<typeof mariaSeedBundleSchema>;
 
@@ -226,5 +293,8 @@ export function getMariaSeedBundle(referenceDate: Date = new Date()): MariaSeedB
     caretakerPreferences: MARIA_CARETAKER_PREFERENCES,
     wearableReadings: getMariaWearableReadings(referenceDate),
     priorRequests: getMariaPriorRequests(referenceDate),
+    dashboardViewer: MARIA_DASHBOARD_VIEWER,
+    familyContacts: MARIA_FAMILY_CONTACTS,
+    conversationTurns: getMariaDemoConversationTurns(referenceDate),
   });
 }

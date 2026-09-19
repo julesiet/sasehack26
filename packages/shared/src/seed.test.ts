@@ -88,6 +88,16 @@ describe("getMariaSeedBundle", () => {
     expect(bundle.appointment.id).toBe("appt_maria_doctor_01");
     expect(bundle.arrivalTarget).toBeTruthy();
     expect(bundle.caretakerPreferences.caretakerId).toBe("caretaker_james");
+    expect(bundle.dashboardViewer.firstName).toBe("Margaret");
+    expect(bundle.familyContacts.map((contact) => contact.name)).toEqual([
+      "Sarah",
+      "James",
+      "Emily",
+    ]);
+    expect(bundle.conversationTurns).toHaveLength(3);
+    expect(bundle.conversationTurns[0]?.text).toBe(
+      "Please get me a ride to my doctor tomorrow.",
+    );
     expect(bundle.wearableReadings).toHaveLength(7);
     expect(bundle.priorRequests.length).toBeGreaterThan(0);
   });

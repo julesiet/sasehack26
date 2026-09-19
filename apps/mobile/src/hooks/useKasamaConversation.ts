@@ -133,6 +133,32 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     };
   }, [stopVoice]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetchSession(sessionId)
+      .then((session) => {
+        if (cancelled || !mounted.current) return;
+        setState((prev) => {
+          if (prev.phase !== "idle" || prev.turns.length > 0) return prev;
+          return {
+            ...prev,
+            turns: session.conversation.turns,
+            lastRideOptions: session.lastRideOptions,
+            lastBooking: session.lastBooking,
+            lastApproval: session.lastApproval,
+            pendingApproval: session.pendingApproval,
+            activeRequest: session.conversation.activeRequest,
+          };
+        });
+      })
+      .catch(() => {
+        // Seeded history is optional; Maria can still start a new turn.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
   const patch = useCallback((next: Partial<ConversationUiState>) => {
     if (mounted.current) setState((prev) => ({ ...prev, ...next }));
   }, []);
