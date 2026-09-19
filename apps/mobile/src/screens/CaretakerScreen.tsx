@@ -77,7 +77,14 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
         </View>
 
         <LinearGradient
-          colors={[colors.bowlTop, colors.bowlBottom]}
+          colors={[
+            colors.caretakerSky,
+            colors.skyGlowSoft,
+            colors.skyGlowWarm,
+            colors.bowlTop,
+            colors.bowlBottom,
+          ]}
+          locations={[0, 0.1, 0.28, 0.52, 1]}
           style={[styles.bowl, { paddingBottom: Math.max(insets.bottom, 20) }]}
         >
           <View style={styles.overviewHeader}>
@@ -123,7 +130,7 @@ const styles = StyleSheet.create({
   sky: {
     paddingHorizontal: 24,
     gap: 22,
-    paddingBottom: 8,
+    paddingBottom: 24,
   },
   dateRow: {
     flexDirection: "row",
@@ -159,9 +166,8 @@ const styles = StyleSheet.create({
   bowl: {
     borderTopLeftRadius: 88,
     borderTopRightRadius: 88,
-    marginTop: -20,
     paddingHorizontal: 20,
-    paddingTop: 72,
+    paddingTop: 64,
     gap: 16,
     flexGrow: 1,
   },
