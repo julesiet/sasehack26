@@ -1,0 +1,9 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "u1-playground-cli",
+  "upstream_ids": ["NFR1", "NFR2"],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "reliability-requirements.md (test coverage expectation restated)" },
+    { "id": "NFR2", "status": "OK", "target": "reliability-requirements.md (no-regression restated)" }
+  ]
+}

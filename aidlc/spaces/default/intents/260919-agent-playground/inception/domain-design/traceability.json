@@ -1,0 +1,16 @@
+{
+  "stage": "domain-design",
+  "upstream_ids": ["FR1", "FR1.1", "FR1.2", "FR1.3", "FR1.4", "FR2", "FR3", "FR4", "FR5", "FR6"],
+  "coverage": [
+    { "id": "FR1", "status": "OK", "target": "PlaygroundCli" },
+    { "id": "FR1.1", "status": "OK", "target": "PlaygroundCli" },
+    { "id": "FR1.2", "status": "OK", "target": "PlaygroundCli" },
+    { "id": "FR1.3", "status": "OK", "target": "PlaygroundCli" },
+    { "id": "FR1.4", "status": "OK", "target": "PlaygroundCli" },
+    { "id": "FR2", "status": "OK", "target": "PlaygroundCli" },
+    { "id": "FR3", "status": "OK", "target": "PlaygroundCli" },
+    { "id": "FR4", "status": "OK", "target": "PlaygroundCli" },
+    { "id": "FR5", "status": "N/A", "target": "Already satisfied by the existing, unchanged audit pipeline (invokeTool -> audit-log.ts) -- not realized by any new component this stage introduces; PlaygroundCli does not add or change audit behavior." },
+    { "id": "FR6", "status": "OK", "target": "PlaygroundCli" }
+  ]
+}

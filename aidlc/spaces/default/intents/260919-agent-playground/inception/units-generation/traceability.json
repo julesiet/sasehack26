@@ -1,0 +1,16 @@
+{
+  "stage": "units-generation",
+  "upstream_ids": ["FR1", "FR1.1", "FR1.2", "FR1.3", "FR1.4", "FR2", "FR3", "FR4", "FR5", "FR6"],
+  "coverage": [
+    { "id": "FR1", "status": "OK", "target": "U1" },
+    { "id": "FR1.1", "status": "OK", "target": "U1" },
+    { "id": "FR1.2", "status": "OK", "target": "U1" },
+    { "id": "FR1.3", "status": "OK", "target": "U1" },
+    { "id": "FR1.4", "status": "OK", "target": "U1" },
+    { "id": "FR2", "status": "OK", "target": "U1" },
+    { "id": "FR3", "status": "OK", "target": "U1" },
+    { "id": "FR4", "status": "OK", "target": "U1" },
+    { "id": "FR5", "status": "N/A", "target": "Satisfied by the existing, unchanged KasamaApiService audit pipeline, not by any new Unit." },
+    { "id": "FR6", "status": "OK", "target": "U1" }
+  ]
+}

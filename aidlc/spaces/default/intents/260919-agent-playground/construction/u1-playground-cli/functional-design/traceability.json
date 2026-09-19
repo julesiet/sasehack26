@@ -1,0 +1,17 @@
+{
+  "stage": "functional-design",
+  "unit": "u1-playground-cli",
+  "upstream_ids": ["FR1", "FR1.1", "FR1.2", "FR1.3", "FR1.4", "FR2", "FR3", "FR4", "FR6"],
+  "coverage": [
+    { "id": "FR1", "status": "OK", "target": "BR1.1, BR1.3, BR1.4" },
+    { "id": "FR1.1", "status": "N/A", "target": "CLI argument parsing shape has no dedicated business rule; it's covered structurally in functional-spec.md's workflow, not a rules.md decision rule" },
+    { "id": "FR1.2", "status": "OK", "target": "BR1.1" },
+    { "id": "FR1.3", "status": "OK", "target": "BR1.1" },
+    { "id": "FR1.4", "status": "OK", "target": "BR1.1, BR1.2" },
+    { "id": "FR2", "status": "OK", "target": "BR1.4" },
+    { "id": "FR3", "status": "OK", "target": "BR1.3" },
+    { "id": "FR4", "status": "OK", "target": "BR1.3" },
+    { "id": "FR6", "status": "N/A", "target": "Default actor is a fixed constant (seeded demo actor), not a decision rule" }
+  ],
+  "reverse": []
+}

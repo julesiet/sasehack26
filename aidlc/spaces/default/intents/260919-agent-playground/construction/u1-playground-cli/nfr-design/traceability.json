@@ -1,0 +1,9 @@
+{
+  "stage": "nfr-design",
+  "unit": "u1-playground-cli",
+  "upstream_ids": ["NFR1", "NFR2"],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "reliability-design.md" },
+    { "id": "NFR2", "status": "OK", "target": "reliability-design.md" }
+  ]
+}

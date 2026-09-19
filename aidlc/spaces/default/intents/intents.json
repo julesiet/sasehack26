@@ -1,0 +1,16 @@
+[
+  {
+    "uuid": "01a0b7a7-508f-7623-8a07-d261418488e6",
+    "slug": "seed-demo-data",
+    "dirName": "260919-seed-demo-data",
+    "scope": "poc",
+    "status": "in-flight"
+  },
+  {
+    "uuid": "01a0bb12-3803-72cd-a0a6-430a4d28eccf",
+    "slug": "agent-playground",
+    "dirName": "260919-agent-playground",
+    "scope": "classic",
+    "status": "in-flight"
+  }
+]
