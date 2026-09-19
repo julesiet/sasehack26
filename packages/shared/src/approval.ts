@@ -1,0 +1,127 @@
+import { z } from "zod";
+import { actors } from "./policy";
+
+/**
+ * Approval checkpoints (#6). High-risk actions wait here until a human
+ * says or taps yes. The model cannot approve.
+ */
+
+export const approvalActionSchema = z.enum(["book_ride", "notify_caretaker", "spend_money"]);
+export type ApprovalAction = z.infer<typeof approvalActionSchema>;
+
+export const approvalDecisionKindSchema = z.enum(["approved", "declined"]);
+export type ApprovalDecisionKind = z.infer<typeof approvalDecisionKindSchema>;
+
+/** What Maria sees and hears while a high-risk action is waiting. */
+export const pendingApprovalSchema = z.object({
+  tool: z.string(),
+  input: z.unknown(),
+  reason: z.string(),
+  summary: z.string(),
+  timestamp: z.string(),
+  action: approvalActionSchema.optional(),
+  /** Spoken + on-screen question, e.g. "The Uber is $24.50. Should I book it?" */
+  prompt: z.string().optional(),
+  /** Large supporting line (price, recipient, or "Preview only"). */
+  detail: z.string().optional(),
+  estimate: z.string().optional(),
+  /** Draft caretaker text. Showing this is not the same as sending. */
+  preview: z.string().optional(),
+  status: z.enum(["pending", "approved", "declined"]).default("pending"),
+});
+export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
+
+/** Last human yes/no for the caretaker view. */
+export const lastApprovalSchema = z.object({
+  tool: z.string(),
+  action: approvalActionSchema.optional(),
+  decision: approvalDecisionKindSchema,
+  actor: z.enum(actors),
+  timestamp: z.string(),
+  summary: z.string(),
+  prompt: z.string().optional(),
+});
+export type LastApproval = z.infer<typeof lastApprovalSchema>;
+
+/** `POST /approvals` — tap Yes / No on the senior screen. */
+export const approvalChoiceSchema = z.enum(["approve", "decline"]);
+export type ApprovalChoice = z.infer<typeof approvalChoiceSchema>;
+
+export const approvalRequestSchema = z.object({
+  sessionId: z.string().min(1).optional(),
+  decision: approvalChoiceSchema,
+  actor: z.enum(["senior", "caretaker"]).default("senior"),
+});
+export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
+
+export const approvalResponseSchema = z.object({
+  sessionId: z.string(),
+  decision: approvalDecisionKindSchema,
+  reply: z.string(),
+  pendingApproval: pendingApprovalSchema.nullable(),
+  lastApproval: lastApprovalSchema.nullable(),
+});
+export type ApprovalResponse = z.infer<typeof approvalResponseSchema>;
+
+/** Accessible demo Uber Maria confirms. Ride cards (#8) can offer more later. */
+export const DEMO_UBER_WAV_OPTION_ID = "uber_wav_1";
+export const DEMO_UBER_WAV_ESTIMATE = "$24.50";
+
+export function bookingApprovalPrompt(estimate: string = DEMO_UBER_WAV_ESTIMATE): string {
+  return `The Uber is ${estimate}. Should I book it?`;
+}
+
+export function notifyApprovalPrompt(): string {
+  return "I can send this to your family. Should I send it?";
+}
+
+export function declinedBookingReply(): string {
+  return "Okay. I will not book that Uber. Is there anything else you need?";
+}
+
+export function declinedNotifyReply(): string {
+  return "Okay. I will not send that message. Is there anything else you need?";
+}
+
+export function approvedBookingReply(estimate: string = DEMO_UBER_WAV_ESTIMATE): string {
+  return `Okay. I booked that Uber for ${estimate}.`;
+}
+
+export function approvedNotifyReply(): string {
+  return "Okay. I sent that to your family.";
+}
+
+export function describePendingApproval(input: {
+  tool: string;
+  toolInput: unknown;
+  rideOptions?: Array<{ optionId: string; product?: string; estimate?: string; accessible?: boolean }>;
+}): Pick<PendingApproval, "action" | "prompt" | "detail" | "estimate" | "preview"> {
+  if (input.tool === "book_ride") {
+    const optionId =
+      input.toolInput && typeof input.toolInput === "object" && "optionId" in input.toolInput
+        ? String((input.toolInput as { optionId: unknown }).optionId)
+        : DEMO_UBER_WAV_OPTION_ID;
+    const option = input.rideOptions?.find((item) => item.optionId === optionId);
+    const estimate = option?.estimate ?? DEMO_UBER_WAV_ESTIMATE;
+    const product = option?.product ?? "WAV";
+    return {
+      action: "book_ride",
+      prompt: bookingApprovalPrompt(estimate),
+      detail: `${product} · ${estimate}`,
+      estimate,
+    };
+  }
+  if (input.tool === "notify_caretaker") {
+    const preview =
+      input.toolInput && typeof input.toolInput === "object" && "summary" in input.toolInput
+        ? String((input.toolInput as { summary: unknown }).summary)
+        : undefined;
+    return {
+      action: "notify_caretaker",
+      prompt: notifyApprovalPrompt(),
+      detail: "Preview only — not sent yet.",
+      preview,
+    };
+  }
+  return {};
+}

@@ -45,7 +45,14 @@ export const ComposerPill = forwardRef<TextInput, Props>(function ComposerPill(
           ? "Microphone is off"
           : "Talk to Kasama";
 
-  const placeholder = phase === "clarify" ? "Your answer" : denied ? "Type here" : "";
+  const placeholder =
+    phase === "clarify"
+      ? "Your answer"
+      : phase === "approving"
+        ? "Or say yes or no"
+        : denied
+          ? "Type here"
+          : "";
 
   return (
     <View style={styles.row}>

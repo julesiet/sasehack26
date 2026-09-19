@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ComposerPill } from "../components/ComposerPill";
 import { OverflowMenu } from "../components/OverflowMenu";
+import { SeniorTabBar, type SeniorTab } from "../components/SeniorTabBar";
 import { SunBowl } from "../components/SunBowl";
 import { SunOrb, type OrbMode } from "../components/SunOrb";
 import {
@@ -21,6 +22,8 @@ import {
   type ConversationPhase,
 } from "../hooks/useKasamaConversation";
 import { colors, radius, size, type } from "../theme";
+import { SeniorChatScreen } from "./SeniorChatScreen";
+import { TasksScreen } from "./TasksScreen";
 
 type Props = {
   onBack: () => void;
@@ -40,6 +43,7 @@ function orbModeFor(phase: ConversationPhase): OrbMode {
     case "thinking":
       return "thinking";
     case "speaking":
+    case "approving":
       return "speaking";
     case "micDenied":
       return "muted";
@@ -49,26 +53,32 @@ function orbModeFor(phase: ConversationPhase): OrbMode {
 }
 
 /**
- * Senior mode: Maria talks to Kasama. One chrome (sky, sun bowl, composer pill);
- * the orb, headline, and pill contents change with the conversation phase.
- * Ride cards and confirmation are #8 and are not on this screen.
+ * Senior mode. Home is the sun welcome. Chat is only the last started
+ * conversation. Composer stays on Home and Chat, above a compact tab bar.
  */
 export function SeniorScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
-  const { state, pressMic, submitText, repeatLastReply, openSettings, recheckMic } =
+  const { state, pressMic, submitText, decideApproval, repeatLastReply, openSettings, recheckMic } =
     useKasamaConversation();
   const [draft, setDraft] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tab, setTab] = useState<SeniorTab>("home");
   const inputRef = useRef<TextInput>(null);
+  const chatStarted = Boolean(state.kasamaText) || state.turns.some((turn) => turn.speaker === "kasama");
+  const openedChat = useRef(false);
+  const onHome = tab === "home";
+  const onChat = tab === "chat";
+  const onTasks = tab === "tasks";
 
-  // Read Kasama's replies to VoiceOver users as they arrive.
   useEffect(() => {
-    if (state.kasamaText && (state.phase === "speaking" || state.phase === "clarify")) {
+    if (
+      state.kasamaText &&
+      (state.phase === "speaking" || state.phase === "clarify" || state.phase === "approving")
+    ) {
       AccessibilityInfo.announceForAccessibility(state.kasamaText);
     }
   }, [state.kasamaText, state.phase]);
 
-  // Coming back from Settings after allowing the mic.
   useEffect(() => {
     if (state.phase !== "micDenied") return;
     const sub = AppState.addEventListener("change", (status) => {
@@ -77,10 +87,16 @@ export function SeniorScreen({ onBack }: Props) {
     return () => sub.remove();
   }, [recheckMic, state.phase]);
 
-  // When speech-to-text is unavailable, point Maria at the keyboard.
   useEffect(() => {
-    if (state.phase === "idle" && state.notice) inputRef.current?.focus();
-  }, [state.notice, state.phase]);
+    if (state.phase === "idle" && state.notice && !onTasks) inputRef.current?.focus();
+  }, [onTasks, state.notice, state.phase]);
+
+  useEffect(() => {
+    if (chatStarted && !openedChat.current) {
+      openedChat.current = true;
+      setTab("chat");
+    }
+  }, [chatStarted]);
 
   const handleSubmit = () => {
     const text = draft.trim();
@@ -89,50 +105,87 @@ export function SeniorScreen({ onBack }: Props) {
     void submitText(text);
   };
 
-  // Long replies need more sky: the sun sits lower while Kasama's words are on screen.
-  const showingReply =
-    state.phase === "speaking" ||
-    state.phase === "clarify" ||
-    state.phase === "error" ||
-    state.phase === "micDenied" ||
-    (state.phase === "idle" && Boolean(state.kasamaText));
+  const selectTab = (next: SeniorTab) => {
+    if (next === "chat" && !chatStarted) {
+      setTab("home");
+      return;
+    }
+    setTab(next);
+  };
 
   const muted = state.phase === "micDenied";
 
   return (
     <View style={styles.screen}>
-      <LinearGradient
-        colors={
-          muted
-            ? [colors.sky, colors.sky, colors.skyMutedSoft, colors.skyMutedWarm]
-            : [colors.sky, colors.sky, colors.skyGlowSoft, colors.skyGlowWarm]
-        }
-        locations={[0, 0.42, 0.62, 0.86]}
-        style={StyleSheet.absoluteFill}
-      />
-      <SunBowl crest={showingReply ? 0.74 : 0.66} muted={muted} />
+      {onHome ? (
+        <>
+          <LinearGradient
+            colors={
+              muted
+                ? [colors.sky, colors.sky, colors.skyMutedSoft, colors.skyMutedWarm]
+                : [colors.sky, colors.sky, colors.skyGlowSoft, colors.skyGlowWarm]
+            }
+            locations={[0, 0.42, 0.62, 0.86]}
+            style={StyleSheet.absoluteFill}
+          />
+          <SunBowl crest={0.66} muted={muted} />
+        </>
+      ) : (
+        <View pointerEvents="none" style={styles.chatBackdrop} />
+      )}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.content}
+        style={styles.column}
+        keyboardVerticalOffset={0}
       >
-        <View style={[styles.stage, { paddingTop: insets.top + 48 }]}>
-          <SunOrb mode={orbModeFor(state.phase)} />
-          <Headline state={state} onOpenSettings={openSettings} />
+        <View style={styles.main}>
+          {onTasks ? (
+            <View style={[styles.pane, { paddingTop: insets.top + 12 }]}>
+              <TasksScreen />
+            </View>
+          ) : onChat && chatStarted ? (
+            <View style={[styles.pane, { paddingTop: insets.top + 12 }]}>
+              <SeniorChatScreen
+                phase={state.phase}
+                turns={state.turns}
+                pendingApproval={state.pendingApproval}
+                justResolved={state.justResolved}
+                notice={state.notice}
+                onConfirm={() => void decideApproval("approve")}
+                onCancel={() => void decideApproval("decline")}
+                onOpenSettings={openSettings}
+              />
+            </View>
+          ) : (
+            <View style={[styles.stage, { paddingTop: insets.top + 48 }]}>
+              <SunOrb mode={orbModeFor(state.phase)} />
+              <Headline state={state} onOpenSettings={openSettings} />
+            </View>
+          )}
         </View>
 
-        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}>
-          <ComposerPill
-            ref={inputRef}
-            phase={state.phase}
-            value={draft}
-            onChangeText={setDraft}
-            onSubmit={handleSubmit}
-            onPressMic={() => void pressMic()}
-            onPressMore={() => setMenuOpen(true)}
-          />
-        </View>
+        {!onTasks ? (
+          <View style={styles.composer}>
+            <ComposerPill
+              ref={inputRef}
+              phase={state.phase}
+              value={draft}
+              onChangeText={setDraft}
+              onSubmit={handleSubmit}
+              onPressMic={() => void pressMic()}
+              onPressMore={() => setMenuOpen(true)}
+            />
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
+
+      <SeniorTabBar
+        active={tab}
+        bottomInset={insets.bottom}
+        chatAvailable={chatStarted}
+        onChange={selectTab}
+      />
 
       <OverflowMenu
         visible={menuOpen}
@@ -150,7 +203,6 @@ type HeadlineProps = {
   onOpenSettings: () => void;
 };
 
-/** Large text under the orb. What it says depends on the phase. */
 function Headline({ state, onOpenSettings }: HeadlineProps) {
   switch (state.phase) {
     case "listening":
@@ -165,17 +217,6 @@ function Headline({ state, onOpenSettings }: HeadlineProps) {
         <View style={styles.headline}>
           {state.seniorText ? <Text style={styles.transcript}>“{state.seniorText}”</Text> : null}
           <Text style={styles.hint}>Thinking…</Text>
-        </View>
-      );
-    case "speaking":
-    case "clarify":
-      return (
-        <View style={styles.headline}>
-          <Text style={styles.speaker}>Kasama</Text>
-          <ReplyText>{state.kasamaText}</ReplyText>
-          {state.phase === "clarify" ? (
-            <Text style={styles.hint}>You can answer out loud or type below.</Text>
-          ) : null}
         </View>
       );
     case "micDenied":
@@ -203,27 +244,11 @@ function Headline({ state, onOpenSettings }: HeadlineProps) {
     default:
       return (
         <View style={styles.headline}>
-          {state.kasamaText ? (
-            <>
-              <Text style={styles.speaker}>Kasama</Text>
-              <ReplyText>{state.kasamaText}</ReplyText>
-            </>
-          ) : (
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-          )}
+          <Text style={styles.greeting}>{getGreeting()}</Text>
           {state.notice ? <Text style={styles.body}>{state.notice}</Text> : null}
         </View>
       );
   }
-}
-
-/** Kasama's words. Long replies shrink a little (never below ~25pt) instead of running into the sun. */
-function ReplyText({ children }: { children: string | null }) {
-  return (
-    <Text style={styles.reply} numberOfLines={7} adjustsFontSizeToFit minimumFontScale={0.85}>
-      {children}
-    </Text>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -231,11 +256,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.sky,
   },
-  content: {
+  chatBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#F7F5F2",
+  },
+  column: {
     flex: 1,
-    justifyContent: "space-between",
+  },
+  main: {
+    flex: 1,
+    minHeight: 0,
+  },
+  pane: {
+    flex: 1,
+    minHeight: 0,
   },
   stage: {
+    flex: 1,
     alignItems: "center",
     paddingHorizontal: size.screenGutter,
   },
@@ -249,13 +286,6 @@ const styles = StyleSheet.create({
     ...type.greeting,
     color: colors.greeting,
     textAlign: "center",
-  },
-  speaker: {
-    ...type.label,
-    color: colors.inkSoft,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    fontSize: 16,
   },
   reply: {
     ...type.reply,
@@ -296,5 +326,7 @@ const styles = StyleSheet.create({
   },
   composer: {
     paddingHorizontal: size.screenGutter,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
 });

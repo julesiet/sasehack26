@@ -70,5 +70,7 @@ describe("session view contract", () => {
     expect(parsed.conversation.activeRequest?.intent).toBe("ride");
     expect(parsed.lastBooking?.provider).toBe("uber");
     expect(parsed.careSignal?.label).toBe("worth reviewing");
+    expect(parsed.lastApproval).toBeNull();
+    expect(parsed.lastRideOptions).toEqual([]);
   });
 });

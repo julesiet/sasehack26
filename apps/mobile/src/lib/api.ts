@@ -1,8 +1,13 @@
 import { File } from "expo-file-system";
 import {
+  approvalResponseSchema,
   conversationTurnResponseSchema,
+  sessionViewSchema,
   transcribeResponseSchema,
+  type ApprovalChoice,
+  type ApprovalResponse,
   type ConversationTurnResponse,
+  type SessionView,
 } from "@kasama/shared";
 
 export const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -66,6 +71,25 @@ export async function transcribeRecording(uri: string): Promise<string> {
  * Fetch ElevenLabs audio for Kasama's reply.
  * Throws `ApiError` with `code === "tts_not_configured"` when the API has no key.
  */
+export async function postApproval(
+  decision: ApprovalChoice,
+  sessionId: string,
+): Promise<ApprovalResponse> {
+  const res = await fetch(`${apiUrl}/approvals`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sessionId, decision, actor: "senior" }),
+  });
+  if (!res.ok) throw await readError(res);
+  return approvalResponseSchema.parse(await res.json());
+}
+
+export async function fetchSession(sessionId: string): Promise<SessionView> {
+  const res = await fetch(`${apiUrl}/sessions/${sessionId}`);
+  if (!res.ok) throw await readError(res);
+  return sessionViewSchema.parse(await res.json());
+}
+
 export async function fetchKasamaVoice(text: string): Promise<Uint8Array> {
   const res = await fetch(`${apiUrl}/speech/speak`, {
     method: "POST",

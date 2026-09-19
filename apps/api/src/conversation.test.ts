@@ -51,26 +51,84 @@ describe("runConversationTurn", () => {
     await turn("Get me a ride to my doctor tomorrow");
     await turn("Yes please");
 
-    expect(auditLog.list().map((event) => event.proposed.tool)).not.toContain("book_ride");
+    const booked = auditLog.list().find((event) => event.proposed.tool === "book_ride");
+    expect(booked?.executed?.attempted).not.toBe(true);
     const view = sessionStore.get("voice-1");
     expect(view.lastBooking).toBeNull();
+    expect(view.pendingApproval?.tool).toBe("book_ride");
   });
 
-  it("remembers the proposal across turns so Maria can just say yes", async () => {
+  it("opens a $24.50 booking checkpoint after Maria accepts the plan", async () => {
     await turn("Get me a ride to my doctor tomorrow");
     const reply = await turn("Yes");
 
-    expect(reply.kind).toBe("answer");
-    expect(reply.reply).toContain("confirm");
+    expect(reply.kind).toBe("proposal");
+    expect(reply.reply).toBe("The Uber is $24.50. Should I book it?");
     expect(reply.activeRequest?.status).toBe("accepted");
+    expect(reply.pendingApproval?.tool).toBe("book_ride");
+    expect(reply.pendingApproval?.estimate).toBe("$24.50");
+    expect(reply.pendingApproval?.prompt).toContain("Should I book it?");
+    expect(sessionStore.get("voice-1").lastBooking).toBeNull();
   });
 
-  it("drops the request when Maria says no", async () => {
+  it("books only after a second human yes", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    await turn("Yes");
+    const reply = await turn("Yes, book it");
+
+    expect(reply.kind).toBe("answer");
+    expect(reply.pendingApproval).toBeNull();
+    const view = sessionStore.get("voice-1");
+    expect(view.lastBooking?.optionId).toBe("uber_wav_1");
+    expect(view.lastApproval?.decision).toBe("approved");
+    expect(view.lastApproval?.actor).toBe("senior");
+    const booked = auditLog.list().find(
+      (event) => event.proposed.tool === "book_ride" && event.executed?.attempted,
+    );
+    expect(booked?.whoAsked.actor).toBe("senior");
+    expect(booked?.approved?.allowed).toBe(true);
+  });
+
+  it("drops the request when Maria says no to the plan", async () => {
     await turn("Get me a ride to my doctor tomorrow");
     const reply = await turn("No, never mind");
 
     expect(reply.kind).toBe("answer");
     expect(reply.activeRequest).toBeNull();
+    expect(reply.pendingApproval).toBeNull();
+  });
+
+  it("logs a decline and does not book when Maria says no at the checkpoint", async () => {
+    await turn("Get me a ride to my doctor tomorrow");
+    await turn("Yes");
+    const reply = await turn("No, cancel");
+
+    expect(reply.kind).toBe("answer");
+    expect(reply.reply).toContain("will not book");
+    expect(reply.pendingApproval).toBeNull();
+    const view = sessionStore.get("voice-1");
+    expect(view.lastBooking).toBeNull();
+    expect(view.pendingApproval).toBeNull();
+    expect(view.lastApproval?.decision).toBe("declined");
+    expect(view.lastApproval?.actor).toBe("senior");
+    const declined = auditLog.list().find((event) => event.outcome.reason === "declined_by_human");
+    expect(declined?.executed?.attempted).toBe(false);
+    expect(declined?.proposed.tool).toBe("book_ride");
+  });
+
+  it("previews a caretaker message and only sends after yes", async () => {
+    const draft = await turn("Please tell my family I am going to the doctor.");
+    expect(draft.kind).toBe("proposal");
+    expect(draft.pendingApproval?.tool).toBe("notify_caretaker");
+    expect(draft.pendingApproval?.preview).toBeTruthy();
+    expect(draft.reply).toContain("Should I send it?");
+    expect(sessionStore.get("voice-1").caretakerActivity.some((item) => item.sent)).toBe(false);
+
+    const sent = await turn("Yes");
+    expect(sent.pendingApproval).toBeNull();
+    const view = sessionStore.get("voice-1");
+    expect(view.caretakerActivity.some((item) => item.sent)).toBe(true);
+    expect(view.lastApproval?.decision).toBe("approved");
   });
 
   it("asks exactly one clarification when the destination is missing", async () => {
@@ -134,8 +192,9 @@ describe("runConversationTurn", () => {
       "kasama",
     ]);
     expect(view.conversation.turns[1]?.kind).toBe("proposal");
+    expect(view.conversation.turns[3]?.kind).toBe("proposal");
     expect(view.conversation.turns[0]?.text).toBe("Get me a ride to my doctor tomorrow");
-    expect(view.conversation.plan.steps.map((step) => step.tool)).toEqual([]);
+    expect(view.conversation.plan.steps.map((step) => step.tool)).toEqual(["book_ride"]);
   });
 
   it("uses the default session when none is given", async () => {

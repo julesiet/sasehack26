@@ -400,6 +400,73 @@ describe("GET /sessions/:sessionId", () => {
   });
 });
 
+describe("POST /approvals", () => {
+  it("approves a pending Uber from the senior Yes button", async () => {
+    await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        transcript: "Please get me a ride to my doctor tomorrow.",
+        sessionId: "tap-1",
+      }),
+    });
+    await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ transcript: "Yes", sessionId: "tap-1" }),
+    });
+
+    const res = await app.request("/approvals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "tap-1", decision: "approve", actor: "senior" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.decision).toBe("approved");
+    expect(body.pendingApproval).toBeNull();
+    expect(sessionStore.get("tap-1").lastBooking?.optionId).toBe("uber_wav_1");
+  });
+
+  it("declines a pending Uber from the No button and writes the audit", async () => {
+    await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        transcript: "Please get me a ride to my doctor tomorrow.",
+        sessionId: "tap-2",
+      }),
+    });
+    await app.request("/conversation/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ transcript: "Yes", sessionId: "tap-2" }),
+    });
+
+    const res = await app.request("/approvals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "tap-2", decision: "decline", actor: "senior" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.decision).toBe("declined");
+    expect(body.reply).toContain("will not book");
+    expect(sessionStore.get("tap-2").lastBooking).toBeNull();
+    expect(sessionStore.get("tap-2").lastApproval?.decision).toBe("declined");
+    expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
+  });
+
+  it("rejects a model actor on the approval route", async () => {
+    const res = await app.request("/approvals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "tap-3", decision: "approve", actor: "model" }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /conversation/turn", () => {
   it("replies to the demo line and projects the turn into the shared session", async () => {
     const res = await app.request("/conversation/turn", {
