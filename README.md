@@ -67,7 +67,7 @@ Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVEN
 
 ChatGPT plans each turn when `MODEL_API_KEY` is in `apps/api/.env` (OpenAI Chat Completions, default `gpt-4o-mini`). Without it the API uses the rules-based turn so the demo line still works.
 
-Text playground (no iOS) — appointment, Uber options, and the $24.50 checkpoint, never a silent booking:
+Text playground (no iOS) — the way to exercise intent, tools, and policy without the Simulator. Coding agents should run this after conversation / tool / policy changes. Appointment, Uber options, and the $24.50 checkpoint; never a silent booking:
 
 ```sh
 pnpm playground

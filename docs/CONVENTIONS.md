@@ -36,6 +36,17 @@ Agent-facing facts go in the canonical files listed in [AGENTS.md](../AGENTS.md)
 - New tool or permission → `packages/shared` **and** [SAFETY.md](SAFETY.md) + `ARCHITECTURE.md`
 - Do not add `docs/architecture-v2.md` or chat-export markdown into the repo
 
+## Testing without iOS
+
+Coding agents should use the text playground when they change intent, tools, policy, approvals, or Uber. Do not wait for designed UI or the Simulator.
+
+```sh
+pnpm playground
+# or POST /playground after pnpm dev:api
+```
+
+See [AGENTS.md](../AGENTS.md#test-with-the-playground-no-ios). The playground never auto-approves book / send / spend.
+
 ## Code style
 
 - TypeScript strict

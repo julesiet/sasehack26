@@ -59,7 +59,19 @@ pnpm playground # text playground (no iOS). Optional: -- "Please get me a ride�
 
 GitHub Actions on pull requests and `main` runs `pnpm typecheck` and `pnpm test` (`.github/workflows/ci.yml`). No `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY` is required.
 
-`pnpm dev`, `pnpm start`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy.
+`pnpm dev`, `pnpm start`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy. `pnpm playground` is not long-running.
+
+## Test with the playground (no iOS)
+
+When you change conversation, harness, tools, policy, approvals, Uber, session projection, or audit, **use the playground** — do not wait for the Simulator or Expo Go.
+
+```sh
+pnpm playground
+pnpm playground -- "Please get me a ride to my doctor tomorrow."
+pnpm playground -- --until turn "I need a ride"
+```
+
+Or `POST /playground` on a running API (`pnpm dev:api`). Same policy + audit as the voice loop. Default `until` is `checkpoint` (stops at the $24.50 prompt, never books). Use a unique `--session-id` so you do not collide with the iOS `default` session. Confirm the JSON has appointment context, ride options, `pendingApproval`, and `lastBooking: null` for the demo line. Failed tools must still return `failure.kind` `retry` or `handoff`.
 
 There is no product website. `http://localhost:3001` is the API. The app is Expo Go (`pnpm start` / `pnpm dev`) or the Simulator (`pnpm ios`). For a phone, put this Mac's LAN IP in `apps/mobile/.env` as `EXPO_PUBLIC_API_URL=http://<ip>:3001` (`ipconfig getifaddr en0`) so the QR is not localhost. Restart Expo after changing `.env`.
 
@@ -126,3 +138,4 @@ Do not implement diagnosis, full EHR, unsupervised payments, or Android.
 2. Shared types/policy updated in `packages/shared` if you touched contracts
 3. Canonical docs updated if behavior or structure changed
 4. `pnpm typecheck` and `pnpm test` pass
+5. If you touched conversation, harness, tools, policy, approvals, or Uber, run `pnpm playground` (or `POST /playground`) and check the demo line — do not treat iOS as the only way to verify

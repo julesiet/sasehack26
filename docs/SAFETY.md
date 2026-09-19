@@ -28,7 +28,7 @@ A token from `actor: "model"` is **not** approval (`model_cannot_self_approve`).
 
 Every invoke writes: who asked, what was proposed, approval, whether execute was attempted, outcome. A human "No" writes `declined_by_human` and never executes. See `GET /audit` (all events, or `?sessionId=`), `GET /sessions/:sessionId` (pending approval, last approval, last booking, consent), and `POST /approvals` for the iPhone Yes / No.
 
-`POST /playground` and `pnpm playground` use the same policy. They may accept a conversational ride plan so you can see the $24.50 prompt; they never auto-approve book, send, or spend.
+`POST /playground` and `pnpm playground` use the same policy. They may accept a conversational ride plan so you can see the $24.50 prompt; they never auto-approve book, send, or spend. Coding agents should run the playground after policy or approval changes to confirm book / send / spend still stop at a human checkpoint.
 
 ## Language
 

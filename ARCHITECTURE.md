@@ -92,6 +92,8 @@ Default `until` is `checkpoint`: one utterance of “Please get me a ride to my 
 
 Default `sessionId` is `playground` so curling it does not collide with the iOS `default` session. Same `invokeTool` path, so policy and audit apply. `pnpm playground` runs the same function in-process (no API required). Out of scope: any designed conversation UI.
 
+Coding agents should use this playground to verify conversation, harness, tools, policy, and retries. It is the intended test surface when iOS UI is not ready or not in scope.
+
 `GET /audit` returns `{ events }` from the process-local log (`apps/api/src/audit-log.ts`). Optional `?sessionId=` filters. Not durable.
 
 ### Conversation (`#4`) and harness (`#5`)
