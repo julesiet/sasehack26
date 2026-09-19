@@ -11,6 +11,10 @@ import {
   notifyCaretakerInputSchema,
   notifyCaretakerResultSchema,
   resolveSessionId,
+  saveHospitalVisitInputSchema,
+  saveHospitalVisitResultSchema,
+  saveMedicationReminderInputSchema,
+  saveMedicationReminderResultSchema,
   toolInputSchemas,
   type ToolName,
 } from "@kasama/shared";
@@ -101,6 +105,38 @@ function executeStub(name: ToolName, input: unknown, options?: { preview?: boole
         preview: false,
         sent: true,
         draft: parsed,
+      });
+    }
+    case "save_medication_reminder": {
+      const parsed = saveMedicationReminderInputSchema.parse(input);
+      const reminder = {
+        name: parsed.name,
+        frequency: parsed.frequency,
+        intervalDays: parsed.intervalDays,
+      };
+      if (parsed.saveLocally) {
+        return saveMedicationReminderResultSchema.parse({
+          success: true,
+          confirmationId: `task_med_${parsed.name.toLowerCase().replace(/\s+/g, "_")}`,
+          summary: `Reminder for ${parsed.name} saved on this phone. Kasama did not change any medication.`,
+          savedLocally: true,
+          reminder,
+        });
+      }
+      return saveMedicationReminderResultSchema.parse({
+        success: false,
+        summary: "We couldn't connect to your health provider. You can retry or save locally.",
+        healthSyncError: true,
+        reminder,
+      });
+    }
+    case "save_hospital_visit": {
+      const parsed = saveHospitalVisitInputSchema.parse(input);
+      return saveHospitalVisitResultSchema.parse({
+        success: true,
+        confirmationId: "visit_st_marys_1",
+        summary: `Appointment details saved for ${parsed.placeName}.`,
+        visit: parsed,
       });
     }
     default: {

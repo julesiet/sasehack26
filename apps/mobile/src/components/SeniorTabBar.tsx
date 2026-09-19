@@ -16,7 +16,8 @@ type Props = {
 
 /**
  * Home is the sun welcome. Chat is the last started conversation.
- * Tasks is empty. On Home the bar is 80% translucent so the sun shows through.
+ * Tasks lists confirmed reminders and saved hospital visits. On Home the
+ * bar is 80% translucent so the sun shows through.
  */
 export function SeniorTabBar({ active, bottomInset, chatAvailable, onChange }: Props) {
   const onHome = active === "home";

@@ -1,13 +1,26 @@
 import { z } from "zod";
 import { actors } from "./policy";
-import type { UberProduct, UberRideOption } from "./tools";
+import {
+  saveHospitalVisitInputSchema,
+  saveMedicationReminderInputSchema,
+  type HospitalVisitDetails,
+  type SaveMedicationReminderInput,
+  type UberProduct,
+  type UberRideOption,
+} from "./tools";
 
 /**
  * Approval checkpoints (#6). High-risk actions wait here until a human
  * says or taps yes. The model cannot approve.
  */
 
-export const approvalActionSchema = z.enum(["book_ride", "notify_caretaker", "spend_money"]);
+export const approvalActionSchema = z.enum([
+  "book_ride",
+  "notify_caretaker",
+  "spend_money",
+  "save_medication_reminder",
+  "save_hospital_visit",
+]);
 export type ApprovalAction = z.infer<typeof approvalActionSchema>;
 
 export const approvalDecisionKindSchema = z.enum(["approved", "declined"]);
@@ -68,6 +81,22 @@ export type ApprovalResponse = z.infer<typeof approvalResponseSchema>;
 export const DEMO_UBER_WAV_OPTION_ID = "uber_wav_1";
 export const DEMO_UBER_WAV_ESTIMATE = "$24.50";
 
+export function pendingMedicationReminder(
+  pending: { tool?: string; input?: unknown } | null,
+): SaveMedicationReminderInput | undefined {
+  if (pending?.tool !== "save_medication_reminder") return undefined;
+  const parsed = saveMedicationReminderInputSchema.safeParse(pending.input);
+  return parsed.success ? parsed.data : undefined;
+}
+
+export function pendingHospitalVisit(
+  pending: { tool?: string; input?: unknown } | null,
+): HospitalVisitDetails | undefined {
+  if (pending?.tool !== "save_hospital_visit") return undefined;
+  const parsed = saveHospitalVisitInputSchema.safeParse(pending.input);
+  return parsed.success ? parsed.data : undefined;
+}
+
 export function pendingRideOptionId(
   pending: { tool?: string; input?: unknown } | null,
 ): string | undefined {
@@ -119,6 +148,36 @@ export function declinedNotifyReply(): string {
   return "Okay. I will not send that message. Is there anything else you need?";
 }
 
+export function medicationReminderPrompt(name: string, frequency: string): string {
+  return `Add ${name}, ${frequency}, to your tasks?`;
+}
+
+export function hospitalVisitPrompt(placeName: string): string {
+  return `I found ${placeName}. Should I save this appointment?`;
+}
+
+export function approvedMedicationReminderReply(input: { name: string; savedLocally?: boolean }): string {
+  return input.savedLocally
+    ? `I saved the ${input.name} reminder on this phone. It is on your Tasks list. Kasama did not change any medication.`
+    : `I saved the ${input.name} reminder. It is on your Tasks list. Kasama did not change any medication.`;
+}
+
+export function healthSyncFailedReply(): string {
+  return "We couldn't connect to your health provider. You can retry or save locally.";
+}
+
+export function declinedMedicationReminderReply(): string {
+  return "Okay. I will not add that reminder. Kasama did not change any medication.";
+}
+
+export function approvedHospitalVisitReply(placeName: string): string {
+  return `I saved the appointment details for ${placeName}.`;
+}
+
+export function declinedHospitalVisitReply(): string {
+  return "Okay. I will not save that appointment. Is there anything else you need?";
+}
+
 export function approvedBookingReply(input: {
   estimate?: string;
   product?: "UberX" | "WAV";
@@ -167,6 +226,34 @@ export function describePendingApproval(input: {
       prompt: notifyApprovalPrompt(),
       detail: "Preview only — not sent yet.",
       preview,
+    };
+  }
+  if (input.tool === "save_medication_reminder") {
+    const reminder =
+      input.toolInput && typeof input.toolInput === "object"
+        ? (input.toolInput as { name?: unknown; frequency?: unknown; saveLocally?: unknown })
+        : {};
+    const name = typeof reminder.name === "string" ? reminder.name : "this medication";
+    const frequency = typeof reminder.frequency === "string" ? reminder.frequency : "as discussed";
+    const saveLocally = reminder.saveLocally === true;
+    return {
+      action: "save_medication_reminder",
+      prompt: saveLocally ? healthSyncFailedReply() : medicationReminderPrompt(name, frequency),
+      detail: `${name} · ${frequency}`,
+    };
+  }
+  if (input.tool === "save_hospital_visit") {
+    const visit =
+      input.toolInput && typeof input.toolInput === "object"
+        ? (input.toolInput as { placeName?: unknown; reason?: unknown; timeLabel?: unknown })
+        : {};
+    const placeName = typeof visit.placeName === "string" ? visit.placeName : "the hospital";
+    const reason = typeof visit.reason === "string" ? visit.reason : "";
+    const timeLabel = typeof visit.timeLabel === "string" ? visit.timeLabel : "";
+    return {
+      action: "save_hospital_visit",
+      prompt: hospitalVisitPrompt(placeName),
+      detail: [reason, timeLabel].filter(Boolean).join(" · "),
     };
   }
   return {};

@@ -58,7 +58,8 @@ function orbModeFor(phase: ConversationPhase): OrbMode {
 
 /**
  * Senior mode. Home is the sun welcome. Chat is only the last started
- * conversation. Composer stays on Home and Chat, above a compact tab bar.
+ * conversation. Tasks lists confirmed reminders and saved hospital visits.
+ * Composer stays on Home and Chat, above a compact tab bar.
  */
 export function SeniorScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
@@ -154,7 +155,7 @@ export function SeniorScreen({ onBack }: Props) {
         <View style={styles.main}>
           {onTasks ? (
             <View style={[styles.pane, { paddingTop: insets.top + 12 }]}>
-              <TasksScreen />
+              <TasksScreen tasks={state.tasks} />
             </View>
           ) : onChat && chatStarted ? (
             <View style={[styles.pane, { paddingTop: insets.top + 12 }]}>
@@ -165,6 +166,7 @@ export function SeniorScreen({ onBack }: Props) {
                 justResolved={state.justResolved}
                 lastRideOptions={state.lastRideOptions}
                 lastBooking={state.lastBooking}
+                lastHospitalVisit={state.lastHospitalVisit}
                 activeRequest={state.activeRequest}
                 rideWork={state.rideWork}
                 notice={state.notice}

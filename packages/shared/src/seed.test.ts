@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MARIA_CARETAKER_PREFERENCES,
+  MARIA_NEARBY_HOSPITAL,
   MARIA_PROFILE,
   computeArrivalTarget,
   getMariaAppointment,
@@ -89,5 +90,12 @@ describe("getMariaSeedBundle", () => {
     expect(bundle.caretakerPreferences.caretakerId).toBe("caretaker_james");
     expect(bundle.wearableReadings).toHaveLength(7);
     expect(bundle.priorRequests.length).toBeGreaterThan(0);
+  });
+});
+
+describe("MARIA_NEARBY_HOSPITAL", () => {
+  it("is St. Mary's Hospital from the senior chat mock", () => {
+    expect(MARIA_NEARBY_HOSPITAL.placeName).toBe("St. Mary's Hospital");
+    expect(MARIA_NEARBY_HOSPITAL.distance).toBe("0.8 miles away");
   });
 });

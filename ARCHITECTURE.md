@@ -12,6 +12,7 @@ Kasama API (Hono)
         ↓
 Tools
   get_appointment · find_ride_options (Uber) · book_ride (Uber) · notify_caretaker
+  save_medication_reminder (Tasks) · save_hospital_visit (local details)
 ```
 
 Core loop:
@@ -38,7 +39,7 @@ CI: GitHub Actions (`.github/workflows/ci.yml`) on pull requests and `main` runs
 - Expo SDK in `apps/mobile`, Expo Go via `pnpm start` / `pnpm dev` or Simulator via `pnpm ios` (no dev client, so no native speech-to-text modules)
 - `EXPO_PUBLIC_API_URL` defaults to `http://localhost:3001` (Simulator). On a phone, set it to `http://<mac-lan-ip>:3001` in `apps/mobile/.env` — that host is also used for the Expo QR (`REACT_NATIVE_PACKAGER_HOSTNAME`). The API listens on `0.0.0.0`.
 - StyleSheet + tokens in `apps/mobile/src/theme.ts`
-- Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`. `HomeScreen` is unchanged. Senior tabs: **Home** (sun welcome), **Chat** (last started conversation), **Tasks** (empty). Chat is disabled until Kasama has replied. Active tab is sun orange. Composer stays on Home and Chat, above a compact tab bar. On Home the bar overlays the sun at 80% opacity so the bowl is not hard-cropped; Chat and Tasks stay solid. Spacing vs the home indicator is interim — polish is [#27](https://github.com/julesiet/sasehack26/issues/27).
+- Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`. `HomeScreen` is unchanged. Senior tabs: **Home** (sun welcome), **Chat** (last started conversation), **Tasks** (confirmed medication reminders and saved hospital visits). Chat is disabled until Kasama has replied. Active tab is sun orange. Composer stays on Home and Chat, above a compact tab bar. On Home the bar overlays the sun at 80% opacity so the bowl is not hard-cropped; Chat and Tasks stay solid. Spacing vs the home indicator is interim — polish is [#27](https://github.com/julesiet/sasehack26/issues/27).
 - Designed UI replaces those screens; it does not replace the API
 
 ### Senior conversation screen (`#4`)
@@ -56,7 +57,7 @@ CI: GitHub Actions (`.github/workflows/ci.yml`) on pull requests and `main` runs
 | `micDenied` | Settings recovery | Settings recovery in the thread | text field stays usable |
 | `error` | large recoverable message | same, in the thread | text field, mic |
 
-Text Maria must act on stays large; chat bubbles are 22pt so a thread fits. Tap targets ≥ 68pt. Ride options (`#8`) are two large Uber rows (UberX and wheelchair WAV) with the price on the right; the selected row uses the orange border. Approval checkpoints (`#6`) are a descriptive card (place, reason, time, selected Uber product + price) with **Cancel** / **Confirm**. Finding / booking never looks idle — a current-action card stays on screen. After Confirm the booked card reads back the product, price, and confirmation id. Declined and failed bookings stay honest (nothing charged).
+Text Maria must act on stays large; chat bubbles are 22pt so a thread fits. Tap targets ≥ 68pt. Ride options (`#8`) are two large Uber rows (UberX and wheelchair WAV) with the price on the right; the selected row uses the orange border. Approval checkpoints (`#6`) are a descriptive card (place, reason, time, selected Uber product + price) with **Cancel** / **Confirm**. Finding / booking never looks idle — a current-action card stays on screen. After Confirm the booked card reads back the product, price, and confirmation id. Declined and failed bookings stay honest (nothing charged). Medication reminders (`#41`) are a blue **Add this to your tasks?** card (name, frequency, Cancel / Confirm). Confirming does not change a prescription. A health-sync miss shows a recoverable error (retry or save locally). Hospital scheduling is a chat thread plus an appointment card (St. Mary's Hospital, reason, time) with Cancel / Confirm and an **Appointment details saved** state. Confirmed reminders and saved visits land on **Tasks**.
 
 Loop: mic → `expo-audio` records (≤ 15 s or tap) → `POST /speech/transcribe` → `POST /conversation/turn` → `POST /speech/speak` (ElevenLabs) → play on device. If STT is `501`, the screen tells Maria to type. If TTS is `501`, the device falls back to `expo-speech`. Session id is `DEFAULT_SESSION_ID` so the caretaker view polls the same conversation.
 
@@ -82,7 +83,7 @@ Flow: parse name → Zod input → `evaluateToolCall` → stub execute if allowe
 
 Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/shared/src/session.ts`). Senior and caretaker clients share one `sessionId` and poll the same view.
 
-`GET /sessions/:sessionId` returns a `sessionViewSchema` projection from the process-local store (`apps/api/src/session-store.ts`): current request, pending approval, last approval, last Uber options, appointment, last Uber booking, caretaker activity, Maria-seed care signal (`"worth reviewing"`), consent, and that session's audit events in append order. Unknown ids return an empty pollable view (200), not 404. The caretaker screen polls this for Maria's yes/no.
+`GET /sessions/:sessionId` returns a `sessionViewSchema` projection from the process-local store (`apps/api/src/session-store.ts`): current request, pending approval, last approval, last Uber options, appointment, last Uber booking, last medication reminder, last hospital visit, tasks, caretaker activity, Maria-seed care signal (`"worth reviewing"`), consent, and that session's audit events in append order. Unknown ids return an empty pollable view (200), not 404. The caretaker screen polls this for Maria's yes/no.
 
 ### Playground (`#13`)
 
@@ -108,7 +109,7 @@ When `MODEL_API_KEY` is set, `apps/api/src/harness.ts` asks ChatGPT (Chat Comple
 
 Rules the harness keeps:
 
-- Every tool call goes through `invokeTool`, so policy and audit apply (`get_appointment`, `find_ride_options`). `book_ride` from the model is denied (`confirmation_required`) — not a failure. `notify_caretaker` without a human token is an automatic draft (`preview`, not sent) and still opens `pendingApproval` for send. A model token cannot send (`model_cannot_self_approve`). The first "yes" on a ride plan asks "The Uber is $24.50. Should I book it?" A second human yes, or `POST /approvals`, books as `senior` with a token. "No" logs `declined_by_human` and does not execute.
+- Every tool call goes through `invokeTool`, so policy and audit apply (`get_appointment`, `find_ride_options`). `book_ride` from the model is denied (`confirmation_required`) — not a failure. `notify_caretaker` without a human token is an automatic draft (`preview`, not sent) and still opens `pendingApproval` for send. `save_medication_reminder` and `save_hospital_visit` also wait for a human yes; they are not prescription changes or live EHR. A model token cannot send or self-approve (`model_cannot_self_approve`). The first "yes" on a ride plan asks "The Uber is $24.50. Should I book it?" A second human yes, or `POST /approvals`, books as `senior` with a token. "No" logs `declined_by_human` and does not execute.
 - At most `MAX_CLARIFICATIONS_PER_REQUEST` (1) clarifying question per request. At most `MAX_TOOL_ROUNDS_PER_TURN` (4) ChatGPT tool rounds; hitting the cap is a `handoff`.
 - `plan.steps` lists tools run this turn (`ok` / `denied` / `failed`). `failure` is `retry` or `handoff` when a tool actually failed — never a fake booking.
 - Session memory: `sessionView.conversation` = `{ turns, activeRequest, clarificationsAsked, plan, failure }`. Maria can say "yes" on the next turn without restating the appointment.
@@ -128,12 +129,12 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 
 ## Shared contracts
 
-- `packages/shared/src/tools.ts` — tool names, inputs, results (Uber products: `UberX`, `WAV`)
+- `packages/shared/src/tools.ts` — tool names, inputs, results (Uber products: `UberX`, `WAV`; local `save_medication_reminder` / `save_hospital_visit`)
 - `packages/shared/src/policy.ts` — `POLICY_TABLE`, `evaluateAction`, `evaluateToolCall`
 - `packages/shared/src/audit.ts` — event shape + `createAuditLog()`
 - `packages/shared/src/invoke.ts` — HTTP request schema
 - `packages/shared/src/approval.ts` — pending/last approval, `POST /approvals` body/response, $24.50 demo prompt helpers
-- `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`, `pendingApproval`, `lastApproval`, `lastRideOptions`
+- `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`, `pendingApproval`, `lastApproval`, `lastRideOptions`, `lastMedicationReminder`, `lastHospitalVisit`, `tasks`
 - `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, `activeRequest`, `plan`, `failure`, `pendingApproval`, `MAX_CLARIFICATIONS_PER_REQUEST`, `MAX_TOOL_ROUNDS_PER_TURN`, transcribe response
 - `packages/shared/src/playground.ts` — text playground (`#13`): `POST /playground` request/response, `PLAYGROUND_DEFAULT_SESSION_ID`, `PLAYGROUND_DEMO_TRANSCRIPT`, `MAX_PLAYGROUND_ADVANCE_TURNS`
 - `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`, optional `GMAIL_CREATE_EMAIL_DRAFT` / `GMAIL_SEND_EMAIL`
@@ -141,6 +142,8 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 - `packages/shared/src/index.ts` — re-exports
 
 If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in `apps/api/src/invoke-tool.ts`, project any session fields in `apps/api/src/session-store.ts`, add tests, and update this file.
+
+`save_medication_reminder` and `save_hospital_visit` are local-only: a reminder becomes a Tasks item (first confirm hits a stub health-sync miss; Confirm on the error saves on-device). Hospital confirm stores St. Mary's details. Neither is live EHR, and neither is `change_medication`.
 
 Composio session tools (`GMAIL_GET_PROFILE`, `GMAIL_CREATE_EMAIL_DRAFT`, `GMAIL_SEND_EMAIL`) live on `POST /composio/*` until a Kasama tool is wired through `invokeTool` + policy. Conversation still cannot send.
 
@@ -152,7 +155,7 @@ Live Uber (official API or Browserbase) is issue `#14`. A later adapter implemen
 
 ## What is not built yet
 
-Live Uber (`#14`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. Ride-option cards (`#8`) are built on Chat (UberX + WAV from `lastRideOptions`). `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
+Live Uber (`#14`), caretaker dashboard (`#9`), care-signal UI (`#10`), notify UI (`#11`). Session HTTP (`#18`) is built: poll `GET /sessions/:sessionId`. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. Ride-option cards (`#8`) are built on Chat (UberX + WAV from `lastRideOptions`). Medication-reminder, health-sync error, and hospital-scheduling cards (`#41`) are built on Chat; confirmed items appear on Tasks. `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
 
 Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
 

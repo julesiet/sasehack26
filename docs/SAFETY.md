@@ -13,10 +13,12 @@ Human-readable policy. The encoded table is `packages/shared/src/policy.ts`. If 
 | Book Uber | Require confirmation |
 | Spend money | Require confirmation |
 | Change medication or medical plan | Caretaker or doctor + approval token |
+| Save a medication reminder to Tasks | Require confirmation (not a prescription change) |
+| Save local hospital appointment details | Require confirmation (not live EHR) |
 | Share health information | Explicit consent + recipient on allow-list |
 | Diagnose | Never |
 
-`book_ride` also counts as `spend_money`. `notify_caretaker` is `draft_caretaker_message` until a human token is present, then `send_message`.
+`book_ride` also counts as `spend_money`. `notify_caretaker` is `draft_caretaker_message` until a human token is present, then `send_message`. `save_medication_reminder` adds a Tasks item after a human yes; it is never `change_medication`. A stub health-sync miss is recoverable (retry or save locally). `save_hospital_visit` stores local appointment details after a human yes.
 
 ## Actors
 

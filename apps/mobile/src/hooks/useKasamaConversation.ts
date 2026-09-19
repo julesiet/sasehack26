@@ -22,6 +22,8 @@ import {
   type LastApproval,
   type PendingApproval,
   type SessionBooking,
+  type SessionHospitalVisit,
+  type SeniorTask,
   type UberRideOption,
 } from "@kasama/shared";
 import {
@@ -73,6 +75,8 @@ export type ConversationUiState = {
   turns: ConversationTurn[];
   lastRideOptions: UberRideOption[];
   lastBooking: SessionBooking | null;
+  lastHospitalVisit: SessionHospitalVisit | null;
+  tasks: SeniorTask[];
   activeRequest: ActiveRequest | null;
   /** Ride-specific busy state so the screen never looks idle (#8). */
   rideWork: RideWork;
@@ -101,6 +105,8 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     turns: [],
     lastRideOptions: [],
     lastBooking: null,
+    lastHospitalVisit: null,
+    tasks: [],
     activeRequest: null,
     rideWork: "none",
   });
@@ -223,6 +229,8 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
             turns: session.conversation.turns,
             lastRideOptions: session.lastRideOptions,
             lastBooking: session.lastBooking,
+            lastHospitalVisit: session.lastHospitalVisit,
+            tasks: session.tasks,
             activeRequest: session.conversation.activeRequest,
             rideWork: "none",
           }));
@@ -352,6 +360,8 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
             turns: session.conversation.turns,
             lastRideOptions: session.lastRideOptions,
             lastBooking: session.lastBooking,
+            lastHospitalVisit: session.lastHospitalVisit,
+            tasks: session.tasks,
             activeRequest: session.conversation.activeRequest,
             rideWork: "none",
           }));

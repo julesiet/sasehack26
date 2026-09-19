@@ -8,6 +8,8 @@ import {
   rideProductTitle,
   selectedRideOption,
   spokenRideChoice,
+  pendingMedicationReminder,
+  pendingHospitalVisit,
   DEMO_UBER_WAV_ESTIMATE,
 } from "./approval";
 
@@ -75,5 +77,49 @@ describe("approval prompts", () => {
     expect(described.action).toBe("notify_caretaker");
     expect(described.preview).toContain("doctor");
     expect(described.detail).toContain("Preview only");
+  });
+
+  it("describes a medication reminder checkpoint", () => {
+    const described = describePendingApproval({
+      tool: "save_medication_reminder",
+      toolInput: { name: "Lisinopril", frequency: "Every 4 days", intervalDays: 4 },
+    });
+    expect(described.action).toBe("save_medication_reminder");
+    expect(described.prompt).toContain("Lisinopril");
+    expect(described.prompt).toContain("tasks");
+  });
+
+  it("describes a hospital visit checkpoint", () => {
+    const described = describePendingApproval({
+      tool: "save_hospital_visit",
+      toolInput: {
+        placeName: "St. Mary's Hospital",
+        distance: "0.8 miles away",
+        reason: "Annual physical. Discuss blood pressure.",
+        timeLabel: "Thursday at 10:00 AM",
+      },
+    });
+    expect(described.action).toBe("save_hospital_visit");
+    expect(described.prompt).toContain("St. Mary's Hospital");
+  });
+
+  it("reads reminder and hospital details from pending input", () => {
+    expect(
+      pendingMedicationReminder({
+        tool: "save_medication_reminder",
+        input: { name: "Lisinopril", frequency: "Every 4 days", intervalDays: 4 },
+      })?.name,
+    ).toBe("Lisinopril");
+    expect(
+      pendingHospitalVisit({
+        tool: "save_hospital_visit",
+        input: {
+          placeName: "St. Mary's Hospital",
+          distance: "0.8 miles away",
+          reason: "Annual physical.",
+          timeLabel: "Thursday at 10:00 AM",
+        },
+      })?.placeName,
+    ).toBe("St. Mary's Hospital");
   });
 });

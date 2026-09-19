@@ -7,6 +7,10 @@ import {
   getAppointmentResultSchema,
   getMariaSeedBundle,
   notifyCaretakerInputSchema,
+  saveHospitalVisitInputSchema,
+  saveHospitalVisitResultSchema,
+  saveMedicationReminderInputSchema,
+  saveMedicationReminderResultSchema,
   sessionViewSchema,
   type Actor,
   type ActiveRequest,
@@ -22,8 +26,11 @@ import {
   type PendingApproval,
   type PolicyDecision,
   type SessionBooking,
+  type SessionHospitalVisit,
+  type SessionMedicationReminder,
   type SessionRequest,
   type SessionView,
+  type SeniorTask,
   type ToolName,
   type UberRideOption,
 } from "@kasama/shared";
@@ -37,6 +44,9 @@ type SessionState = {
   lastRideOptions: UberRideOption[];
   appointment: Appointment | null;
   lastBooking: SessionBooking | null;
+  lastMedicationReminder: SessionMedicationReminder | null;
+  lastHospitalVisit: SessionHospitalVisit | null;
+  tasks: SeniorTask[];
   caretakerActivity: CaretakerActivityItem[];
   careSignal: CareSignal | null;
   consentGranted: boolean;
@@ -54,6 +64,7 @@ export type ApplyConversationTurnInput = {
   plan: ConversationPlan;
   failure: ConversationFailure | null;
   timestamp: string;
+  extraKasamaTexts?: string[];
 };
 
 export type ApplyToolEventInput = {
@@ -93,6 +104,9 @@ function emptyState(sessionId: string): SessionState {
     lastRideOptions: [],
     appointment: null,
     lastBooking: null,
+    lastMedicationReminder: null,
+    lastHospitalVisit: null,
+    tasks: [],
     caretakerActivity: [],
     careSignal: seedCareSignal(),
     consentGranted: false,
@@ -174,6 +188,7 @@ export function createSessionStore(): SessionStore {
       plan,
       failure,
       timestamp,
+      extraKasamaTexts,
     }) {
       const state = getOrCreate(sessionId);
       const conversation = state.conversation;
@@ -184,6 +199,14 @@ export function createSessionStore(): SessionStore {
         speaker: "senior",
         text: seniorText,
       });
+      for (const extra of extraKasamaTexts ?? []) {
+        conversation.turns.push({
+          id: nextTurnId(),
+          timestamp,
+          speaker: "kasama",
+          text: extra,
+        });
+      }
       conversation.turns.push({
         id: nextTurnId(),
         timestamp,
@@ -231,6 +254,33 @@ export function createSessionStore(): SessionStore {
         const rides = findRideOptionsResultSchema.safeParse(result);
         if (rides.success) {
           state.lastRideOptions = rides.data.options;
+        }
+      }
+
+      if (tool === "save_medication_reminder" && result) {
+        const reminderResult = saveMedicationReminderResultSchema.safeParse(result);
+        if (reminderResult.success && reminderResult.data.healthSyncError) {
+          const parsed = saveMedicationReminderInputSchema.parse(input);
+          const localInput = { ...parsed, saveLocally: true };
+          state.lastMedicationReminder = {
+            name: parsed.name,
+            frequency: parsed.frequency,
+            intervalDays: parsed.intervalDays,
+            status: "sync_failed",
+          };
+          state.pendingApproval = {
+            tool,
+            input: localInput,
+            reason: "health_sync_failed",
+            summary: reminderResult.data.summary,
+            timestamp: event.timestamp,
+            status: "pending",
+            ...describePendingApproval({
+              tool,
+              toolInput: localInput,
+            }),
+          };
+          return toView(state);
         }
       }
 
@@ -288,7 +338,12 @@ export function createSessionStore(): SessionStore {
           prompt: state.pendingApproval.prompt,
         };
         state.pendingApproval = null;
-      } else if (tool === "book_ride" || tool === "notify_caretaker") {
+      } else if (
+        tool === "book_ride" ||
+        tool === "notify_caretaker" ||
+        tool === "save_medication_reminder" ||
+        tool === "save_hospital_visit"
+      ) {
         const described = describePendingApproval({
           tool,
           toolInput: input,
@@ -334,6 +389,48 @@ export function createSessionStore(): SessionStore {
         appendCaretakerActivity(state, input, event, true);
       }
 
+      if (tool === "save_medication_reminder" && result) {
+        const reminderResult = saveMedicationReminderResultSchema.safeParse(result);
+        if (reminderResult.success && reminderResult.data.success) {
+          const parsed = saveMedicationReminderInputSchema.parse(input);
+          state.lastMedicationReminder = {
+            name: parsed.name,
+            frequency: parsed.frequency,
+            intervalDays: parsed.intervalDays,
+            status: "saved",
+            savedLocally: reminderResult.data.savedLocally,
+          };
+          state.tasks.push({
+            id: reminderResult.data.confirmationId ?? event.id,
+            kind: "medication_reminder",
+            title: parsed.name,
+            detail: parsed.frequency,
+            timestamp: event.timestamp,
+            savedLocally: reminderResult.data.savedLocally,
+          });
+          state.conversation.activeRequest = null;
+        }
+      }
+
+      if (tool === "save_hospital_visit" && result) {
+        const visitResult = saveHospitalVisitResultSchema.safeParse(result);
+        if (visitResult.success && visitResult.data.success) {
+          const parsed = saveHospitalVisitInputSchema.parse(input);
+          state.lastHospitalVisit = {
+            ...parsed,
+            status: "saved",
+          };
+          state.tasks.push({
+            id: visitResult.data.confirmationId ?? event.id,
+            kind: "hospital_visit",
+            title: parsed.placeName,
+            detail: `${parsed.reason} · ${parsed.timeLabel}`,
+            timestamp: event.timestamp,
+          });
+          state.conversation.activeRequest = null;
+        }
+      }
+
       return toView(state);
     },
     declinePending({ sessionId, actor }) {
@@ -346,7 +443,11 @@ export function createSessionStore(): SessionStore {
       const summary =
         pending.tool === "notify_caretaker"
           ? "The caretaker message was declined. Nothing was sent."
-          : "The Uber booking was declined. Nothing was booked.";
+          : pending.tool === "save_medication_reminder"
+            ? "The medication reminder was declined. Nothing was saved. Kasama did not change any medication."
+            : pending.tool === "save_hospital_visit"
+              ? "The hospital appointment was declined. Nothing was saved."
+              : "The Uber booking was declined. Nothing was booked.";
 
       const event = auditLog.append({
         whoAsked: { actor, sessionId },
@@ -378,6 +479,23 @@ export function createSessionStore(): SessionStore {
       };
       state.pendingApproval = null;
       state.conversation.activeRequest = null;
+      if (pending.tool === "save_medication_reminder") {
+        const parsed = saveMedicationReminderInputSchema.safeParse(pending.input);
+        if (parsed.success) {
+          state.lastMedicationReminder = {
+            name: parsed.data.name,
+            frequency: parsed.data.frequency,
+            intervalDays: parsed.data.intervalDays,
+            status: "cancelled",
+          };
+        }
+      }
+      if (pending.tool === "save_hospital_visit") {
+        const parsed = saveHospitalVisitInputSchema.safeParse(pending.input);
+        if (parsed.success) {
+          state.lastHospitalVisit = { ...parsed.data, status: "cancelled" };
+        }
+      }
       return toView(state);
     },
     clear() {

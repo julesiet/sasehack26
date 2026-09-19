@@ -168,6 +168,30 @@ describe("evaluateToolCall", () => {
     expect(decision.reason).toBe("model_cannot_self_approve");
   });
 
+  it("denies save_medication_reminder without approval — this is not a prescription change", () => {
+    const decision = evaluateToolCall("save_medication_reminder", model);
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe("confirmation_required");
+    expect(decision.action).toBe("save_medication_reminder");
+  });
+
+  it("allows a senior to confirm a local medication reminder", () => {
+    expect(evaluateToolCall("save_medication_reminder", seniorApproved)).toMatchObject({
+      allowed: true,
+      action: "save_medication_reminder",
+    });
+  });
+
+  it("still forbids a senior from changing a prescription", () => {
+    expect(evaluateAction("change_medication", seniorApproved).reason).toBe("caretaker_doctor_only");
+  });
+
+  it("denies save_hospital_visit without approval", () => {
+    const decision = evaluateToolCall("save_hospital_visit", model);
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe("confirmation_required");
+  });
+
   it("treats book_ride as spending money, so it cannot skip that check", () => {
     const decision = evaluateToolCall("book_ride", seniorApproved);
     expect(decision.allowed).toBe(true);

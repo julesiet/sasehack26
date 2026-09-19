@@ -11,6 +11,8 @@ import {
   getMariaAppointment,
   notifyApprovalPrompt,
   resolveSessionId,
+  saveHospitalVisitInputSchema,
+  saveMedicationReminderInputSchema,
   type ActiveRequest,
   type Appointment,
   type ConversationReplyKind,
@@ -25,6 +27,15 @@ import {
   type HarnessTurnResult,
 } from "./harness";
 import { invokeTool } from "./invoke-tool";
+import {
+  looksLikeHospitalSchedule,
+  looksLikeMedicationReminder,
+  looksLikeMostlyTime,
+  nearbyHospital,
+  parseAppointmentTime,
+  parseMedicationReminder,
+  tidyAppointmentReason,
+} from "./care-intent";
 import { openaiChatComplete, type ChatComplete } from "./model";
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
@@ -204,6 +215,117 @@ function applySpokenProduct(
   };
 }
 
+function reminderInputFromActive(active: ActiveRequest) {
+  return saveMedicationReminderInputSchema.parse({
+    name: active.medicationName,
+    frequency: active.frequency,
+    intervalDays: active.intervalDays,
+  });
+}
+
+function hospitalInputFromActive(active: ActiveRequest) {
+  const hospital = nearbyHospital();
+  return saveHospitalVisitInputSchema.parse({
+    placeName: active.placeName ?? hospital.placeName,
+    distance: active.distance ?? hospital.distance,
+    reason: active.reason,
+    timeLabel: active.timeLabel,
+  });
+}
+
+function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
+  const active = decided.activeRequest;
+  if (!active) return decided;
+  const pending = sessionStore.get(sessionId).pendingApproval;
+
+  if (active.intent === "medication_reminder" && active.status === "proposed") {
+    if (!active.medicationName || !active.frequency || !active.intervalDays) {
+      return decided;
+    }
+    if (pending?.tool === "save_medication_reminder") {
+      return decided;
+    }
+    const before = auditLog.list().length;
+    invokeTool("save_medication_reminder", {
+      input: reminderInputFromActive(active),
+      actor: "model",
+      sessionId,
+    });
+    return {
+      ...decided,
+      kind: "proposal",
+      plan: { steps: [...decided.plan.steps, ...planFromAuditEvents(auditLog.list().slice(before)).steps] },
+    };
+  }
+
+  if (active.intent === "hospital_schedule" && active.status === "proposed") {
+    if (!active.reason || !active.timeLabel) {
+      return decided;
+    }
+    if (pending?.tool === "save_hospital_visit") {
+      return decided;
+    }
+    const before = auditLog.list().length;
+    invokeTool("save_hospital_visit", {
+      input: hospitalInputFromActive(active),
+      actor: "model",
+      sessionId,
+    });
+    return {
+      ...decided,
+      kind: "proposal",
+      plan: { steps: [...decided.plan.steps, ...planFromAuditEvents(auditLog.list().slice(before)).steps] },
+    };
+  }
+
+  return decided;
+}
+
+function careRulesNeeded(
+  transcript: string,
+  state: ConversationState,
+  decided: HarnessTurnResult,
+  sessionId: string,
+): boolean {
+  const pending = sessionStore.get(sessionId).pendingApproval;
+  if (pending?.tool === "save_medication_reminder" || pending?.tool === "save_hospital_visit") {
+    return false;
+  }
+  if (
+    decided.activeRequest?.intent === "medication_reminder" ||
+    decided.activeRequest?.intent === "hospital_schedule"
+  ) {
+    return false;
+  }
+  const text = normalize(transcript);
+  return (
+    looksLikeMedicationReminder(text) ||
+    looksLikeHospitalSchedule(text, RIDE.test(text)) ||
+    state.activeRequest?.intent === "medication_reminder" ||
+    state.activeRequest?.intent === "hospital_schedule"
+  );
+}
+
+function finishDecidedTurn(
+  sessionId: string,
+  transcript: string,
+  state: ConversationState,
+  now: Date,
+  decided: HarnessTurnResult,
+): HarnessTurnResult {
+  let next = openCareCheckpoint(sessionId, maybeOpenBookingCheckpoint(sessionId, decided));
+  if (careRulesNeeded(transcript, state, next, sessionId)) {
+    next = openCareCheckpoint(
+      sessionId,
+      maybeOpenBookingCheckpoint(
+        sessionId,
+        applySpokenProduct(transcript, runRulesTurn(sessionId, transcript, state, now), state.activeRequest, sessionId),
+      ),
+    );
+  }
+  return next;
+}
+
 function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
   if (decided.activeRequest?.intent !== "ride" || decided.activeRequest.status !== "accepted") {
     return applyPendingPrompt(sessionId, decided);
@@ -227,6 +349,9 @@ function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResul
 function applyPendingPrompt(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
   const pending = sessionStore.get(sessionId).pendingApproval;
   if (!pending?.prompt) return decided;
+  if (pending.tool === "save_medication_reminder" || pending.tool === "save_hospital_visit") {
+    return { ...decided, kind: "proposal" };
+  }
   const text =
     pending.preview && pending.tool === "notify_caretaker"
       ? `${pending.preview} ${pending.prompt}`
@@ -262,6 +387,7 @@ type Reply = {
   kind: ConversationReplyKind;
   activeRequest: ActiveRequest | null;
   askedClarification?: boolean;
+  extraKasamaTexts?: string[];
 };
 
 function proposeRideToAppointment(
@@ -326,6 +452,140 @@ function decide(
         activeRequest: { ...active, product, status: "accepted" },
       };
     }
+  }
+
+  if (active?.intent === "medication_reminder") {
+    if (saysNo) {
+      return {
+        text: "Okay. I will not add that reminder. Kasama did not change any medication.",
+        kind: "answer",
+        activeRequest: null,
+      };
+    }
+    const parsed = parseMedicationReminder(text);
+    if (parsed) {
+      return {
+        text: "I'll set that up for you.",
+        kind: "proposal",
+        activeRequest: {
+          intent: "medication_reminder",
+          status: "proposed",
+          medicationName: parsed.name,
+          frequency: parsed.frequency,
+          intervalDays: parsed.intervalDays,
+        },
+      };
+    }
+    if (active.status === "gathering" && state.clarificationsAsked >= MAX_CLARIFICATIONS_PER_REQUEST) {
+      return {
+        text: "I couldn't tell which medication to remind you about. Ask again when you're ready. Kasama will not change any medication.",
+        kind: "answer",
+        activeRequest: null,
+      };
+    }
+  }
+
+  if (looksLikeMedicationReminder(text)) {
+    const parsed = parseMedicationReminder(text);
+    if (parsed) {
+      return {
+        text: "I'll set that up for you.",
+        kind: "proposal",
+        activeRequest: {
+          intent: "medication_reminder",
+          status: "proposed",
+          medicationName: parsed.name,
+          frequency: parsed.frequency,
+          intervalDays: parsed.intervalDays,
+        },
+      };
+    }
+    if (state.clarificationsAsked < MAX_CLARIFICATIONS_PER_REQUEST) {
+      return {
+        text: "What medication should I remind you about, and how often? This only adds a task — Kasama will not change any medication.",
+        kind: "clarification",
+        activeRequest: { intent: "medication_reminder", status: "gathering" },
+        askedClarification: true,
+      };
+    }
+  }
+
+  if (active?.intent === "hospital_schedule") {
+    if (saysNo) {
+      return {
+        text: "Okay. I will not save that appointment. Is there anything else you need?",
+        kind: "answer",
+        activeRequest: null,
+      };
+    }
+    const hospital = nearbyHospital();
+    const time = parseAppointmentTime(text);
+    const next: ActiveRequest = {
+      ...active,
+      placeName: active.placeName ?? hospital.placeName,
+      distance: active.distance ?? hospital.distance,
+    };
+    if (!active.reason && !looksLikeMostlyTime(text)) {
+      next.reason = tidyAppointmentReason(transcript);
+    }
+    if (time) {
+      next.timeLabel = time;
+    } else if (active.reason && !looksLikeMostlyTime(text) && text.length > 0) {
+      next.timeLabel = transcript.trim().replace(/[.!?]+$/, "");
+    }
+    if (next.reason && next.timeLabel) {
+      return {
+        text: "I found the closest hospital.",
+        kind: "proposal",
+        activeRequest: { ...next, status: "proposed" },
+      };
+    }
+    if (!next.reason) {
+      return {
+        text: "What is this appointment for? And is there anything you'd like the doctor to know ahead of time?",
+        kind: "clarification",
+        activeRequest: { ...next, status: "gathering" },
+      };
+    }
+    return {
+      text: "What time works best for you?",
+      kind: "clarification",
+      activeRequest: { ...next, status: "gathering" },
+    };
+  }
+
+  if (looksLikeHospitalSchedule(text, RIDE.test(text))) {
+    const hospital = nearbyHospital();
+    const time = parseAppointmentTime(text);
+    const reason = looksLikeMostlyTime(text) ? undefined : tidyAppointmentReason(transcript);
+    if (reason && time) {
+      return {
+        text: "I found the closest hospital.",
+        kind: "proposal",
+        extraKasamaTexts: ["Looking for the closest hospital now."],
+        activeRequest: {
+          intent: "hospital_schedule",
+          status: "proposed",
+          placeName: hospital.placeName,
+          distance: hospital.distance,
+          reason,
+          timeLabel: time,
+        },
+      };
+    }
+    return {
+      text: "What is this appointment for? And is there anything you'd like the doctor to know ahead of time?",
+      kind: "clarification",
+      extraKasamaTexts: ["Looking for the closest hospital now."],
+      activeRequest: {
+        intent: "hospital_schedule",
+        status: "gathering",
+        placeName: hospital.placeName,
+        distance: hospital.distance,
+        ...(time ? { timeLabel: time } : {}),
+      },
+      askedClarification: true,
+    };
   }
 
   if (NOTIFY.test(text) && !RIDE.test(text)) {
@@ -425,7 +685,7 @@ function decide(
   }
 
   return {
-    text: "I can get you a ride to your appointments, or tell you when your next appointment is. What would you like?",
+    text: "I can get you a ride to your appointments, set a medication reminder, or help schedule a hospital visit. What would you like?",
     kind: "answer",
     activeRequest: active,
   };
@@ -448,6 +708,7 @@ function runRulesTurn(
     askedClarification: reply.askedClarification ?? false,
     plan,
     failure: failed ? { kind: "retry", tool: failed.tool, summary: failed.summary } : null,
+    extraKasamaTexts: reply.extraKasamaTexts,
   };
 }
 
@@ -504,8 +765,11 @@ export async function runConversationTurn(
         state.activeRequest,
         sessionId,
       );
-      decided = maybeOpenBookingCheckpoint(
+      decided = finishDecidedTurn(
         sessionId,
+        request.data.transcript,
+        state,
+        now,
         fromModel.plan.steps.length === 0 && isCheckingFiller(fromModel.text)
           ? applySpokenProduct(
               request.data.transcript,
@@ -516,8 +780,11 @@ export async function runConversationTurn(
           : fromModel,
       );
     } catch {
-      decided = maybeOpenBookingCheckpoint(
+      decided = finishDecidedTurn(
         sessionId,
+        request.data.transcript,
+        state,
+        now,
         applySpokenProduct(
           request.data.transcript,
           runRulesTurn(sessionId, request.data.transcript, state, now),
@@ -527,8 +794,11 @@ export async function runConversationTurn(
       );
     }
   } else {
-    decided = maybeOpenBookingCheckpoint(
+    decided = finishDecidedTurn(
       sessionId,
+      request.data.transcript,
+      state,
+      now,
       applySpokenProduct(
         request.data.transcript,
         runRulesTurn(sessionId, request.data.transcript, state, now),
@@ -548,6 +818,7 @@ export async function runConversationTurn(
     plan: decided.plan,
     failure: decided.failure,
     timestamp: now.toISOString(),
+    extraKasamaTexts: decided.extraKasamaTexts,
   });
 
   const body: ConversationTurnResponse = conversationTurnResponseSchema.parse({

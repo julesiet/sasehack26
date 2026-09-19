@@ -338,6 +338,9 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.consentGranted).toBe(false);
     expect(body.events).toEqual([]);
     expect(body.careSignal?.label).toBe("worth reviewing");
+    expect(body.tasks).toEqual([]);
+    expect(body.lastMedicationReminder).toBeNull();
+    expect(body.lastHospitalVisit).toBeNull();
   });
 
   it("uses the documented default session when sessionId is omitted", async () => {

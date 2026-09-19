@@ -89,6 +89,42 @@ export const KASAMA_CHAT_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "save_medication_reminder",
+      description:
+        "Propose adding a medication reminder to Maria's Tasks. This is not a prescription change. Requires a human yes. Do not claim it was saved.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          frequency: { type: "string" },
+          intervalDays: { type: "number" },
+          saveLocally: { type: "boolean" },
+        },
+        required: ["name", "frequency", "intervalDays"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_hospital_visit",
+      description:
+        "Propose saving local hospital appointment details (place, reason, time). Not live EHR. Requires a human yes.",
+      parameters: {
+        type: "object",
+        properties: {
+          placeName: { type: "string" },
+          distance: { type: "string" },
+          reason: { type: "string" },
+          timeLabel: { type: "string" },
+        },
+        required: ["placeName", "distance", "reason", "timeLabel"],
+      },
+    },
+  },
 ] as const;
 
 const YES = /\b(yes|yeah|yep|yup|sure|please do|ok|okay|go ahead|that works|sounds good|do it|book it)\b/i;
@@ -101,6 +137,7 @@ export type HarnessTurnResult = {
   askedClarification: boolean;
   plan: ConversationPlan;
   failure: ConversationFailure | null;
+  extraKasamaTexts?: string[];
 };
 
 function isoDate(d: Date): string {
@@ -145,6 +182,8 @@ function systemPrompt(now: Date, state: ConversationState): string {
     'Care language is "worth reviewing" only — never a medical conclusion.',
     "Never say an Uber was booked or a message was sent. Those need a human yes on the iPhone.",
     "Do not call book_ride or notify_caretaker. Propose the action and wait.",
+    "Maria CAN set a medication reminder. That only adds a Task — it is not a prescription change. Never say you cannot set reminders. If she asks, gather the name and how often, then call save_medication_reminder (it waits for a human yes).",
+    "Maria CAN schedule a hospital visit as local appointment details (closest is St. Mary's Hospital). Never say you cannot schedule appointments. If she asks, gather the reason and time, then call save_hospital_visit (it waits for a human yes). This is not live EHR.",
     `Today is ${today}. Tomorrow is ${tomorrowDate}. Use those calendar dates — never a past year.`,
     `Maria lives at ${appointment.pickup}. Accessibility: ${MARIA_PROFILE.accessibilityNeeds.join(", ")}.`,
     `Her next doctor visit is ${appointment.title} at ${appointment.start}, at ${appointment.destination} (lookup date ${isoDate(new Date(appointment.start))}).`,
@@ -247,6 +286,8 @@ function inferReply(
 
   const booked = executed.find((item) => item.tool === "book_ride");
   const notified = executed.find((item) => item.tool === "notify_caretaker");
+  const reminder = executed.find((item) => item.tool === "save_medication_reminder");
+  const hospital = executed.find((item) => item.tool === "save_hospital_visit");
   const rideSearch = [...executed].reverse().find((item) => item.tool === "find_ride_options");
   const appointmentLookup = [...executed].reverse().find((item) => item.tool === "get_appointment");
 
@@ -264,6 +305,49 @@ function inferReply(
     (typeof appointmentLookup?.input.date === "string"
       ? isoDate(new Date(appointmentLookup.input.date))
       : undefined) ?? previous?.date;
+
+  if (reminder) {
+    const name = typeof reminder.input.name === "string" ? reminder.input.name : previous?.medicationName;
+    const frequency =
+      typeof reminder.input.frequency === "string" ? reminder.input.frequency : previous?.frequency;
+    const intervalDays =
+      typeof reminder.input.intervalDays === "number" ? reminder.input.intervalDays : previous?.intervalDays;
+    return {
+      kind: "proposal",
+      activeRequest: {
+        intent: "medication_reminder",
+        status: "proposed",
+        ...(name ? { medicationName: name } : {}),
+        ...(frequency ? { frequency } : {}),
+        ...(intervalDays ? { intervalDays } : {}),
+      },
+      askedClarification: false,
+      failure,
+    };
+  }
+
+  if (hospital) {
+    const placeName =
+      typeof hospital.input.placeName === "string" ? hospital.input.placeName : previous?.placeName;
+    const distance =
+      typeof hospital.input.distance === "string" ? hospital.input.distance : previous?.distance;
+    const reason = typeof hospital.input.reason === "string" ? hospital.input.reason : previous?.reason;
+    const timeLabel =
+      typeof hospital.input.timeLabel === "string" ? hospital.input.timeLabel : previous?.timeLabel;
+    return {
+      kind: "proposal",
+      activeRequest: {
+        intent: "hospital_schedule",
+        status: "proposed",
+        ...(placeName ? { placeName } : {}),
+        ...(distance ? { distance } : {}),
+        ...(reason ? { reason } : {}),
+        ...(timeLabel ? { timeLabel } : {}),
+      },
+      askedClarification: false,
+      failure,
+    };
+  }
 
   if (booked || notified) {
     const denied = (booked ?? notified)?.step.status === "denied";
@@ -452,6 +536,14 @@ export async function runHarnessTurn(input: {
   }
   if (notifyWaiting && /\b(sent|emailed|texted|notified)\b/i.test(text)) {
     text = "I can draft a note for your family. You'll confirm before anything is sent.";
+  }
+  const reminderWaiting = executed.some((item) => item.tool === "save_medication_reminder");
+  if (reminderWaiting && /\b(saved|added to your tasks|changed your (medication|prescription))\b/i.test(text)) {
+    text = "I'll set that up for you. You'll confirm before it is added to Tasks. Kasama will not change any medication.";
+  }
+  const hospitalWaiting = executed.some((item) => item.tool === "save_hospital_visit");
+  if (hospitalWaiting && /\b(saved|booked|scheduled)\b/i.test(text)) {
+    text = "I found the closest hospital. You'll confirm before those details are saved.";
   }
 
   return {
