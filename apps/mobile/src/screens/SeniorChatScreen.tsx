@@ -80,9 +80,11 @@ export function SeniorChatScreen({
   const selected = selectedRideOption(lastRideOptions, pendingApproval, activeRequest?.product);
   const reminder = pendingMedicationReminder(pendingApproval);
   const hospitalPending = pendingHospitalVisit(pendingApproval);
-  const hospitalSaved = lastHospitalVisit?.status === "saved" && !hospitalPending;
+  const hospitalJustResolved = justResolved?.tool === "save_hospital_visit";
+  const hospitalSaved =
+    lastHospitalVisit?.status === "saved" && hospitalJustResolved && justResolved?.decision === "approved";
   const hospitalCancelled =
-    lastHospitalVisit?.status === "cancelled" && justResolved?.tool === "save_hospital_visit";
+    lastHospitalVisit?.status === "cancelled" && hospitalJustResolved;
   const rideFinished =
     lastBooking?.status === "booked" && !pendingApproval && activeRequest?.status !== "proposed";
   const showOptions =
