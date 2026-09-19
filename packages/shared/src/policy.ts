@@ -53,7 +53,7 @@ export const TOOL_ACTIONS = {
   get_appointment: ["read_calendar"],
   find_ride_options: ["search_rides"],
   book_ride: ["book_ride", "spend_money"],
-  notify_caretaker: ["send_message"],
+  notify_caretaker: ["draft_caretaker_message", "send_message"],
 } as const satisfies Record<ToolName, readonly PolicyAction[]>;
 
 export type ApprovalContext = {
@@ -196,6 +196,18 @@ export function evaluateToolCall(
   tool: ToolName,
   ctx: ApprovalContext,
 ): PolicyDecision {
+  if (tool === "notify_caretaker") {
+    const send = evaluateAction("send_message", ctx);
+    if (send.allowed) {
+      return send;
+    }
+    // Missing human token → automatic draft. Self-approve still fails the send.
+    if (send.reason === "confirmation_required") {
+      return evaluateAction("draft_caretaker_message", ctx);
+    }
+    return send;
+  }
+
   const actions = TOOL_ACTIONS[tool];
   let last: PolicyDecision | undefined;
   for (const action of actions) {

@@ -78,7 +78,7 @@ export const KASAMA_CHAT_TOOLS = [
     function: {
       name: "notify_caretaker",
       description:
-        "Send a message to Maria's caretaker. Requires a human confirmation token. Do not claim it was sent.",
+        "Draft a message to Maria's caretaker. Sending still needs a human yes. Do not claim it was sent.",
       parameters: {
         type: "object",
         properties: {
@@ -267,7 +267,8 @@ function inferReply(
 
   if (booked || notified) {
     const denied = (booked ?? notified)?.step.status === "denied";
-    if (denied) {
+    const notifyWaiting = notified && notified.body.sent === false;
+    if (denied || notifyWaiting) {
       const wasProposed = previous?.status === "proposed";
       return {
         kind: wasProposed ? "answer" : "proposal",
@@ -441,13 +442,15 @@ export async function runHarnessTurn(input: {
   }
 
   const bookedDenied = executed.some((item) => item.tool === "book_ride" && item.step.status === "denied");
-  const notifyDenied = executed.some(
-    (item) => item.tool === "notify_caretaker" && item.step.status === "denied",
+  const notifyWaiting = executed.some(
+    (item) =>
+      item.tool === "notify_caretaker" &&
+      (item.step.status === "denied" || item.body.sent === false),
   );
   if (bookedDenied && /\b(booked|confirmed your ride|on (its|the) way)\b/i.test(text)) {
     text = "You'll see the Uber on screen and confirm before anything is booked.";
   }
-  if (notifyDenied && /\b(sent|emailed|texted|notified)\b/i.test(text)) {
+  if (notifyWaiting && /\b(sent|emailed|texted|notified)\b/i.test(text)) {
     text = "I can draft a note for your family. You'll confirm before anything is sent.";
   }
 
