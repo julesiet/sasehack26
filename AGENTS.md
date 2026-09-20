@@ -48,10 +48,11 @@ pnpm workspaces + Turborepo. Node 20. Package manager `pnpm@9.15.9`.
 
 ```sh
 pnpm install
-pnpm dev              # API + Expo LAN (QR for Expo Go)
+pnpm dev              # API + Expo LAN (QR for Expo Go; Mac or Windows)
 pnpm dev:api          # API only
-pnpm start            # Expo Go QR only (own terminal)
-pnpm ios              # Expo → iOS Simulator (own terminal)
+pnpm start            # Expo Go QR only (own terminal; auto LAN IP)
+pnpm start:tunnel     # Expo Go via Expo tunnel (own terminal; when LAN QR fails)
+pnpm ios              # Expo → iOS Simulator (Mac only; own terminal)
 pnpm typecheck
 pnpm test
 pnpm playground # text playground (no iOS). Optional: -- "Please get me a ride…"
@@ -59,7 +60,7 @@ pnpm playground # text playground (no iOS). Optional: -- "Please get me a ride�
 
 GitHub Actions on pull requests and `main` runs `pnpm typecheck` and `pnpm test` (`.github/workflows/ci.yml`). No `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY` is required.
 
-`pnpm dev`, `pnpm start`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy. `pnpm playground` is not long-running.
+`pnpm dev`, `pnpm start`, `pnpm start:tunnel`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy. `pnpm playground` is not long-running.
 
 ## Test with the playground (no iOS)
 
@@ -73,7 +74,7 @@ pnpm playground -- --until turn "I need a ride"
 
 Or `POST /playground` on a running API (`pnpm dev:api`). Same policy + audit as the voice loop. Default `until` is `checkpoint` (stops at the $24.50 prompt, never books). Use a unique `--session-id` so you do not collide with the iOS `default` session. Confirm the JSON has appointment context, ride options, `pendingApproval`, and `lastBooking: null` for the demo line. Failed tools must still return `failure.kind` `retry` or `handoff`.
 
-There is no product website. `http://localhost:3001` is the API. The app is Expo Go (`pnpm start` / `pnpm dev`) or the Simulator (`pnpm ios`). For a phone, put this Mac's LAN IP in `apps/mobile/.env` as `EXPO_PUBLIC_API_URL=http://<ip>:3001` (`ipconfig getifaddr en0`) so the QR is not localhost. Restart Expo after changing `.env`.
+There is no product website. `http://localhost:3001` is the API. The app is Expo Go (`pnpm start` / `pnpm dev`) or the Simulator (`pnpm ios`, Mac only). `pnpm start` detects this computer's LAN IPv4 so Expo Go on a phone gets `exp://<ip>:8081` and `EXPO_PUBLIC_API_URL=http://<ip>:3001`. Same Wi-Fi as the phone. Override in `apps/mobile/.env` if the wrong NIC is chosen (Mac: `ipconfig getifaddr en0`; Windows: `ipconfig` → IPv4 Address). Restart Expo after changing `.env`. Windows cannot run `pnpm ios`. If the QR cannot connect, `pnpm start:tunnel` (API still needs the LAN IP; allow ports 3001 and 8081).
 
 ## Current API
 
@@ -98,7 +99,7 @@ Calendar is **seeded** (`get_appointment` for Maria's tomorrow appointment). Ube
 
 ## Mobile
 
-Expo Go only (`pnpm start` or `pnpm ios`). Add only Expo Go–compatible packages; no native speech-to-text modules and no `expo prebuild`. Speech-to-text and Kasama's voice run on the API via ElevenLabs. The device falls back to `expo-speech` if TTS is not configured.
+Expo Go only (`pnpm start` or `pnpm ios` on a Mac). Add only Expo Go–compatible packages; no native speech-to-text modules and no `expo prebuild`. Speech-to-text and Kasama's voice run on the API via ElevenLabs. The device falls back to `expo-speech` if TTS is not configured.
 
 Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Senior tabs: Home (sun welcome), Chat (last started conversation), Tasks (confirmed medication reminders and saved hospital visits). Active tab is sun orange. On Home the compact tab bar is 80% opaque over the sun. After a ride search, Chat shows two Uber option cards (UberX and wheelchair WAV). Tapping a card selects that product through the conversation turn (same as saying "the wheelchair Uber" / "the UberX"). Confirmation is a descriptive Cancel / Confirm card for the selected option. Finding and booking show a current-action card so the screen never looks idle. Medication reminder, health-sync error, and hospital appointment cards follow the same large-type Cancel / Confirm pattern (`#41`). The saved hospital card is only the just-finished confirmation; the next question leaves Chat as bubbles and keeps the visit on Tasks. Tap targets ≥ 68pt on senior actions.
 

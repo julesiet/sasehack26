@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node ./scripts/start-expo.cjs",
     "start": "node ./scripts/start-expo.cjs",
+    "start:tunnel": "node ./scripts/start-expo.cjs --tunnel",
     "ios": "node ./scripts/start-expo.cjs --ios",
     "typecheck": "tsc --noEmit"
   },

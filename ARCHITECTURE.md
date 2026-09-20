@@ -36,8 +36,8 @@ CI: GitHub Actions (`.github/workflows/ci.yml`) on pull requests and `main` runs
 
 ## Mobile
 
-- Expo SDK in `apps/mobile`, Expo Go via `pnpm start` / `pnpm dev` or Simulator via `pnpm ios` (no dev client, so no native speech-to-text modules)
-- `EXPO_PUBLIC_API_URL` defaults to `http://localhost:3001` (Simulator). On a phone, set it to `http://<mac-lan-ip>:3001` in `apps/mobile/.env` — that host is also used for the Expo QR (`REACT_NATIVE_PACKAGER_HOSTNAME`). The API listens on `0.0.0.0`.
+- Expo SDK in `apps/mobile`, Expo Go via `pnpm start` / `pnpm dev` (Mac or Windows) or Simulator via `pnpm ios` on a Mac (no dev client, so no native speech-to-text modules)
+- `EXPO_PUBLIC_API_URL` defaults to `http://localhost:3001` (Simulator). `pnpm start` / `pnpm dev` detect a LAN IPv4 and point both the Expo QR (`REACT_NATIVE_PACKAGER_HOSTNAME`) and the API URL at that host so Expo Go on a phone works. Override in `apps/mobile/.env` if the wrong NIC is chosen. If the QR cannot connect (Windows Firewall, guest Wi-Fi), `pnpm start:tunnel`. The API listens on `0.0.0.0`.
 - StyleSheet + tokens in `apps/mobile/src/theme.ts`
 - Screens: `App.tsx` switches `HomeScreen` / `SeniorScreen` / `CaretakerScreen`. `HomeScreen` is unchanged. Senior tabs: **Home** (sun welcome), **Chat** (last started conversation), **Tasks** (confirmed medication reminders and saved hospital visits). Chat is disabled until Kasama has replied. Active tab is sun orange. Composer stays on Home and Chat, above a compact tab bar. On Home the bar overlays the sun at 80% opacity so the bowl is not hard-cropped; Chat and Tasks stay solid. Spacing vs the home indicator is interim — polish is [#27](https://github.com/julesiet/sasehack26/issues/27). Demo role switch: Home **Dev** → Senior / Caretaker; Caretaker **Maria** opens Senior on the same phone.
 - Designed UI replaces those screens; it does not replace the API
