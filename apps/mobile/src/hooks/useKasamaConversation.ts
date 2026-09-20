@@ -13,8 +13,11 @@ import { File, Paths } from "expo-file-system";
 import * as Speech from "expo-speech";
 import {
   DEFAULT_SESSION_ID,
+  MARIA_PROFILE,
+  deviceSpeechRate,
   pendingRideOptionId,
   spokenRideChoice,
+  spokenTextForTts,
   type ActiveRequest,
   type ApprovalChoice,
   type ConversationReplyKind,
@@ -84,8 +87,8 @@ export type ConversationUiState = {
 
 const MAX_RECORDING_MS = 15_000;
 const SPEECH_LANGUAGE = "en-US";
-const SPEECH_RATE = 0.92;
 const RIDE_WORDS = /\b(ride|uber|pickup|taxi|car|wheelchair|wav|uberx)\b/i;
+const MARIA_PREFS = MARIA_PROFILE.communicationPreferences;
 
 function looksLikeRide(text: string): boolean {
   return RIDE_WORDS.test(text);
@@ -167,7 +170,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     (text: string, settle: () => void) => {
       Speech.speak(text, {
         language: SPEECH_LANGUAGE,
-        rate: SPEECH_RATE,
+        rate: deviceSpeechRate(MARIA_PREFS),
         onDone: settle,
         onStopped: settle,
         onError: settle,
@@ -178,6 +181,9 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
 
   const speak = useCallback(
     async (text: string, kind: ConversationReplyKind, pending: PendingApproval | null = null) => {
+      const spoken = spokenTextForTts(text, MARIA_PREFS, {
+        repeatConfirmation: pending?.tool === "book_ride",
+      });
       const settle = () =>
         patch({
           phase: kind === "clarification" ? "clarify" : pending ? "approving" : "idle",
@@ -193,7 +199,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
       });
 
       try {
-        const bytes = await fetchKasamaVoice(text);
+        const bytes = await fetchKasamaVoice(spoken);
         if (!mounted.current) return;
         const file = new File(Paths.cache, "kasama-reply.mp3");
         if (!file.exists) file.create();
@@ -212,7 +218,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         player.play();
       } catch {
         if (!mounted.current) return;
-        speakWithDevice(text, settle);
+        speakWithDevice(spoken, settle);
       }
     },
     [patch, speakWithDevice, stopVoice],

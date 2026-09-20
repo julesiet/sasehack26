@@ -4,7 +4,14 @@
  * The iOS app records with `expo-audio` and uploads the clip here (Scribe).
  * Kasama's reply is synthesized here (ElevenLabs TTS) and played on device.
  * Keys stay on the server; the app never sees `ELEVENLABS_API_KEY`.
+ * TTS speed follows Maria's `speaksSlowly` preference (#31).
  */
+
+import {
+  MARIA_PROFILE,
+  elevenLabsSpeechSpeed,
+  type CommunicationPreferences,
+} from "@kasama/shared";
 
 export const ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text";
 export const ELEVENLABS_STT_MODEL = "scribe_v1";
@@ -45,6 +52,7 @@ type SpeakerDeps = {
   apiKey: string | undefined;
   voiceId?: string;
   fetchImpl?: typeof fetch;
+  preferences?: CommunicationPreferences;
 };
 
 export function createElevenLabsTranscriber({
@@ -82,6 +90,7 @@ export function createElevenLabsSpeaker({
   apiKey,
   voiceId = process.env.ELEVENLABS_VOICE_ID || DEFAULT_KASAMA_VOICE_ID,
   fetchImpl = fetch,
+  preferences = MARIA_PROFILE.communicationPreferences,
 }: SpeakerDeps): Speaker {
   return async (text) => {
     if (!apiKey) {
@@ -101,7 +110,7 @@ export function createElevenLabsSpeaker({
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
-          speed: 0.88,
+          speed: elevenLabsSpeechSpeed(preferences),
         },
       }),
     });
