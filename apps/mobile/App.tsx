@@ -4,8 +4,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { CaretakerScreen } from "./src/screens/CaretakerScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { SeniorScreen } from "./src/screens/SeniorScreen";
+import { SpeechDebugScreen } from "./src/screens/SpeechDebugScreen";
 
-type Screen = "home" | "senior" | "caretaker";
+type Screen = "home" | "senior" | "caretaker" | "speechDebug";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
@@ -16,6 +17,7 @@ export default function App() {
         <HomeScreen
           onOpenSenior={() => setScreen("senior")}
           onOpenCaretaker={() => setScreen("caretaker")}
+          onOpenSpeechDebug={() => setScreen("speechDebug")}
         />
       ) : null}
       {screen === "senior" ? (
@@ -23,6 +25,9 @@ export default function App() {
       ) : null}
       {screen === "caretaker" ? (
         <CaretakerScreen onBack={() => setScreen("home")} onOpenSenior={() => setScreen("senior")} />
+      ) : null}
+      {screen === "speechDebug" ? (
+        <SpeechDebugScreen onBack={() => setScreen("home")} />
       ) : null}
       <StatusBar style="dark" />
     </SafeAreaProvider>

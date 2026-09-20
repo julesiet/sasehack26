@@ -6,9 +6,10 @@ import { apiUrl } from "../lib/api";
 type Props = {
   onOpenSenior: () => void;
   onOpenCaretaker: () => void;
+  onOpenSpeechDebug: () => void;
 };
 
-export function HomeScreen({ onOpenSenior, onOpenCaretaker }: Props) {
+export function HomeScreen({ onOpenSenior, onOpenCaretaker, onOpenSpeechDebug }: Props) {
   const [devOpen, setDevOpen] = useState(false);
   const [health, setHealth] = useState("checking API…");
 
@@ -35,6 +36,9 @@ export function HomeScreen({ onOpenSenior, onOpenCaretaker }: Props) {
           </Pressable>
           <Pressable style={styles.devButton} onPress={onOpenCaretaker}>
             <Text style={styles.devButtonLabel}>Caretaker</Text>
+          </Pressable>
+          <Pressable style={styles.devButton} onPress={onOpenSpeechDebug}>
+            <Text style={styles.devButtonLabel}>Speech debug</Text>
           </Pressable>
         </View>
       ) : (
