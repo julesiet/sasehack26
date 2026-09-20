@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { toolNameSchema } from "./tools";
+import { pendingApprovalSchema } from "./approval";
+import { toolNameSchema, uberProductSchema } from "./tools";
 
 /**
  * Voice conversation loop contracts (#4).
@@ -47,7 +48,7 @@ export type ConversationSpeaker = z.infer<typeof conversationSpeakerSchema>;
 /**
  * - `answer`: Kasama answered or acknowledged; the turn is complete.
  * - `clarification`: Kasama asked one follow-up question and is waiting.
- * - `proposal`: Kasama proposed an action that still needs human approval (#8).
+ * - `proposal`: Kasama proposed an action that still needs human approval (#6).
  */
 export const conversationReplyKindSchema = z.enum(["answer", "clarification", "proposal"]);
 export type ConversationReplyKind = z.infer<typeof conversationReplyKindSchema>;
@@ -71,6 +72,7 @@ export const activeRequestSchema = z.object({
   /** ISO date (YYYY-MM-DD) Kasama resolved from words like "tomorrow". */
   date: z.string().optional(),
   appointmentId: z.string().optional(),
+  product: uberProductSchema.optional(),
   status: z.enum(["gathering", "proposed", "accepted"]),
 });
 export type ActiveRequest = z.infer<typeof activeRequestSchema>;
@@ -113,6 +115,8 @@ export const conversationTurnResponseSchema = z.object({
   clarificationsAsked: z.number().int().nonnegative(),
   plan: conversationPlanSchema.default({ steps: [] }),
   failure: conversationFailureSchema.nullable().default(null),
+  /** Present when Kasama is waiting for a human yes/no on the iPhone. */
+  pendingApproval: pendingApprovalSchema.nullable().default(null),
 });
 export type ConversationTurnResponse = z.infer<typeof conversationTurnResponseSchema>;
 

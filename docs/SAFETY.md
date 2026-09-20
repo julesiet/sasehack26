@@ -16,7 +16,7 @@ Human-readable policy. The encoded table is `packages/shared/src/policy.ts`. If 
 | Share health information | Explicit consent + recipient on allow-list |
 | Diagnose | Never |
 
-`book_ride` also counts as `spend_money`.
+`book_ride` also counts as `spend_money`. `notify_caretaker` is `draft_caretaker_message` until a human token is present, then `send_message`.
 
 ## Actors
 
@@ -26,8 +26,10 @@ A token from `actor: "model"` is **not** approval (`model_cannot_self_approve`).
 
 ## Audit
 
-Every invoke writes: who asked, what was proposed, approval, whether execute was attempted, outcome. See `GET /audit` (all events, or `?sessionId=`) and `GET /sessions/:sessionId` (session-scoped events plus the current request, pending approval, last booking, and consent).
+Every invoke writes: who asked, what was proposed, approval, whether execute was attempted, outcome. A human "No" writes `declined_by_human` and never executes. See `GET /audit` (all events, or `?sessionId=`), `GET /sessions/:sessionId` (pending approval, last approval, last booking, consent), and `POST /approvals` for the iPhone Yes / No.
 
 ## Language
 
 Signals are “worth reviewing.” Kasama must never diagnose, change a prescription, or book/charge without a human yes.
+
+`POST /composio/execute` may create a Gmail draft (`GMAIL_CREATE_EMAIL_DRAFT`) or send (`GMAIL_SEND_EMAIL`) when the HTTP caller asks. Default remains `GMAIL_GET_PROFILE`. Conversation still cannot send through Composio. `notify_caretaker` send is mocked until that path is wired. A model actor cannot self-approve a send.

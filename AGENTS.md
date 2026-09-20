@@ -56,6 +56,8 @@ pnpm typecheck
 pnpm test
 ```
 
+GitHub Actions on pull requests and `main` runs `pnpm typecheck` and `pnpm test` (`.github/workflows/ci.yml`). No `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY` is required.
+
 `pnpm dev`, `pnpm start`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy.
 
 There is no product website. `http://localhost:3001` is the API. The app is Expo Go (`pnpm start` / `pnpm dev`) or the Simulator (`pnpm ios`). For a phone, put this Mac's LAN IP in `apps/mobile/.env` as `EXPO_PUBLIC_API_URL=http://<ip>:3001` (`ipconfig getifaddr en0`) so the QR is not localhost. Restart Expo after changing `.env`.
@@ -65,25 +67,26 @@ There is no product website. `http://localhost:3001` is the API. The app is Expo
 - `GET /` — service hint
 - `GET /health` — `{ ok: true, service: "kasama-api" }`
 - `POST /tools/:name` — validate → policy → audit → session projection → stub execute
-- `GET /sessions/:sessionId` — in-memory session view (current request, pending approval, appointment, last Uber booking, caretaker activity, care signal, session events)
+- `GET /sessions/:sessionId` — in-memory session view (current request, pending approval, last approval, last Uber options, appointment, last Uber booking, caretaker activity, care signal, session events)
 - `GET /audit` — `{ events: [...] }` all process-local events; optional `?sessionId=` filters. Cleared on process restart
-- `POST /conversation/turn` — `{ transcript, sessionId? }` → Kasama's reply + `kind` + `plan` + `failure`. ChatGPT plans when `MODEL_API_KEY` is set; otherwise the rules-based turn. Every tool still goes through policy + audit. ChatGPT is never allowed to book or send.
+- `POST /conversation/turn` — `{ transcript, sessionId? }` → Kasama's reply + `kind` + `plan` + `failure` + `pendingApproval`. ChatGPT plans when `MODEL_API_KEY` is set; otherwise the rules-based turn. Every tool still goes through policy + audit. ChatGPT is never allowed to book or send. A spoken yes after a ride plan opens the $24.50 checkpoint; a second yes (or tap) books as `senior`.
+- `POST /approvals` — `{ decision: "approve" | "decline", sessionId?, actor?: "senior" | "caretaker" }` → resolve the pending checkpoint. Same policy + audit as tools. Model actors are rejected.
 - `POST /speech/transcribe` — multipart `file` → `{ transcript }` via ElevenLabs (needs `ELEVENLABS_API_KEY` in `apps/api/.env`; `501` otherwise)
 - `POST /speech/speak` — `{ text }` → MPEG audio of Kasama (same key, plus Text to Speech on the key; `501` otherwise, device falls back to iOS speech)
 - `POST /composio/connect` — `{ userId?, toolkit?, wait? }` → Gmail Connect Link or `{ connected: true }`. Session user is `senior_maria` (`MARIA_PROFILE.id`). Needs `COMPOSIO_API_KEY` in `apps/api/.env`; `501` otherwise
-- `POST /composio/execute` — `{ userId?, toolSlug?, arguments? }` → session tool result + `logId`. Defaults to `GMAIL_GET_PROFILE`. `409` with a Connect Link if Gmail is not connected
+- `POST /composio/execute` — `{ userId?, toolSlug?, arguments? }` → session tool result + `logId`. Defaults to `GMAIL_GET_PROFILE`. Pass `GMAIL_CREATE_EMAIL_DRAFT` for a caretaker draft or `GMAIL_SEND_EMAIL` to send to `juleselvandrade@gmail.com`. `409` with a Connect Link if Gmail is not connected. `GMAIL_SEND_DRAFT` is rejected. Not wired into `notify_caretaker` or conversation.
 
 Omitted `sessionId` on a tool call is stored as `default`. Senior and caretaker clients poll the same `sessionId`.
 
-Tools: `get_appointment`, `find_ride_options`, `book_ride`, `notify_caretaker`.
+Tools: `get_appointment`, `find_ride_options`, `book_ride`, `notify_caretaker`. After a human yes, `book_ride` returns `status: "booked"` and a confirmation id, or `success: false` if the confirmation cannot be proven. `notify_caretaker` drafts automatically (`preview`, not sent). Send needs a human `approvalToken` (actor ≠ `model`) and currently mocks email/SMS.
 
-Calendar and Uber are **stubs**. Policy and audit are real. Live Uber is later (`#14` / `#7`).
+Calendar is **seeded** (`get_appointment` for Maria's tomorrow appointment). Uber search and book use a controlled in-process provider (`apps/api/src/uber-provider.ts`). Policy and audit are real. Live Uber is `#14`.
 
 ## Mobile
 
 Expo Go only (`pnpm start` or `pnpm ios`). Add only Expo Go–compatible packages; no native speech-to-text modules and no `expo prebuild`. Speech-to-text and Kasama's voice run on the API via ElevenLabs. The device falls back to `expo-speech` if TTS is not configured.
 
-Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Keep text ≥ 28pt and tap targets ≥ 68pt on senior screens.
+Senior screen design tokens live in `apps/mobile/src/theme.ts`. Conversation phases and what each looks like are in [ARCHITECTURE.md](ARCHITECTURE.md#senior-conversation-screen-4). Senior tabs: Home (sun welcome), Chat (last started conversation), Tasks (empty). Active tab is sun orange. On Home the compact tab bar is 80% opaque over the sun. Confirmation is a descriptive Cancel / Confirm card that only appears for a pending (or just-finished) decision. Tap targets ≥ 68pt on senior actions.
 
 ## Safety (non-negotiable)
 
