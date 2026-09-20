@@ -3413,3 +3413,48 @@
 **Review Record Digest**: sha256:d3236eebc13aae8d5c2ead347dd9d3b461fd0a7f79e6b4d2937db440a8a2fa20
 
 ---
+
+## Error Logged
+**Timestamp**: 2026-09-20T01:29:20Z
+**Event**: ERROR_LOGGED
+**Tool**: aidlc-utility
+**Command**: aidlc-utility config-change --test-strategy minimal --review none --sensors off --learnings off --yes
+**Error**: config-change does not accept --yes.
+
+---
+
+## Test Strategy Change
+**Timestamp**: 2026-09-20T01:29:23Z
+**Event**: TEST_STRATEGY_CHANGED
+**Old Strategy**: Standard
+**New Strategy**: Minimal
+
+---
+
+## Review Class Change
+**Timestamp**: 2026-09-20T01:29:23Z
+**Event**: REVIEW_CLASS_CHANGED
+**Old Override**: none set
+**New Override**: none
+
+---
+
+## Ceremony Set
+**Timestamp**: 2026-09-20T01:29:23Z
+**Event**: CEREMONY_SET
+**Key**: sensors
+**Old**: on
+**New**: off
+**Source**: you
+
+---
+
+## Ceremony Set
+**Timestamp**: 2026-09-20T01:29:23Z
+**Event**: CEREMONY_SET
+**Key**: learnings
+**Old**: on
+**New**: off
+**Source**: you
+
+---
