@@ -57,6 +57,7 @@ describe("conversation contract", () => {
     expect(chatTitleForIntent("ride", "the grocery store")).toBe("Ride");
     expect(chatTitleForIntent("medication_reminder")).toBe("Medication reminder");
     expect(chatTitleForIntent("hospital_schedule")).toBe("Hospital visit");
+    expect(chatTitleForIntent("family_update")).toBe("Family update");
     expect(chatTitleForIntent("unknown")).toBe("New chat");
   });
 

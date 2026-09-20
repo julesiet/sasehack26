@@ -70,7 +70,7 @@ const DOCTOR = /\b(doctor'?s?|dr\.?|appointment|check ?up|clinic|chen|physician)
 const APPOINTMENT_INFO = /\b(what time|when is|when'?s|what day|do i have|remind me)\b/;
 const VAGUE_PLACE = /\b(somewhere|anywhere|i don'?t know|not sure|dunno|um+|uh+)\b/;
 const NOTIFY =
-  /\b(tell|text|message|notify|let (my )?(family|son|daughter|james|caretaker) know)\b/;
+  /\b(tell|text|message|notify|email|e-mail|send (an |a )?(email|e-mail|message)|let (my )?(family|son|daughter|james|jules|caretaker) know)\b/;
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^\p{L}\p{N}'\s.-]/gu, " ").replace(/\s+/g, " ").trim();
@@ -172,11 +172,21 @@ async function openBookingCheckpoint(sessionId: string, active: ActiveRequest): 
   };
 }
 
-function draftNotifySummary(transcript: string): string {
-  if (DOCTOR.test(normalize(transcript))) {
+function notifyBodyFromTranscript(transcript: string): string {
+  const saying = transcript.match(/\b(?:saying|that|about)\s+(.+)$/i);
+  const raw = saying?.[1]?.trim() || transcript.trim();
+  if (/missed.{0,40}medication/i.test(raw)) {
+    return "Maria missed her medication reminder.";
+  }
+  if (DOCTOR.test(normalize(raw))) {
     return "Maria is going to her doctor's appointment.";
   }
-  return `Maria asked me to let you know: ${transcript.trim()}`;
+  return `Maria asked me to let you know: ${raw.replace(/^(that\s+)/i, "")}`;
+}
+
+function wantsNotify(text: string): boolean {
+  if (!NOTIFY.test(text)) return false;
+  return !RIDE.test(text) || /\bemail\b/.test(text);
 }
 
 async function openNotifyCheckpoint(
@@ -199,7 +209,7 @@ async function openNotifyCheckpoint(
   return {
     text: `${preview} ${pending?.prompt ?? notifyApprovalPrompt()}`,
     kind: "proposal",
-    activeRequest: sessionStore.getConversation(sessionId).activeRequest ?? null,
+    activeRequest: { intent: "family_update", status: "proposed" },
     askedClarification: false,
     plan: planFromAuditEvents(auditLog.list().slice(before)),
     failure: null,
@@ -312,11 +322,18 @@ function careRulesNeeded(
   }
   if (
     decided.activeRequest?.intent === "medication_reminder" ||
-    decided.activeRequest?.intent === "hospital_schedule"
+    decided.activeRequest?.intent === "hospital_schedule" ||
+    decided.activeRequest?.intent === "family_update"
   ) {
     return false;
   }
+  if (pending?.tool === "notify_caretaker") {
+    return false;
+  }
   const text = normalize(transcript);
+  if (wantsNotify(text)) {
+    return false;
+  }
   return (
     looksLikeMedicationReminder(text) ||
     looksLikeHospitalSchedule(text, RIDE.test(text)) ||
@@ -515,6 +532,10 @@ async function decide(
     }
   }
 
+  if (wantsNotify(text)) {
+    return await openNotifyCheckpoint(sessionId, notifyBodyFromTranscript(transcript), transcript);
+  }
+
   if (looksLikeMedicationReminder(text)) {
     const parsed = parseMedicationReminder(text);
     if (parsed) {
@@ -616,14 +637,6 @@ async function decide(
       },
       askedClarification: true,
     };
-  }
-
-  if (NOTIFY.test(text) && !RIDE.test(text)) {
-    return await openNotifyCheckpoint(
-      sessionId,
-      draftNotifySummary(transcript),
-      transcript,
-    );
   }
 
   // Appointment question ("what time is my appointment").

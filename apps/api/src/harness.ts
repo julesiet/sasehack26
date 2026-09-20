@@ -86,6 +86,8 @@ export const KASAMA_CHAT_TOOLS = [
         properties: {
           summary: { type: "string" },
           urgency: { type: "string", enum: ["low", "normal", "high"] },
+          recipientId: { type: "string" },
+          recipientName: { type: "string" },
         },
         required: ["summary", "urgency"],
       },

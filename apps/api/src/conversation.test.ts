@@ -152,6 +152,28 @@ describe("runConversationTurn", () => {
     }
   });
 
+  it("previews an email to James Alvarez from a spoken send request", async () => {
+    const draft = await turn("send an email to james alvarez saying i missed my medication");
+    expect(draft.kind).toBe("proposal");
+    expect(draft.pendingApproval?.tool).toBe("notify_caretaker");
+    expect(draft.pendingApproval?.preview).toMatch(/missed.*medication/i);
+    const input = sessionStore.get("voice-1").pendingApproval?.input as {
+      recipientName?: string;
+      summary?: string;
+      urgency?: string;
+    };
+    expect(input.recipientName).toBe("James Alvarez");
+    expect(input.urgency).toBe("normal");
+    expect(input.summary).toMatch(/missed her medication/i);
+    expect(sessionStore.get("voice-1").caretakerActivity.some((item) => item.sent)).toBe(false);
+  });
+
+  it("previews an email when Maria names Jules", async () => {
+    const draft = await turn("send an email to jules saying I am going to the doctor");
+    const input = sessionStore.get("voice-1").pendingApproval?.input as { recipientName?: string };
+    expect(input.recipientName).toBe("Jules");
+  });
+
   it("asks exactly one clarification when the destination is missing", async () => {
     const first = await turn("I need a ride");
     expect(first.kind).toBe("clarification");
