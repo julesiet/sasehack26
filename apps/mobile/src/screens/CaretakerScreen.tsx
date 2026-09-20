@@ -102,7 +102,11 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
             ) : null}
           </View>
 
-          <OverviewCards appointment={dashboard.appointment} ride={dashboard.ride} />
+          <OverviewCards
+            appointment={dashboard.appointment}
+            ride={dashboard.ride}
+            familyUpdate={dashboard.familyUpdate}
+          />
           <ConsentRecord items={dashboard.consentItems} />
           <ActivitySummary
             items={dashboard.activity}

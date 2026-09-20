@@ -1,8 +1,9 @@
 import { selectedRideOption, type LastApproval, type PendingApproval } from "./approval";
 import { emptyConversationState, allConversationTurns } from "./conversation";
+import { resolveFamilyRecipient, titleCaseUrgency } from "./family";
 import { getMariaSeedBundle, type MariaSeedBundle } from "./seed";
-import type { SessionView } from "./session";
-import type { UberProduct, UberRideOption } from "./tools";
+import type { CaretakerActivityItem, SessionView } from "./session";
+import { notifyCaretakerInputSchema, type UberProduct, type UberRideOption } from "./tools";
 
 export const caretakerOverviewStatusSchema = ["confirmed", "pending", "declined", "idle"] as const;
 export type CaretakerOverviewStatus = (typeof caretakerOverviewStatusSchema)[number];
@@ -42,6 +43,17 @@ export type CaretakerRideCard = {
   booked: boolean;
 };
 
+export type CaretakerFamilyUpdate = {
+  status: "draft" | "sent" | "not_sent";
+  kicker: "FAMILY UPDATE";
+  headline: string;
+  summary: string;
+  urgencyLabel: string;
+  recipientName: string;
+  sentLine: string | null;
+  whenLabel: string | null;
+};
+
 export type CaretakerDashboard = {
   dateLabel: string;
   viewerFirstName: string;
@@ -53,6 +65,7 @@ export type CaretakerDashboard = {
   overviewBadge: string | null;
   appointment: CaretakerAppointmentCard;
   ride: CaretakerRideCard | null;
+  familyUpdate: CaretakerFamilyUpdate | null;
   consentItems: CaretakerConsentItem[];
   activity: CaretakerTimelineItem[];
 };
@@ -169,6 +182,7 @@ export function buildCaretakerDashboard(input: {
     overviewBadge: overviewBadgeFor(status),
     appointment: appointmentCard(view, seed, now),
     ride: rideCard(view, seed),
+    familyUpdate: familyUpdateCard(view, senior, now),
     consentItems: consentItems(view, senior),
     activity: activityItems(view, senior),
   };
@@ -206,6 +220,69 @@ function rideCard(view: SessionView, seed: MariaSeedBundle): CaretakerRideCard |
     confirmationId: booked ? view.lastBooking?.confirmationId : undefined,
     booked,
   };
+}
+
+function familyUpdateCard(
+  view: SessionView,
+  senior: string,
+  now: Date,
+): CaretakerFamilyUpdate | null {
+  const notify = latestNotifyActivity(view);
+  const pending = isNotifyApproval(view.pendingApproval) ? view.pendingApproval : null;
+  const lastNotify = isNotifyApproval(view.lastApproval) ? view.lastApproval : null;
+
+  if (notify?.sent) {
+    const recipientName = displayRecipientName(notify.recipientName);
+    return {
+      status: "sent",
+      kicker: "FAMILY UPDATE",
+      headline: "Sent",
+      summary: notify.summary,
+      urgencyLabel: titleCaseUrgency(notify.urgency ?? "normal"),
+      recipientName,
+      sentLine: `Sent to ${recipientName}`,
+      whenLabel: formatAppointmentWhen(notify.timestamp, now),
+    };
+  }
+
+  if (notify?.preview || pending) {
+    const pendingInput = notifyCaretakerInputSchema.safeParse(pending?.input);
+    const draft = pendingInput.success ? pendingInput.data : null;
+    return {
+      status: "draft",
+      kicker: "FAMILY UPDATE",
+      headline: "Draft — awaiting confirmation",
+      summary:
+        notify?.summary ?? pending?.preview ?? draft?.summary ?? "Preview only — not sent yet.",
+      urgencyLabel: titleCaseUrgency(notify?.urgency ?? draft?.urgency ?? "normal"),
+      recipientName: displayRecipientName(notify?.recipientName ?? draft?.recipientName),
+      sentLine: null,
+      whenLabel: null,
+    };
+  }
+
+  if (lastNotify?.decision === "declined") {
+    return {
+      status: "not_sent",
+      kicker: "FAMILY UPDATE",
+      headline: "Not sent",
+      summary: `${senior} cancelled this message.`,
+      urgencyLabel: titleCaseUrgency("normal"),
+      recipientName: displayRecipientName(),
+      sentLine: null,
+      whenLabel: null,
+    };
+  }
+
+  return null;
+}
+
+function latestNotifyActivity(view: SessionView): CaretakerActivityItem | undefined {
+  return [...view.caretakerActivity].reverse().find((item) => item.summary);
+}
+
+function displayRecipientName(name?: string): string {
+  return name?.trim() || resolveFamilyRecipient("").name;
 }
 
 function selectedRide(view: SessionView): UberRideOption | undefined {
@@ -388,6 +465,12 @@ function isRideApproval(
   value: PendingApproval | LastApproval | null | undefined,
 ): value is PendingApproval | LastApproval {
   return value?.tool === "book_ride" || value?.action === "book_ride";
+}
+
+function isNotifyApproval(
+  value: PendingApproval | LastApproval | null | undefined,
+): value is PendingApproval | LastApproval {
+  return value?.tool === "notify_caretaker" || value?.action === "notify_caretaker";
 }
 
 function sameCalendarDay(a: Date, b: Date): boolean {

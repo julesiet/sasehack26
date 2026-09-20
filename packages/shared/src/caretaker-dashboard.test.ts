@@ -231,4 +231,102 @@ describe("caretaker dashboard projection", () => {
       title: "Ride booking declined",
     });
   });
+
+  it("projects a draft FAMILY UPDATE for a notify preview", () => {
+    const dashboard = buildCaretakerDashboard({
+      view: view({
+        pendingApproval: {
+          tool: "notify_caretaker",
+          action: "notify_caretaker",
+          reason: "confirmation_required",
+          summary: "This action requires a confirmation token from a human.",
+          prompt: "I can send this to your family. Should I send it?",
+          detail: "Preview only — not sent yet.",
+          preview: "Maria missed her medication reminder.",
+          input: {
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            recipientName: "James Alvarez",
+          },
+          timestamp: NOW.toISOString(),
+          status: "pending",
+        },
+        caretakerActivity: [
+          {
+            id: "act_1",
+            timestamp: NOW.toISOString(),
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            sent: false,
+            preview: true,
+            recipientName: "James Alvarez",
+          },
+        ],
+      }),
+      seed: SEED,
+      now: NOW,
+    });
+    expect(dashboard.familyUpdate).toEqual({
+      status: "draft",
+      kicker: "FAMILY UPDATE",
+      headline: "Draft — awaiting confirmation",
+      summary: "Maria missed her medication reminder.",
+      urgencyLabel: "Normal",
+      recipientName: "James Alvarez",
+      sentLine: null,
+      whenLabel: null,
+    });
+  });
+
+  it("projects sent and cancelled FAMILY UPDATE copy", () => {
+    const sent = buildCaretakerDashboard({
+      view: view({
+        caretakerActivity: [
+          {
+            id: "act_sent",
+            timestamp: NOW.toISOString(),
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            sent: true,
+            preview: false,
+            recipientName: "James Alvarez",
+          },
+        ],
+      }),
+      seed: SEED,
+      now: NOW,
+    });
+    expect(sent.familyUpdate).toMatchObject({
+      status: "sent",
+      kicker: "FAMILY UPDATE",
+      headline: "Sent",
+      summary: "Maria missed her medication reminder.",
+      urgencyLabel: "Normal",
+      recipientName: "James Alvarez",
+      sentLine: "Sent to James Alvarez",
+      whenLabel: formatAppointmentWhen(NOW.toISOString(), NOW),
+    });
+
+    const cancelled = buildCaretakerDashboard({
+      view: view({
+        lastApproval: {
+          tool: "notify_caretaker",
+          action: "notify_caretaker",
+          decision: "declined",
+          actor: "senior",
+          timestamp: NOW.toISOString(),
+          summary: "Okay. I will not send that message.",
+          prompt: "I can send this to your family. Should I send it?",
+        },
+      }),
+      seed: SEED,
+      now: NOW,
+    });
+    expect(cancelled.familyUpdate).toMatchObject({
+      status: "not_sent",
+      kicker: "FAMILY UPDATE",
+      headline: "Not sent",
+      summary: "Maria cancelled this message.",
+    });
+  });
 });

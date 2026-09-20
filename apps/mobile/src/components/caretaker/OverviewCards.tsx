@@ -1,16 +1,22 @@
 import type { ComponentProps } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { CaretakerAppointmentCard, CaretakerRideCard } from "@kasama/shared";
+import type {
+  CaretakerAppointmentCard,
+  CaretakerFamilyUpdate,
+  CaretakerRideCard,
+} from "@kasama/shared";
 import { colors } from "../../theme";
 import { CaretakerCard, CaretakerCardHeader } from "./CaretakerCard";
+import { FamilyUpdateCard } from "./FamilyUpdateCard";
 
 type Props = {
   appointment: CaretakerAppointmentCard;
   ride: CaretakerRideCard | null;
+  familyUpdate: CaretakerFamilyUpdate | null;
 };
 
-export function OverviewCards({ appointment, ride }: Props) {
+export function OverviewCards({ appointment, ride, familyUpdate }: Props) {
   return (
     <View style={styles.stack}>
       <CaretakerCard>
@@ -35,6 +41,8 @@ export function OverviewCards({ appointment, ride }: Props) {
           <Text style={styles.title}>No ride selected yet</Text>
         )}
       </CaretakerCard>
+
+      {familyUpdate ? <FamilyUpdateCard update={familyUpdate} /> : null}
     </View>
   );
 }
