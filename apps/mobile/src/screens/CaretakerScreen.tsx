@@ -9,6 +9,7 @@ import { ConsentRecord } from "../components/caretaker/ConsentRecord";
 import { ContactsRow } from "../components/caretaker/ContactsRow";
 import { OverviewCards } from "../components/caretaker/OverviewCards";
 import { fetchSession } from "../lib/api";
+import { CareAwareScreen } from "./CareAwareScreen";
 import { colors } from "../theme";
 
 type Props = {
@@ -18,13 +19,15 @@ type Props = {
 
 /**
  * Designed caretaker dashboard (#9). Polls the same session Maria uses so a
- * booking shows up here without a manual refresh.
+ * booking shows up here without a manual refresh. Care notes opens the
+ * care-aware view (#10).
  */
 export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<SessionView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [page, setPage] = useState<"overview" | "careAware">("overview");
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +52,10 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
 
   const dashboard = useMemo(() => buildCaretakerDashboard({ view }), [view]);
 
+  if (page === "careAware") {
+    return <CareAwareScreen onBack={() => setPage("overview")} />;
+  }
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -72,19 +79,17 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
           <Text style={styles.subtitle}>{dashboard.subtitle}</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <CareNotesCard notes={dashboard.careNotes} />
+          <CareNotesCard notes={dashboard.careNotes} onPress={() => setPage("careAware")} />
           <ContactsRow contacts={dashboard.contacts} />
         </View>
 
         <LinearGradient
           colors={[
             colors.caretakerSky,
-            colors.skyGlowSoft,
-            colors.skyGlowWarm,
-            colors.bowlBottom,
-            colors.bowlTop,
+            colors.careAwareWash,
+            colors.careAwareWashDeep,
           ]}
-          locations={[0, 0.18, 0.4, 0.7, 1]}
+          locations={[0, 0.55, 1]}
           style={[styles.wash, { paddingBottom: Math.max(insets.bottom, 20) }]}
         >
           <View style={styles.overviewHeader}>
@@ -209,7 +214,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   homeLabel: {
-    color: colors.onOrange,
+    color: colors.caretakerInk,
     fontSize: 16,
     fontWeight: "600",
   },

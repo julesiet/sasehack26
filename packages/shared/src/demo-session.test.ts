@@ -69,7 +69,7 @@ describe("getMariaDemoSession", () => {
         label: "worth reviewing",
         note: seed.priorRequests.find((request) => request.flaggedConfusion)?.note ?? "",
         source: "maria_seed",
-        flaggedConfusionCount: 2,
+        flaggedConfusionCount: 3,
       },
       consentGranted: demo.consentGranted,
       conversation: demo.conversation,
