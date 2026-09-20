@@ -16,6 +16,7 @@ packages/shared/src/        Zod + policy + audit + session types (source of trut
 AGENTS.md                   Coding-agent operating manual
 ARCHITECTURE.md             System map
 docs/                       Extra canonical docs only (this folder)
+docs/demo/                  Printed 3-minute demo sheet (`pnpm demo:pdf`)
 ```
 
 New feature:
@@ -45,7 +46,7 @@ pnpm playground
 # or POST /playground after pnpm dev:api
 ```
 
-See [AGENTS.md](../AGENTS.md#test-with-the-playground-no-ios). The playground never auto-approves book / send / spend.
+See [AGENTS.md](../AGENTS.md#test-with-the-playground-no-ios). The playground never auto-approves book / send / spend. `pnpm demo:rehearse` is the 3-minute script; it does book the controlled Uber on a live-demo session.
 
 ## Code style
 

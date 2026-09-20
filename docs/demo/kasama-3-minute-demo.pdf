@@ -1,0 +1,126 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 3055 >>
+stream
+BT
+/F1 22 Tf
+1 0 0 1 48 736.0 Tm (KASAMA 3-MINUTE DEMO) Tj
+/F1 12 Tf
+1 0 0 1 48 708.0 Tm (Read this sheet. Do not improvise. Typed fallback is the same line.) Tj
+/F1 11 Tf
+1 0 0 1 48 692.0 Tm (Script issue-12. Rules-based copy \(KASAMA_DEMO=1\). Uber is the controlled provider.) Tj
+/F1 9 Tf
+1 0 0 1 48 665.0 Tm (----------------------------------------------------------------) Tj
+/F1 14 Tf
+1 0 0 1 48 648.0 Tm (SETUP \(BEFORE JUDGES SIT DOWN\) \(~20s\)) Tj
+/F1 12 Tf
+1 0 0 1 48 628.0 Tm (EXPECT: API on port 3001. KASAMA_DEMO=1. Reset the iOS default session to live-demo so) Tj
+1 0 0 1 48 612.0 Tm (the ride is not already booked. Senior mode on the demo phone. Optional second phone) Tj
+1 0 0 1 48 596.0 Tm (already on Caretaker.) Tj
+1 0 0 1 48 580.0 Tm (IF IT FAILS: If Expo cannot reach the API, stop. Do not improvise with a stale) Tj
+1 0 0 1 48 564.0 Tm (session.) Tj
+/F1 9 Tf
+1 0 0 1 48 540.0 Tm (----------------------------------------------------------------) Tj
+/F1 14 Tf
+1 0 0 1 48 523.0 Tm (INTRODUCE MARIA \(~20s\)) Tj
+/F1 12 Tf
+1 0 0 1 48 503.0 Tm (POINT: Presenter: This is Maria. She has a checkup with Dr. Chen tomorrow at 10:30. Do) Tj
+1 0 0 1 48 487.0 Tm (not open Chat yet. Stay on Senior Home.) Tj
+/F1 9 Tf
+1 0 0 1 48 463.0 Tm (----------------------------------------------------------------) Tj
+/F1 14 Tf
+1 0 0 1 48 446.0 Tm (ASK FOR THE RIDE \(~40s\)) Tj
+/F1 16 Tf
+1 0 0 1 48 426.0 Tm (SAY OR TYPE: Please get me a ride to my doctor tomorrow.) Tj
+/F1 12 Tf
+1 0 0 1 48 405.0 Tm (EXPECT: Kasama names Dr. Chen, tomorrow, 10:30, and a pickup around 10:15. Two large) Tj
+1 0 0 1 48 389.0 Tm (Uber cards: UberX $18.00 and Wheelchair Uber $24.50. Screen may say Finding Ubers.) Tj
+1 0 0 1 48 373.0 Tm (IF IT FAILS: Mic denied, STT missing, or a missed transcript: type the same line. Do) Tj
+1 0 0 1 48 357.0 Tm (not rephrase.) Tj
+/F1 9 Tf
+1 0 0 1 48 333.0 Tm (----------------------------------------------------------------) Tj
+/F1 14 Tf
+1 0 0 1 48 316.0 Tm (CHOOSE THE ACCESSIBLE UBER \(~25s\)) Tj
+/F1 16 Tf
+1 0 0 1 48 296.0 Tm (SAY OR TYPE: Choose the accessible one.) Tj
+/F1 13 Tf
+1 0 0 1 48 275.0 Tm (TAP: Wheelchair Uber card \($24.50\)) Tj
+/F1 12 Tf
+1 0 0 1 48 258.0 Tm (EXPECT: The Uber is $24.50. Should I book it?) Tj
+1 0 0 1 48 242.0 Tm (IF IT FAILS: Type: Choose the accessible one.) Tj
+/F1 9 Tf
+1 0 0 1 48 218.0 Tm (----------------------------------------------------------------) Tj
+/F1 14 Tf
+1 0 0 1 48 201.0 Tm (HUMAN YES - THEN BOOK \(~25s\)) Tj
+/F1 16 Tf
+1 0 0 1 48 181.0 Tm (SAY OR TYPE: Yes) Tj
+/F1 13 Tf
+1 0 0 1 48 160.0 Tm (TAP: Confirm) Tj
+/F1 12 Tf
+1 0 0 1 48 143.0 Tm (EXPECT: Kasama books the wheelchair Uber for $24.50 and reads a confirmation id) Tj
+1 0 0 1 48 127.0 Tm (\(UBER-WAV-0001 after a live-demo reset\). Nothing is charged until this yes.) Tj
+1 0 0 1 48 111.0 Tm (IF IT FAILS: Type Yes, or tap Confirm. If booking fails, tap Confirm again - do not) Tj
+1 0 0 1 48 95.0 Tm (pretend it booked.) Tj
+/F1 9 Tf
+1 0 0 1 48 71.0 Tm (----------------------------------------------------------------) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Length 1269 >>
+stream
+BT
+/F1 14 Tf
+1 0 0 1 48 736.0 Tm (CARETAKER MODE \(~40s\)) Tj
+/F1 13 Tf
+1 0 0 1 48 716.0 Tm (TAP: Home Dev -> Caretaker \(or the second iPhone already on Caretaker\)) Tj
+/F1 12 Tf
+1 0 0 1 48 699.0 Tm (EXPECT: Appointment, wheelchair ride, timestamp, consent, CONFIRMED. Care notes: worth) Tj
+1 0 0 1 48 683.0 Tm (reviewing, 15-minute lead, no diagnosis.) Tj
+1 0 0 1 48 667.0 Tm (POINT: Tap Care notes. Point at repeated questions or less sleep than usual. Say this) Tj
+1 0 0 1 48 651.0 Tm (is worth reviewing. Never a diagnosis.) Tj
+1 0 0 1 48 635.0 Tm (IF IT FAILS: If the ride is still the seeded UBER-WAV-SEED booking, the session was) Tj
+1 0 0 1 48 619.0 Tm (not reset. Stop and reset to live-demo.) Tj
+/F1 9 Tf
+1 0 0 1 48 595.0 Tm (----------------------------------------------------------------) Tj
+/F1 14 Tf
+1 0 0 1 48 578.0 Tm (DO NOT) Tj
+/F1 12 Tf
+1 0 0 1 48 559.0 Tm (Do not skip Confirm. Do not let ChatGPT plan \(KASAMA_DEMO=1\). Do not diagnose. Do not) Tj
+1 0 0 1 48 543.0 Tm (book twice. If Confirm stays on screen, the send/book failed - retry, do not claim) Tj
+1 0 0 1 48 527.0 Tm (success.) Tj
+1 0 0 1 48 511.0 Tm (Time budget is 170 seconds. Leave a few seconds of silence between beats so Kasama can) Tj
+1 0 0 1 48 495.0 Tm (finish speaking.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000373 00000 n 
+0000003480 00000 n 
+0000004801 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+4871
+%%EOF

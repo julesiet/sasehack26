@@ -4,6 +4,7 @@ import {
   MARIA_DEMO_CONFIRMATION_ID,
   getMariaDemoRideOptions,
   getMariaDemoSession,
+  getMariaLiveDemoSession,
 } from "./demo-session";
 import { getMariaDemoConversationTurns, getMariaSeedBundle } from "./seed";
 import { emptyConversationState } from "./conversation";
@@ -93,5 +94,60 @@ describe("getMariaDemoSession", () => {
       'Most recent response: "Thanks Kasama, that helps a lot. I\'ll be ready by 2:00."',
     ]);
     expect(demo.conversation).not.toEqual(emptyConversationState());
+  });
+});
+
+describe("getMariaLiveDemoSession", () => {
+  it("keeps Maria's appointment and history but leaves the ride unbooked", () => {
+    const live = getMariaLiveDemoSession(NOW);
+    const seed = getMariaSeedBundle(NOW);
+
+    expect(live.appointment.id).toBe(seed.appointment.id);
+    expect(live.lastBooking).toBeNull();
+    expect(live.lastApproval).toBeNull();
+    expect(live.lastRideOptions).toEqual([]);
+    expect(live.consentGranted).toBe(false);
+    expect(live.caretakerActivity).toEqual([]);
+    expect(live.conversation.activeChatId).toBeNull();
+    expect(live.conversation.turns).toEqual([]);
+    expect(live.conversation.chats.map((chat) => chat.title)).toEqual([
+      "Hospital visit",
+      "Medication reminder",
+    ]);
+    expect(live.tasks.map((task) => task.title)).toEqual([
+      "Lisinopril",
+      "St. Mary's Hospital",
+    ]);
+
+    const view: SessionView = {
+      sessionId: "default",
+      currentRequest: null,
+      pendingApproval: null,
+      lastApproval: live.lastApproval,
+      lastRideOptions: live.lastRideOptions,
+      appointment: live.appointment,
+      lastBooking: live.lastBooking,
+      lastMedicationReminder: live.lastMedicationReminder,
+      lastHospitalVisit: live.lastHospitalVisit,
+      tasks: live.tasks,
+      caretakerActivity: live.caretakerActivity,
+      caretakerNarrative: [],
+      careSignal: {
+        label: "worth reviewing",
+        note: seed.priorRequests.find((request) => request.flaggedConfusion)?.note ?? "",
+        source: "maria_seed",
+        flaggedConfusionCount: 3,
+      },
+      consentGranted: live.consentGranted,
+      conversation: live.conversation,
+      events: [],
+    };
+
+    const dashboard = buildCaretakerDashboard({ view, seed, now: NOW });
+    expect(dashboard.overviewStatus).toBe("idle");
+    expect(dashboard.ride).toBeNull();
+    expect(dashboard.careNotes).toMatch(/worth reviewing/i);
+    expect(dashboard.careNotes).toMatch(/15 minutes/i);
+    expect(dashboard.careNotes).toMatch(/No diagnosis noted/i);
   });
 });
