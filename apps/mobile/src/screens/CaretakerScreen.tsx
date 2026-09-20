@@ -53,7 +53,22 @@ export function CaretakerScreen({ onBack, onOpenSenior }: Props) {
   const dashboard = useMemo(() => buildCaretakerDashboard({ view }), [view]);
 
   if (page === "careAware") {
-    return <CareAwareScreen onBack={() => setPage("overview")} />;
+    return (
+      <CareAwareScreen
+        sessionId={DEFAULT_SESSION_ID}
+        onBack={() => setPage("overview")}
+        onFamilyUpdateChanged={() => {
+          void fetchSession(DEFAULT_SESSION_ID)
+            .then((next) => {
+              setView(next);
+              setError(null);
+            })
+            .catch(() => {
+              setError("Could not reach Kasama. Seeded details still show.");
+            });
+        }}
+      />
+    );
   }
 
   return (

@@ -52,11 +52,12 @@ describe("buildCareAwareView", () => {
     ]);
   });
 
-  it("keeps notify and remind copy from claiming a send or a diagnosis", () => {
+  it("describes notify as a confirmable family update and does not diagnose", () => {
     const view = buildCareAwareView({ seed: SEED, now: NOW });
     const notify = view.actions.find((action) => action.id === "notify_caretaker");
     const remind = view.actions.find((action) => action.id === "remind");
-    expect(notify?.detail).toMatch(/not sent/i);
+    expect(notify?.detail).toBe("Opens a family update. Confirm to email Jules.");
+    expect(notify?.detail.toLowerCase()).not.toMatch(/nothing was messaged|not sent/);
     expect(remind?.detail).toMatch(/did not change any medication/i);
   });
 });

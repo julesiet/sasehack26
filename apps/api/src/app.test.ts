@@ -696,6 +696,58 @@ describe("POST /approvals", () => {
     expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
   });
 
+  it("lets a caretaker confirm a notify draft", async () => {
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: true,
+      logId: "gmail_send_caretaker",
+    });
+
+    try {
+      await app.request("/tools/notify_caretaker", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          input: {
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            recipientName: "Sarah",
+          },
+          actor: "model",
+          sessionId: "caretaker-notify-1",
+        }),
+      });
+
+      const res = await app.request("/approvals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "caretaker-notify-1",
+          decision: "approve",
+          actor: "caretaker",
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.lastApproval.actor).toBe("caretaker");
+      expect(body.decision).toBe("approved");
+      expect(executeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+          arguments: expect.objectContaining({
+            recipient_email: "juleselvandrade@gmail.com",
+            body: "Maria missed her medication reminder.",
+          }),
+        }),
+      );
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
   it("cancels a drafted caretaker message and never sends it", async () => {
     await app.request("/tools/notify_caretaker", {
       method: "POST",

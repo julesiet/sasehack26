@@ -106,7 +106,7 @@ export function buildCareAwareView(input: {
       {
         id: "notify_caretaker",
         label: "Notify daughter",
-        detail: "Family updates are not sent from this screen. Nothing was messaged.",
+        detail: "Opens a family update. Confirm to email Jules.",
       },
       {
         id: "doctor_summary",

@@ -48,7 +48,7 @@ CI: GitHub Actions (`.github/workflows/ci.yml`) on pull requests and `main` runs
 
 ### Care-aware view (`#10`)
 
-`apps/mobile/src/screens/CareAwareScreen.tsx`. Opened from the caretaker dashboard Care notes card. Projection is `buildCareAwareView()` in `packages/shared/src/care-aware.ts` (usage, response times, repeated-question note, worth-reviewing quote, and quick actions from Maria's seed). Layout matches caretaker Overview: cream sky, then a peach wash of the same white cards (total usage, repeated questions, response time, worth reviewing). Demo-only quick actions (remind / notify daughter / prepare doctor summary) do not send, book, or diagnose. The orange arrow goes back to the caretaker dashboard.
+`apps/mobile/src/screens/CareAwareScreen.tsx`. Opened from the caretaker dashboard Care notes card. Projection is `buildCareAwareView()` in `packages/shared/src/care-aware.ts` (usage, response times, repeated-question note, worth-reviewing quote, and quick actions from Maria's seed). Layout matches caretaker Overview: cream sky, then a peach wash of the same white cards (total usage, repeated questions, response time, worth reviewing). Remind and prepare-doctor-summary stay local and do not send, book, or diagnose. **Notify daughter** drafts `notify_caretaker` on the shared `default` session (display recipient Sarah; delivery is Jules's Gmail). Confirm on the sheet sends as `actor: "caretaker"` through `POST /approvals`; Cancel declines the same way. The orange arrow goes back to the caretaker dashboard.
 
 ### Senior conversation screen (`#4`)
 
@@ -154,7 +154,7 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 - `packages/shared/src/communication.ts` — maps `communicationPreferences` to ElevenLabs speed, device TTS rate, spoken confirmation repeats, and the harness simple-language line (`#31`). No in-app toggle.
 - `packages/shared/src/demo-session.ts` — iOS `default` session start state: appointment, UberX + WAV options, seeded WAV booking (`UBER-WAV-SEED`), senior approval, Lisinopril reminder, St. Mary's visit, Tasks items, and `conversation.chats` (hospital visit, medication reminder, doctor ride). Senior Chat history, caretaker activity, and Tasks all read this from `GET /sessions/default` — do not add a second transcript store.
 - `packages/shared/src/caretaker-dashboard.ts` — caretaker screen projection from `SessionView` + seed (overview status, care notes, appointment, selected ride, consent rows, activity).
-- `packages/shared/src/care-aware.ts` — care-aware view (`#10`) projection from Maria's seed (usage, response times, repeated questions, worth-reviewing quote, demo actions).
+- `packages/shared/src/care-aware.ts` — care-aware view (`#10`) projection from Maria's seed (usage, response times, repeated questions, worth-reviewing quote, and quick actions). Notify daughter opens a family update; it does not claim that nothing was messaged.
 - `packages/shared/src/index.ts` — re-exports
 
 If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in `apps/api/src/invoke-tool.ts`, project any session fields in `apps/api/src/session-store.ts`, add tests, and update this file.
