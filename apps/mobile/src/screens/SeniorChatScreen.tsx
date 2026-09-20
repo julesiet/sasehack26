@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import {
   pendingHospitalVisit,
   pendingMedicationReminder,
   selectedRideOption,
   type ActiveRequest,
+  type ConversationIntent,
   type ConversationTurn,
   type LastApproval,
   type PendingApproval,
@@ -23,6 +25,9 @@ import { confirmationFromPending } from "../lib/mvp-confirmation";
 import { colors, type } from "../theme";
 
 type Props = {
+  title: string;
+  intent: ConversationIntent;
+  liveCards: boolean;
   phase: ConversationPhase;
   turns: ConversationTurn[];
   pendingApproval: PendingApproval | null;
@@ -33,6 +38,7 @@ type Props = {
   activeRequest: ActiveRequest | null;
   rideWork: RideWork;
   notice: string | null;
+  onBack: () => void;
   onSelectRide: (option: UberRideOption) => void;
   onConfirm: () => void;
   onCancel: () => void;
@@ -59,6 +65,9 @@ function confirmationStatus(
  * outside this screen so they stay fixed.
  */
 export function SeniorChatScreen({
+  title,
+  intent,
+  liveCards,
   phase,
   turns,
   pendingApproval,
@@ -69,6 +78,7 @@ export function SeniorChatScreen({
   activeRequest,
   rideWork,
   notice,
+  onBack,
   onSelectRide,
   onConfirm,
   onCancel,
@@ -87,13 +97,20 @@ export function SeniorChatScreen({
     lastHospitalVisit?.status === "cancelled" && hospitalJustResolved;
   const rideFinished =
     lastBooking?.status === "booked" && !pendingApproval && activeRequest?.status !== "proposed";
+  const rideIntent = intent === "ride" || intent === "unknown";
+  const reminderIntent = intent === "medication_reminder" || intent === "unknown";
+  const hospitalIntent = intent === "hospital_schedule" || intent === "unknown";
   const showOptions =
+    liveCards &&
+    rideIntent &&
     lastRideOptions.length > 0 &&
     justResolved?.decision !== "approved" &&
     !rideFinished &&
     !reminder &&
     !hospitalPending;
   const showRideConfirmation =
+    liveCards &&
+    rideIntent &&
     Boolean(card && cardStatus && !reminder && !hospitalPending) &&
     (pendingApproval?.tool === "book_ride" ||
       pendingApproval?.tool === "notify_caretaker" ||
@@ -117,11 +134,26 @@ export function SeniorChatScreen({
       keyboardDismissMode="on-drag"
       nestedScrollEnabled
     >
+      <View style={styles.header}>
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Chat"
+          style={({ pressed }) => [styles.back, pressed ? styles.pressed : null]}
+        >
+          <Ionicons name="chevron-back" size={28} color={colors.bowlTop} />
+          <Text style={styles.backLabel}>Chat</Text>
+        </Pressable>
+        <Text style={styles.title} accessibilityRole="header">
+          {title}
+        </Text>
+      </View>
+
       {turns.map((turn) => (
         <ChatBubble key={turn.id} speaker={turn.speaker} text={turn.text} />
       ))}
 
-      {rideWork === "finding" || rideWork === "booking" ? (
+      {liveCards && rideIntent && (rideWork === "finding" || rideWork === "booking") ? (
         <View style={styles.cardWrap}>
           <RideStatusCard work={rideWork} />
         </View>
@@ -141,7 +173,7 @@ export function SeniorChatScreen({
         </View>
       ) : null}
 
-      {reminder ? (
+      {liveCards && reminderIntent && reminder ? (
         <View style={styles.cardWrap}>
           <MedicationReminderCard
             reminder={reminder}
@@ -153,7 +185,7 @@ export function SeniorChatScreen({
         </View>
       ) : null}
 
-      {hospitalPending ? (
+      {liveCards && hospitalIntent && hospitalPending ? (
         <View style={styles.cardWrap}>
           <HospitalAppointmentCard
             visit={hospitalPending}
@@ -165,7 +197,7 @@ export function SeniorChatScreen({
         </View>
       ) : null}
 
-      {hospitalSaved && lastHospitalVisit ? (
+      {liveCards && hospitalIntent && hospitalSaved && lastHospitalVisit ? (
         <View style={styles.cardWrap}>
           <HospitalAppointmentCard
             visit={lastHospitalVisit}
@@ -176,7 +208,7 @@ export function SeniorChatScreen({
         </View>
       ) : null}
 
-      {hospitalCancelled && lastHospitalVisit ? (
+      {liveCards && hospitalIntent && hospitalCancelled && lastHospitalVisit ? (
         <View style={styles.cardWrap}>
           <HospitalAppointmentCard
             visit={lastHospitalVisit}
@@ -223,6 +255,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 24,
+  },
+  header: {
+    marginBottom: 16,
+    gap: 8,
+  },
+  back: {
+    alignSelf: "flex-start",
+    minHeight: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingRight: 16,
+  },
+  backLabel: {
+    ...type.button,
+    color: colors.bowlTop,
+    fontWeight: "600",
+  },
+  title: {
+    ...type.greeting,
+    color: colors.ink,
+  },
+  pressed: {
+    opacity: 0.85,
   },
   cardWrap: {
     marginTop: 4,

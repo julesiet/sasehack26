@@ -2,8 +2,10 @@ import {
   bookRideInputSchema,
   bookRideResultSchema,
   DEFAULT_SESSION_ID,
+  applyChatTitleFromRequest,
   describePendingApproval,
   emptyConversationState,
+  ensureActiveChat,
   findRideOptionsResultSchema,
   getAppointmentResultSchema,
   getMariaDemoSession,
@@ -13,7 +15,9 @@ import {
   saveHospitalVisitResultSchema,
   saveMedicationReminderInputSchema,
   saveMedicationReminderResultSchema,
+  selectChat,
   sessionViewSchema,
+  startNewChat,
   type Actor,
   type ActiveRequest,
   type Appointment,
@@ -67,6 +71,7 @@ export type ApplyConversationTurnInput = {
   failure: ConversationFailure | null;
   timestamp: string;
   extraKasamaTexts?: string[];
+  chatId?: string;
 };
 
 export type ApplyToolEventInput = {
@@ -124,6 +129,9 @@ function emptyState(sessionId: string): SessionState {
     lastRideOptions: demo.lastRideOptions,
     lastBooking: demo.lastBooking,
     lastApproval: demo.lastApproval,
+    lastMedicationReminder: demo.lastMedicationReminder,
+    lastHospitalVisit: demo.lastHospitalVisit,
+    tasks: demo.tasks,
     caretakerActivity: demo.caretakerActivity,
     consentGranted: demo.consentGranted,
     conversation: demo.conversation,
@@ -164,6 +172,7 @@ export type SessionStore = {
   getConversation: (sessionId: string) => ConversationState;
   applyToolEvent: (input: ApplyToolEventInput) => SessionView;
   applyConversationTurn: (input: ApplyConversationTurnInput) => SessionView;
+  startOrSelectChat: (input: { sessionId: string; chatId?: string; timestamp?: string }) => SessionView;
   declinePending: (input: { sessionId: string; actor: Actor }) => SessionView;
   clear: () => void;
 };
@@ -205,31 +214,38 @@ export function createSessionStore(): SessionStore {
       failure,
       timestamp,
       extraKasamaTexts,
+      chatId,
     }) {
       const state = getOrCreate(sessionId);
       const conversation = state.conversation;
+      if (chatId) {
+        selectChat(conversation, chatId);
+      }
+      const chat = ensureActiveChat(conversation, timestamp);
 
-      conversation.turns.push({
+      chat.turns.push({
         id: nextTurnId(),
         timestamp,
         speaker: "senior",
         text: seniorText,
       });
       for (const extra of extraKasamaTexts ?? []) {
-        conversation.turns.push({
+        chat.turns.push({
           id: nextTurnId(),
           timestamp,
           speaker: "kasama",
           text: extra,
         });
       }
-      conversation.turns.push({
+      chat.turns.push({
         id: nextTurnId(),
         timestamp,
         speaker: "kasama",
         text: kasamaText,
         kind,
       });
+      applyChatTitleFromRequest(chat, activeRequest);
+      conversation.turns = chat.turns;
 
       // The clarification budget is per request: it grows while Kasama is still
       // gathering and resets once the request resolves (proposal, answer, or dropped).
@@ -242,6 +258,19 @@ export function createSessionStore(): SessionStore {
       conversation.plan = plan;
       conversation.failure = failure;
 
+      return toView(state);
+    },
+    startOrSelectChat({ sessionId, chatId, timestamp }) {
+      const state = getOrCreate(sessionId);
+      const when = timestamp ?? new Date().toISOString();
+      if (chatId) {
+        const selected = selectChat(state.conversation, chatId);
+        if (!selected) {
+          return toView(state);
+        }
+        return toView(state);
+      }
+      startNewChat(state.conversation, when);
       return toView(state);
     },
     applyToolEvent({

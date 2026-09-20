@@ -1,5 +1,5 @@
 import { selectedRideOption, type LastApproval, type PendingApproval } from "./approval";
-import { emptyConversationState } from "./conversation";
+import { emptyConversationState, allConversationTurns } from "./conversation";
 import { getMariaSeedBundle, type MariaSeedBundle } from "./seed";
 import type { SessionView } from "./session";
 import type { UberProduct, UberRideOption } from "./tools";
@@ -297,7 +297,10 @@ function consentItems(view: SessionView, senior: string): CaretakerConsentItem[]
 }
 
 function activityItems(view: SessionView, senior: string): CaretakerTimelineItem[] {
-  const turns = view.conversation.turns;
+  const turns =
+    (view.conversation.chats?.length ?? 0) > 0
+      ? allConversationTurns(view.conversation)
+      : view.conversation.turns;
   if (turns.length === 0) {
     const fallback: CaretakerTimelineItem[] = [];
     if (view.lastBooking?.status === "booked") {
@@ -334,13 +337,25 @@ function activityItems(view: SessionView, senior: string): CaretakerTimelineItem
 }
 
 function summarizeMaria(text: string, senior: string): string {
-  if (/\b(ride|uber|book|doctor|appointment)\b/i.test(text)) {
+  if (/\b(ride|uber)\b/i.test(text)) {
     return `${senior} requested a ride`;
+  }
+  if (/\b(remind|lisinopril|medication)\b/i.test(text)) {
+    return `${senior} set a reminder`;
+  }
+  if (/\b(hospital|st\.?\s*mary)/i.test(text) || /\bappointment\b/i.test(text)) {
+    return `${senior} scheduled a hospital visit`;
   }
   return clip(text, 72);
 }
 
 function summarizeKasama(text: string, view: SessionView): string {
+  if (/\b(lisinopril|reminder)\b/i.test(text) && /\bsaved\b/i.test(text)) {
+    return "Kasama saved a reminder";
+  }
+  if (/\bappointment details\b/i.test(text) || (/\bsaved\b/i.test(text) && /\bhospital\b/i.test(text))) {
+    return "Kasama saved appointment details";
+  }
   if (view.lastBooking?.status === "booked" || /\b(booked|confirmation)\b/i.test(text)) {
     return "Kasama confirmed booking";
   }

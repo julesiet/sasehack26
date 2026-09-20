@@ -12,6 +12,7 @@ import {
   formatHospitalTimeLabel,
   getMariaAppointment,
   isKnownTool,
+  simpleLanguageInstruction,
   type ActiveRequest,
   type AuditEvent,
   type ConversationFailure,
@@ -180,9 +181,11 @@ function systemPrompt(now: Date, state: ConversationState): string {
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowDate = isoDate(tomorrow);
+  const simpleLanguage = simpleLanguageInstruction(MARIA_PROFILE.communicationPreferences);
   return [
     `You are Kasama, a voice-first companion for ${MARIA_PROFILE.name}.`,
-    "Speak in short, simple sentences she can hear. Never diagnose. Never change medication.",
+    ...(simpleLanguage ? [simpleLanguage] : []),
+    "Never diagnose. Never change medication.",
     'Care language is "worth reviewing" only — never a medical conclusion.',
     "Never say an Uber was booked or a message was sent. Those need a human yes on the iPhone.",
     "Do not call book_ride or notify_caretaker. Propose the action and wait.",

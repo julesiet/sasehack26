@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { conversationTurnSchema, type ConversationTurn } from "./conversation";
+import { conversationChatSchema, conversationTurnSchema, type ConversationChat, type ConversationTurn } from "./conversation";
 import { caretakerUrgencySchema } from "./tools";
 
 /**
@@ -170,42 +170,90 @@ export const priorRequestSchema = z.object({
 });
 export type PriorRequest = z.infer<typeof priorRequestSchema>;
 
+function atPastWeekday(
+  referenceDate: Date,
+  weekday: number,
+  hours: number,
+  minutes: number,
+): string {
+  const d = new Date(referenceDate);
+  const delta = weekday - d.getDay();
+  d.setDate(d.getDate() + delta);
+  if (d.getTime() > referenceDate.getTime()) {
+    d.setDate(d.getDate() - 7);
+  }
+  d.setHours(hours, minutes, 0, 0);
+  return d.toISOString();
+}
+
 /** Recent request history, including repeated-confusion markers for the care-signal insight. */
 export function getMariaPriorRequests(
   referenceDate: Date = new Date(),
 ): PriorRequest[] {
-  const yesterday = new Date(referenceDate);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const at = (hours: number, minutes: number) => {
-    const d = new Date(yesterday);
-    d.setHours(hours, minutes, 0, 0);
-    return d.toISOString();
-  };
-
   return [
     priorRequestSchema.parse({
-      id: "req_1",
-      timestamp: at(9, 5),
+      id: "req_appointment_1",
+      timestamp: atPastWeekday(referenceDate, 2, 8, 40),
+      requestText: "What time is my doctor appointment?",
+      flaggedConfusion: true,
+      note: "Asked about her doctor appointment.",
+    }),
+    priorRequestSchema.parse({
+      id: "req_appointment_2",
+      timestamp: atPastWeekday(referenceDate, 2, 9, 5),
+      requestText: "Did I already ask about my appointment?",
+      flaggedConfusion: true,
+      note: "Asked about the same appointment twice.",
+    }),
+    priorRequestSchema.parse({
+      id: "req_family_1",
+      timestamp: atPastWeekday(referenceDate, 4, 18, 20),
+      requestText: "Have I talked to my daughter today?",
+      flaggedConfusion: true,
+      note: "Asked about her daughter.",
+    }),
+    priorRequestSchema.parse({
+      id: "req_ride_1",
+      timestamp: atPastWeekday(referenceDate, 5, 9, 5),
       requestText: "Can you call me a ride to the doctor?",
       flaggedConfusion: false,
     }),
-    priorRequestSchema.parse({
-      id: "req_2",
-      timestamp: at(9, 9),
-      requestText: "Wait, did I already ask you to book the ride?",
-      flaggedConfusion: true,
-      note: "Asked the same question twice within 5 minutes.",
-    }),
-    priorRequestSchema.parse({
-      id: "req_3",
-      timestamp: at(9, 40),
-      requestText: "What time is my appointment again?",
-      flaggedConfusion: true,
-      note: "Third time asking within the hour.",
-    }),
   ];
 }
+
+export const careAwareUsageSchema = z.object({
+  totalMinutes: z.number().nonnegative(),
+  morningMinutes: z.number().nonnegative(),
+  afternoonMinutes: z.number().nonnegative(),
+  eveningMinutes: z.number().nonnegative(),
+  peakActivity: z.string().min(1),
+});
+export type CareAwareUsage = z.infer<typeof careAwareUsageSchema>;
+
+/** Demo Kasama-usage windows for the care-aware view (#10). */
+export const MARIA_CARE_AWARE_USAGE: CareAwareUsage = careAwareUsageSchema.parse({
+  totalMinutes: 12,
+  morningMinutes: 9,
+  afternoonMinutes: 3,
+  eveningMinutes: 0,
+  peakActivity: "8:30am - 9:15am during morning routine",
+});
+
+export const careAwareResponseSchema = z.object({
+  averageSeconds: z.number().nonnegative(),
+  dailySeconds: z.array(z.number().nonnegative()).length(7),
+  morningAverageSeconds: z.number().nonnegative(),
+  eveningAverageSeconds: z.number().nonnegative(),
+});
+export type CareAwareResponse = z.infer<typeof careAwareResponseSchema>;
+
+/** Monday–Sunday response times for the care-aware view (#10). */
+export const MARIA_CARE_AWARE_RESPONSE: CareAwareResponse = careAwareResponseSchema.parse({
+  averageSeconds: 4.2,
+  dailySeconds: [2.8, 3.4, 2.2, 5.1, 2.9, 6.2, 1.9],
+  morningAverageSeconds: 3.1,
+  eveningAverageSeconds: 5.8,
+});
 
 export const familyContactSchema = z.object({
   id: z.string(),
@@ -240,6 +288,11 @@ function atTime(referenceDate: Date, hours: number, minutes: number): string {
   return d.toISOString();
 }
 
+/** Seeded Chat / caretaker activity for the iOS `default` session. */
+export const MARIA_DEMO_CHAT_HOSPITAL_ID = "chat_hospital";
+export const MARIA_DEMO_CHAT_MEDICATION_ID = "chat_medication";
+export const MARIA_DEMO_CHAT_RIDE_ID = "chat_ride";
+
 /**
  * Seeded Chat / caretaker activity for the iOS `default` session.
  * Chat history UI must read these turns from the session — do not fork a second store.
@@ -270,6 +323,81 @@ export function getMariaDemoConversationTurns(
   ];
 }
 
+function getMariaDemoHospitalTurns(referenceDate: Date): ConversationTurn[] {
+  return [
+    conversationTurnSchema.parse({
+      id: "seed_hospital_1",
+      timestamp: atTime(referenceDate, 7, 10),
+      speaker: "senior",
+      text: "Schedule an appointment at St. Mary's for my annual physical.",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_hospital_2",
+      timestamp: atTime(referenceDate, 7, 12),
+      speaker: "kasama",
+      text: "I saved the appointment details for St. Mary's Hospital. That's Thursday at 10:00 AM.",
+      kind: "answer",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_hospital_3",
+      timestamp: atTime(referenceDate, 7, 15),
+      speaker: "senior",
+      text: "Thank you.",
+    }),
+  ];
+}
+
+function getMariaDemoMedicationTurns(referenceDate: Date): ConversationTurn[] {
+  return [
+    conversationTurnSchema.parse({
+      id: "seed_med_1",
+      timestamp: atTime(referenceDate, 7, 38),
+      speaker: "senior",
+      text: "Remind me to take Lisinopril every 4 days.",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_med_2",
+      timestamp: atTime(referenceDate, 7, 40),
+      speaker: "kasama",
+      text: "I saved the Lisinopril reminder. It is on your Tasks list. Kasama did not change any medication.",
+      kind: "answer",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_med_3",
+      timestamp: atTime(referenceDate, 7, 42),
+      speaker: "senior",
+      text: "Thanks.",
+    }),
+  ];
+}
+
+/** Oldest first. History UI sorts newest-first from last-turn time. */
+export function getMariaDemoChats(referenceDate: Date = new Date()): ConversationChat[] {
+  return [
+    conversationChatSchema.parse({
+      id: MARIA_DEMO_CHAT_HOSPITAL_ID,
+      title: "Hospital visit",
+      intent: "hospital_schedule",
+      startedAt: atTime(referenceDate, 7, 10),
+      turns: getMariaDemoHospitalTurns(referenceDate),
+    }),
+    conversationChatSchema.parse({
+      id: MARIA_DEMO_CHAT_MEDICATION_ID,
+      title: "Medication reminder",
+      intent: "medication_reminder",
+      startedAt: atTime(referenceDate, 7, 38),
+      turns: getMariaDemoMedicationTurns(referenceDate),
+    }),
+    conversationChatSchema.parse({
+      id: MARIA_DEMO_CHAT_RIDE_ID,
+      title: "Doctor ride",
+      intent: "ride",
+      startedAt: atTime(referenceDate, 8, 42),
+      turns: getMariaDemoConversationTurns(referenceDate),
+    }),
+  ];
+}
+
 export const mariaSeedBundleSchema = z.object({
   profile: seniorProfileSchema,
   appointment: seedAppointmentSchema,
@@ -280,6 +408,9 @@ export const mariaSeedBundleSchema = z.object({
   dashboardViewer: dashboardViewerSchema,
   familyContacts: z.array(familyContactSchema),
   conversationTurns: z.array(conversationTurnSchema),
+  conversationChats: z.array(conversationChatSchema),
+  careAwareUsage: careAwareUsageSchema,
+  careAwareResponse: careAwareResponseSchema,
 });
 export type MariaSeedBundle = z.infer<typeof mariaSeedBundleSchema>;
 
@@ -296,5 +427,8 @@ export function getMariaSeedBundle(referenceDate: Date = new Date()): MariaSeedB
     dashboardViewer: MARIA_DASHBOARD_VIEWER,
     familyContacts: MARIA_FAMILY_CONTACTS,
     conversationTurns: getMariaDemoConversationTurns(referenceDate),
+    conversationChats: getMariaDemoChats(referenceDate),
+    careAwareUsage: MARIA_CARE_AWARE_USAGE,
+    careAwareResponse: MARIA_CARE_AWARE_RESPONSE,
   });
 }

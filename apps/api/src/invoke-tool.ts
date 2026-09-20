@@ -5,7 +5,9 @@ import {
   findRideOptionsInputSchema,
   getAppointmentInputSchema,
   getAppointmentResultSchema,
+  getCareSignalResultSchema,
   getMariaAppointment,
+  getMariaSeedBundle,
   invokeToolRequestSchema,
   isKnownTool,
   notifyCaretakerInputSchema,
@@ -16,6 +18,7 @@ import {
   saveMedicationReminderInputSchema,
   saveMedicationReminderResultSchema,
   toolInputSchemas,
+  type CareSignalAction,
   type ToolName,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
@@ -57,6 +60,53 @@ function formatTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** Below this, a night counts as "less sleep than usual" for the weekly care signal. */
+const USUAL_SLEEP_HOURS = 7;
+/** This many same-topic repeats in the window counts as a "repeated question" signal. */
+const REPEATED_QUESTION_THRESHOLD = 2;
+
+function firstName(fullName: string): string {
+  return fullName.split(" ")[0] ?? fullName;
+}
+
+function computeCareSignal(): {
+  summary: string;
+  actions: CareSignalAction[];
+  diagnosis: false;
+} {
+  const seed = getMariaSeedBundle();
+  const name = firstName(seed.profile.name);
+
+  const flaggedCount = seed.priorRequests.filter((request) => request.flaggedConfusion).length;
+  const repeatedQuestion = flaggedCount >= REPEATED_QUESTION_THRESHOLD;
+
+  const averageSleepHours =
+    seed.wearableReadings.reduce((total, reading) => total + reading.sleepHours, 0) /
+    seed.wearableReadings.length;
+  const lessSleep = averageSleepHours < USUAL_SLEEP_HOURS;
+
+  const clauses: string[] = [];
+  if (repeatedQuestion) clauses.push(`${name} asked about the same appointment twice`);
+  if (lessSleep) clauses.push("slept less than usual this week");
+
+  if (clauses.length === 0) {
+    return {
+      summary: `Nothing unusual to review for ${name} this week.`,
+      actions: [],
+      diagnosis: false,
+    };
+  }
+
+  const actions: CareSignalAction[] = ["remind", "notify_caretaker"];
+  if (repeatedQuestion && lessSleep) actions.push("doctor_summary");
+
+  return {
+    summary: `${clauses.join(" and ")}.`,
+    actions,
+    diagnosis: false,
+  };
 }
 
 async function executeStub(name: ToolName, input: unknown, options?: { preview?: boolean }) {
@@ -175,6 +225,13 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
         confirmationId: "visit_st_marys_1",
         summary: `Appointment details saved for ${parsed.placeName}.`,
         visit: parsed,
+      });
+    }
+    case "get_care_signal": {
+      const signal = computeCareSignal();
+      return getCareSignalResultSchema.parse({
+        success: true,
+        ...signal,
       });
     }
     default: {

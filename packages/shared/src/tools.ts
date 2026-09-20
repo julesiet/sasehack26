@@ -8,6 +8,7 @@ export const toolNames = [
   "notify_caretaker",
   "save_medication_reminder",
   "save_hospital_visit",
+  "get_care_signal",
 ] as const;
 
 export type ToolName = (typeof toolNames)[number];
@@ -147,6 +148,20 @@ export const saveHospitalVisitResultSchema = z.object({
   visit: hospitalVisitDetailsSchema.optional(),
 });
 
+/** Suggested next actions a caretaker or Kasama can take on a care signal — never a medical action. */
+export const careSignalActionSchema = z.enum(["remind", "notify_caretaker", "doctor_summary"]);
+export type CareSignalAction = z.infer<typeof careSignalActionSchema>;
+
+export const getCareSignalInputSchema = z.object({}).strict();
+
+export const getCareSignalResultSchema = z.object({
+  success: z.boolean(),
+  summary: z.string(),
+  actions: z.array(careSignalActionSchema),
+  /** Always false — Kasama never diagnoses. Care language is "worth reviewing" only. */
+  diagnosis: z.literal(false),
+});
+
 export const toolInputSchemas = {
   get_appointment: getAppointmentInputSchema,
   find_ride_options: findRideOptionsInputSchema,
@@ -154,6 +169,7 @@ export const toolInputSchemas = {
   notify_caretaker: notifyCaretakerInputSchema,
   save_medication_reminder: saveMedicationReminderInputSchema,
   save_hospital_visit: saveHospitalVisitInputSchema,
+  get_care_signal: getCareSignalInputSchema,
 } as const;
 
 export const toolResultSchemas = {
@@ -163,6 +179,7 @@ export const toolResultSchemas = {
   notify_caretaker: notifyCaretakerResultSchema,
   save_medication_reminder: saveMedicationReminderResultSchema,
   save_hospital_visit: saveHospitalVisitResultSchema,
+  get_care_signal: getCareSignalResultSchema,
 } as const;
 
 export type GetAppointmentInput = z.infer<typeof getAppointmentInputSchema>;
@@ -178,6 +195,8 @@ export type SaveMedicationReminderInput = z.infer<typeof saveMedicationReminderI
 export type SaveMedicationReminderResult = z.infer<typeof saveMedicationReminderResultSchema>;
 export type SaveHospitalVisitInput = z.infer<typeof saveHospitalVisitInputSchema>;
 export type SaveHospitalVisitResult = z.infer<typeof saveHospitalVisitResultSchema>;
+export type GetCareSignalInput = z.infer<typeof getCareSignalInputSchema>;
+export type GetCareSignalResult = z.infer<typeof getCareSignalResultSchema>;
 
 export type ToolInput<T extends ToolName> = z.infer<(typeof toolInputSchemas)[T]>;
 export type ToolResult<T extends ToolName> = z.infer<(typeof toolResultSchemas)[T]>;

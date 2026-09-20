@@ -5,9 +5,12 @@ import {
   COMPOSIO_GMAIL_SEND_TOOL,
   PLAYGROUND_DEMO_TRANSCRIPT,
   buildCaretakerDashboard,
+  conversationChatResponseSchema,
   conversationTurnResponseSchema,
+  getMariaAppointment,
   playgroundResponseSchema,
   sessionViewSchema,
+  emptyConversationState,
 } from "@kasama/shared";
 import { app, createApp } from "./app";
 import { auditLog } from "./audit-log";
@@ -22,6 +25,15 @@ beforeEach(() => {
   resetControlledUberProvider();
   process.env.MODEL_API_KEY = "";
 });
+
+function localDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const mariaAppointmentDay = localDateString(new Date(getMariaAppointment().start));
 
 describe("POST /tools/:name", () => {
   it("denies book_ride without approval and writes the audit log", async () => {
@@ -161,15 +173,11 @@ describe("POST /tools/:name", () => {
   });
 
   it("returns Maria's seeded appointment for tomorrow and null for other dates", async () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateStr = tomorrow.toISOString().slice(0, 10);
-
     const res = await app.request("/tools/get_appointment", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        input: { date: dateStr },
+        input: { date: mariaAppointmentDay },
         actor: "model",
       }),
     });
@@ -309,11 +317,7 @@ describe("GET /audit", () => {
 });
 
 describe("GET /sessions/:sessionId", () => {
-  const tomorrow = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
-  })();
+  const tomorrow = mariaAppointmentDay;
 
   async function postTool(
     name: string,
@@ -349,6 +353,16 @@ describe("GET /sessions/:sessionId", () => {
     expect(res.status).toBe(200);
     const body = sessionViewSchema.parse(await res.json());
     expect(body.conversation.turns).toHaveLength(3);
+    expect(body.conversation.chats.map((chat) => chat.title)).toEqual([
+      "Hospital visit",
+      "Medication reminder",
+      "Doctor ride",
+    ]);
+    expect(body.conversation.activeChatId).toBe("chat_ride");
+    expect(body.tasks.map((task) => task.title)).toEqual([
+      "Lisinopril",
+      "St. Mary's Hospital",
+    ]);
     expect(body.conversation.turns[0]?.text).toBe(
       "Please get me a ride to my doctor tomorrow.",
     );
@@ -358,7 +372,22 @@ describe("GET /sessions/:sessionId", () => {
 
     const dashboard = buildCaretakerDashboard({ view: body });
     expect(dashboard.overviewStatus).toBe("confirmed");
-    expect(dashboard.activity).toHaveLength(3);
+    expect(dashboard.activity).toHaveLength(9);
+  });
+
+  it("starts a new chat on the same session without copying the ride thread", async () => {
+    const res = await app.request("/conversation/chats", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: "default" }),
+    });
+    expect(res.status).toBe(200);
+    const body = conversationChatResponseSchema.parse(await res.json());
+    expect(body.conversation.chats).toHaveLength(4);
+    expect(body.conversation.activeChatId).toBe(body.chatId);
+    expect(body.conversation.turns).toEqual([]);
+    const ride = body.conversation.chats.find((chat) => chat.title === "Doctor ride");
+    expect(ride?.turns).toHaveLength(3);
   });
 
   it("uses the documented default session when sessionId is omitted", async () => {
@@ -525,13 +554,7 @@ describe("GET /sessions/:sessionId", () => {
     const body = sessionViewSchema.parse(
       await (await app.request("/sessions/quiet")).json(),
     );
-    expect(body.conversation).toEqual({
-      turns: [],
-      activeRequest: null,
-      clarificationsAsked: 0,
-      plan: { steps: [] },
-      failure: null,
-    });
+    expect(body.conversation).toEqual(emptyConversationState());
   });
 });
 
