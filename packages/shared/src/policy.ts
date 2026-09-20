@@ -14,6 +14,7 @@ export const policyActions = [
   "save_medication_reminder",
   "save_hospital_visit",
   "share_health_information",
+  "read_care_signal",
   "diagnose",
 ] as const;
 
@@ -41,6 +42,7 @@ export const POLICY_TABLE = {
   save_medication_reminder: { requirement: "require_confirmation" },
   save_hospital_visit: { requirement: "require_confirmation" },
   share_health_information: { requirement: "explicit_consent" },
+  read_care_signal: { requirement: "automatic" },
   diagnose: { requirement: "never" },
 } as const satisfies Record<PolicyAction, { requirement: PolicyRequirement }>;
 
@@ -62,6 +64,7 @@ export const TOOL_ACTIONS = {
   notify_caretaker: ["draft_caretaker_message", "send_message"],
   save_medication_reminder: ["save_medication_reminder"],
   save_hospital_visit: ["save_hospital_visit"],
+  get_care_signal: ["read_care_signal"],
 } as const satisfies Record<ToolName, readonly PolicyAction[]>;
 
 export type ApprovalContext = {
