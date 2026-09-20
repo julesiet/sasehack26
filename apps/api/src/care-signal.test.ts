@@ -9,8 +9,8 @@ beforeEach(() => {
 });
 
 describe("get_care_signal", () => {
-  it("returns the Maria sleep + repeat-question signal from seed data, without diagnosing", () => {
-    const result = invokeTool("get_care_signal", {
+  it("returns the Maria sleep + repeat-question signal from seed data, without diagnosing", async () => {
+    const result = await invokeTool("get_care_signal", {
       actor: "caretaker",
       input: {},
     });
@@ -24,8 +24,8 @@ describe("get_care_signal", () => {
     });
   });
 
-  it("never requires approval — it is read-only", () => {
-    const result = invokeTool("get_care_signal", {
+  it("never requires approval — it is read-only", async () => {
+    const result = await invokeTool("get_care_signal", {
       actor: "model",
       input: {},
     });
@@ -34,8 +34,8 @@ describe("get_care_signal", () => {
     expect(result.body.success).toBe(true);
   });
 
-  it("never includes diagnostic language in the summary", () => {
-    const result = invokeTool("get_care_signal", {
+  it("never includes diagnostic language in the summary", async () => {
+    const result = await invokeTool("get_care_signal", {
       actor: "caretaker",
       input: {},
     });

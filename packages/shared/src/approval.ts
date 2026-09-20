@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { familyMessageAnalysis } from "./family";
 import { actors } from "./policy";
 import { formatHospitalTimeLabel } from "./time-label";
 import {
@@ -55,6 +56,10 @@ export const lastApprovalSchema = z.object({
   timestamp: z.string(),
   summary: z.string(),
   prompt: z.string().optional(),
+  /** Draft caretaker text, kept so the just-resolved MESSAGE TO card stays honest. */
+  preview: z.string().optional(),
+  recipientName: z.string().optional(),
+  urgency: z.enum(["low", "normal", "high"]).optional(),
 });
 export type LastApproval = z.infer<typeof lastApprovalSchema>;
 
@@ -137,8 +142,22 @@ export function bookingApprovalPrompt(estimate: string = DEMO_UBER_WAV_ESTIMATE)
   return `The Uber is ${estimate}. Should I book it?`;
 }
 
-export function notifyApprovalPrompt(): string {
-  return "I can send this to your family. Should I send it?";
+export function notifyApprovalPrompt(input?: {
+  summary?: string;
+  urgency?: "low" | "normal" | "high";
+  recipientName?: string;
+  recipientId?: string;
+}): string {
+  if (!input?.summary) {
+    return "I can send this to your family. Should I send it?";
+  }
+  return familyMessageAnalysis({
+    recipientName: input.recipientName,
+    recipientId: input.recipientId,
+    summary: input.summary,
+    urgency: input.urgency ?? "normal",
+    status: "pending",
+  }).spokenPrompt;
 }
 
 export function declinedBookingReply(): string {
@@ -218,15 +237,38 @@ export function describePendingApproval(input: {
     };
   }
   if (input.tool === "notify_caretaker") {
-    const preview =
-      input.toolInput && typeof input.toolInput === "object" && "summary" in input.toolInput
-        ? String((input.toolInput as { summary: unknown }).summary)
-        : undefined;
+    const toolInput =
+      input.toolInput && typeof input.toolInput === "object"
+        ? (input.toolInput as {
+            summary?: unknown;
+            urgency?: unknown;
+            recipientName?: unknown;
+            recipientId?: unknown;
+          })
+        : {};
+    const summary = typeof toolInput.summary === "string" ? toolInput.summary : undefined;
+    const urgency =
+      toolInput.urgency === "low" || toolInput.urgency === "high" || toolInput.urgency === "normal"
+        ? toolInput.urgency
+        : "normal";
+    const recipientName = typeof toolInput.recipientName === "string" ? toolInput.recipientName : undefined;
+    const recipientId = typeof toolInput.recipientId === "string" ? toolInput.recipientId : undefined;
+    const analysis = summary
+      ? familyMessageAnalysis({
+          summary,
+          urgency,
+          recipientName,
+          recipientId,
+          status: "pending",
+        })
+      : null;
     return {
       action: "notify_caretaker",
-      prompt: notifyApprovalPrompt(),
+      prompt: notifyApprovalPrompt(
+        summary ? { summary, urgency, recipientName, recipientId } : undefined,
+      ),
       detail: "Preview only — not sent yet.",
-      preview,
+      preview: analysis?.summary ?? summary,
     };
   }
   if (input.tool === "save_medication_reminder") {

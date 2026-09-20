@@ -91,14 +91,38 @@ export async function transcribeRecording(uri: string): Promise<string> {
 export async function postApproval(
   decision: ApprovalChoice,
   sessionId: string,
+  actor: "senior" | "caretaker" = "senior",
 ): Promise<ApprovalResponse> {
   const res = await fetch(`${apiUrl}/approvals`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ sessionId, decision, actor: "senior" }),
+    body: JSON.stringify({ sessionId, decision, actor }),
   });
   if (!res.ok) throw await readError(res);
   return approvalResponseSchema.parse(await res.json());
+}
+
+export async function postNotifyCaretaker(input: {
+  sessionId: string;
+  summary: string;
+  urgency: "low" | "normal" | "high";
+  recipientName: string;
+  actor: "senior" | "caretaker";
+}): Promise<void> {
+  const res = await fetch(`${apiUrl}/tools/notify_caretaker`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      input: {
+        summary: input.summary,
+        urgency: input.urgency,
+        recipientName: input.recipientName,
+      },
+      actor: input.actor,
+      sessionId: input.sessionId,
+    }),
+  });
+  if (!res.ok) throw await readError(res);
 }
 
 export async function fetchSession(sessionId: string): Promise<SessionView> {

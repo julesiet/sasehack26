@@ -59,6 +59,7 @@ export const conversationIntentSchema = z.enum([
   "appointment_info",
   "medication_reminder",
   "hospital_schedule",
+  "family_update",
   "unknown",
 ]);
 export type ConversationIntent = z.infer<typeof conversationIntentSchema>;
@@ -143,6 +144,8 @@ export function chatTitleForIntent(intent: ConversationIntent, destination?: str
       return "Hospital visit";
     case "appointment_info":
       return "Appointment";
+    case "family_update":
+      return "Family update";
     default:
       return "New chat";
   }

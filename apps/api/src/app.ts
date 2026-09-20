@@ -95,7 +95,7 @@ export function createApp({
       return c.json({ success: false, summary: "Request body must be JSON." }, 400);
     }
 
-    const result = invokeTool(c.req.param("name"), raw);
+    const result = await invokeTool(c.req.param("name"), raw);
     return c.json(result.body, result.status);
   });
 
@@ -107,7 +107,7 @@ export function createApp({
       return c.json({ success: false, summary: "Request body must be JSON." }, 400);
     }
 
-    const result = decideApproval(raw);
+    const result = await decideApproval(raw);
     return c.json(result.body, result.status);
   });
 

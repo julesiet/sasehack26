@@ -203,6 +203,11 @@ export function evaluateAction(
   return allow(action, requirement);
 }
 
+export function containsHealthData(text: string): boolean {
+  const keywords = ["medication", "blood pressure", "glucose", "doctor", "hospital", "health", "condition", "treatment"];
+  return keywords.some((k) => text.toLowerCase().includes(k));
+}
+
 export function evaluateToolCall(
   tool: ToolName,
   ctx: ApprovalContext,
@@ -218,6 +223,8 @@ export function evaluateToolCall(
     }
     return send;
   }
+
+
 
   const actions = TOOL_ACTIONS[tool];
   let last: PolicyDecision | undefined;

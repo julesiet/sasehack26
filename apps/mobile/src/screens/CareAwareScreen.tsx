@@ -5,17 +5,32 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   buildCareAwareView,
+  DEFAULT_SESSION_ID,
+  familyMessageAnalysis,
   formatSeconds,
   type CareAwareAction,
   type CareAwareResponseTone,
   type CareAwareUsagePeriod,
 } from "@kasama/shared";
 import { CaretakerCard, CaretakerCardHeader } from "../components/caretaker/CaretakerCard";
+import { postApproval, postNotifyCaretaker } from "../lib/api";
 import { colors } from "../theme";
 
 type Props = {
   onBack: () => void;
+  sessionId?: string;
+  onFamilyUpdateChanged?: () => void;
 };
+
+const NOTIFY_DAUGHTER_SUMMARY = "Maria missed her medication reminder.";
+const NOTIFY_DAUGHTER_RECIPIENT = "Sarah";
+const NOTIFY_DAUGHTER_URGENCY = "normal" as const;
+const NOTIFY_DAUGHTER_ANALYSIS = familyMessageAnalysis({
+  recipientName: NOTIFY_DAUGHTER_RECIPIENT,
+  summary: NOTIFY_DAUGHTER_SUMMARY,
+  urgency: NOTIFY_DAUGHTER_URGENCY,
+  status: "pending",
+});
 
 const CHIP: Record<CareAwareResponseTone, string> = {
   fast: colors.careAwareChipFast,
@@ -26,13 +41,88 @@ const CHIP: Record<CareAwareResponseTone, string> = {
 /**
  * Care-aware update (#10). Opened from Care notes on the caretaker dashboard.
  * Copy is worth-reviewing only — never a diagnosis. Layout matches caretaker
- * Overview: cream sky, then a peach wash of white cards.
+ * Overview: cream sky, then a peach wash of white cards. Notify daughter
+ * drafts a family update on the shared session; Confirm sends as caretaker.
  */
-export function CareAwareScreen({ onBack }: Props) {
+export function CareAwareScreen({
+  onBack,
+  sessionId = DEFAULT_SESSION_ID,
+  onFamilyUpdateChanged,
+}: Props) {
   const insets = useSafeAreaInsets();
   const view = buildCareAwareView();
   const [action, setAction] = useState<CareAwareAction | null>(null);
+  const [notifyReady, setNotifyReady] = useState(false);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
   const barMax = Math.max(...view.periods.map((period) => period.minutes), 1);
+  const notifySheet = action?.id === "notify_caretaker";
+
+  async function openAction(item: CareAwareAction) {
+    setAction(item);
+    setNotifyError(null);
+    setNotifyReady(false);
+    if (item.id !== "notify_caretaker") return;
+    setNotifyBusy(true);
+    try {
+      await postNotifyCaretaker({
+        sessionId,
+        summary: NOTIFY_DAUGHTER_SUMMARY,
+        urgency: NOTIFY_DAUGHTER_URGENCY,
+        recipientName: NOTIFY_DAUGHTER_RECIPIENT,
+        actor: "caretaker",
+      });
+      setNotifyReady(true);
+      onFamilyUpdateChanged?.();
+    } catch {
+      setNotifyError("Could not open a family update.");
+    } finally {
+      setNotifyBusy(false);
+    }
+  }
+
+  async function confirmNotify() {
+    if (notifyBusy || !notifyReady) return;
+    setNotifyBusy(true);
+    try {
+      await postApproval("approve", sessionId, "caretaker");
+      onFamilyUpdateChanged?.();
+      setAction(null);
+      setNotifyReady(false);
+    } catch {
+      setNotifyError("Could not send that family update.");
+    } finally {
+      setNotifyBusy(false);
+    }
+  }
+
+  async function cancelNotify() {
+    if (notifyBusy) return;
+    if (!notifyReady) {
+      setAction(null);
+      return;
+    }
+    setNotifyBusy(true);
+    try {
+      await postApproval("decline", sessionId, "caretaker");
+      onFamilyUpdateChanged?.();
+      setAction(null);
+      setNotifyReady(false);
+    } catch {
+      setNotifyError("Could not cancel that family update.");
+    } finally {
+      setNotifyBusy(false);
+    }
+  }
+
+  function dismissSheet() {
+    if (notifyBusy) return;
+    if (notifySheet) {
+      void cancelNotify();
+      return;
+    }
+    setAction(null);
+  }
 
   return (
     <View style={styles.screen}>
@@ -130,7 +220,7 @@ export function CareAwareScreen({ onBack }: Props) {
               .map((item) => (
                 <Pressable
                   key={item.id}
-                  onPress={() => setAction(item)}
+                  onPress={() => void openAction(item)}
                   accessibilityRole="button"
                   accessibilityLabel={item.label}
                   style={({ pressed }) => [styles.actionPill, pressed ? styles.pressed : null]}
@@ -151,7 +241,7 @@ export function CareAwareScreen({ onBack }: Props) {
             .map((item) => (
               <Pressable
                 key={item.id}
-                onPress={() => setAction(item)}
+                onPress={() => void openAction(item)}
                 accessibilityRole="button"
                 accessibilityLabel={item.label}
                 style={({ pressed }) => [styles.actionFill, pressed ? styles.pressed : null]}
@@ -163,19 +253,76 @@ export function CareAwareScreen({ onBack }: Props) {
         </LinearGradient>
       </ScrollView>
 
-      <Modal visible={action !== null} transparent animationType="fade" onRequestClose={() => setAction(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setAction(null)} accessibilityLabel="Close">
-          <View style={styles.sheet}>
+      <Modal
+        visible={action !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={dismissSheet}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={dismissSheet}
+          accessibilityLabel="Close"
+        >
+          <Pressable style={styles.sheet}>
             <Text style={styles.sheetTitle}>{action?.label}</Text>
-            <Text style={styles.sheetBody}>{action?.detail}</Text>
-            <Pressable
-              onPress={() => setAction(null)}
-              accessibilityRole="button"
-              style={styles.sheetClose}
-            >
-              <Text style={styles.sheetCloseLabel}>Close</Text>
-            </Pressable>
-          </View>
+            {notifySheet ? (
+              <>
+                <Text style={styles.sheetIntro}>Preview only. Nothing is sent yet.</Text>
+                <Text style={styles.sheetBody}>Recipient: {NOTIFY_DAUGHTER_ANALYSIS.recipientName}</Text>
+                <Text style={styles.sheetBody}>
+                  Relationship: {NOTIFY_DAUGHTER_ANALYSIS.relationshipLabel}
+                </Text>
+                <Text style={styles.sheetBody}>Message: {NOTIFY_DAUGHTER_ANALYSIS.summary}</Text>
+                <Text style={styles.sheetBody}>Urgency: {NOTIFY_DAUGHTER_ANALYSIS.urgencyLabel}</Text>
+                <Text style={styles.sheetBody}>
+                  Health information: {NOTIFY_DAUGHTER_ANALYSIS.healthLabel}.{" "}
+                  {NOTIFY_DAUGHTER_ANALYSIS.healthDetail}
+                </Text>
+                {notifyBusy ? <Text style={styles.sheetMeta}>Working…</Text> : null}
+                {notifyError ? <Text style={styles.sheetError}>{notifyError}</Text> : null}
+                <View style={styles.sheetActions}>
+                  <Pressable
+                    onPress={() => void cancelNotify()}
+                    disabled={notifyBusy || !notifyReady}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel"
+                    style={({ pressed }) => [
+                      styles.sheetCancel,
+                      notifyBusy || !notifyReady ? styles.disabled : null,
+                      pressed ? styles.pressed : null,
+                    ]}
+                  >
+                    <Text style={styles.sheetCancelLabel}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void confirmNotify()}
+                    disabled={notifyBusy || !notifyReady}
+                    accessibilityRole="button"
+                    accessibilityLabel="Confirm"
+                    style={({ pressed }) => [
+                      styles.sheetConfirm,
+                      notifyBusy || !notifyReady ? styles.disabled : null,
+                      pressed ? styles.pressed : null,
+                    ]}
+                  >
+                    <Text style={styles.sheetCloseLabel}>Confirm</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.sheetBody}>{action?.detail}</Text>
+                <Pressable
+                  onPress={() => setAction(null)}
+                  accessibilityRole="button"
+                  style={styles.sheetClose}
+                >
+                  <Text style={styles.sheetCloseLabel}>Close</Text>
+                </Pressable>
+              </>
+            )}
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -431,6 +578,12 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: colors.caretakerInk,
   },
+  sheetIntro: {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: "600",
+    color: colors.caretakerInk,
+  },
   sheetBody: {
     fontSize: 18,
     lineHeight: 26,
@@ -448,6 +601,43 @@ const styles = StyleSheet.create({
     color: colors.onOrange,
     fontSize: 18,
     fontWeight: "600",
+  },
+  sheetMeta: {
+    fontSize: 16,
+    color: colors.caretakerMuted,
+  },
+  sheetError: {
+    fontSize: 16,
+    color: colors.danger,
+  },
+  sheetActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  sheetCancel: {
+    flex: 1,
+    minHeight: 68,
+    borderRadius: 28,
+    backgroundColor: colors.cancelFill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetConfirm: {
+    flex: 1,
+    minHeight: 68,
+    borderRadius: 28,
+    backgroundColor: colors.bowlTop,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetCancelLabel: {
+    color: colors.caretakerInk,
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  disabled: {
+    opacity: 0.45,
   },
   pressed: {
     opacity: 0.85,

@@ -1,8 +1,9 @@
 import { selectedRideOption, type LastApproval, type PendingApproval } from "./approval";
 import { emptyConversationState, allConversationTurns } from "./conversation";
+import { familyMessageAnalysis, resolveFamilyRecipient } from "./family";
 import { getMariaSeedBundle, type MariaSeedBundle } from "./seed";
-import type { SessionView } from "./session";
-import type { UberProduct, UberRideOption } from "./tools";
+import type { CaretakerActivityItem, SessionView } from "./session";
+import { notifyCaretakerInputSchema, type UberProduct, type UberRideOption } from "./tools";
 
 export const caretakerOverviewStatusSchema = ["confirmed", "pending", "declined", "idle"] as const;
 export type CaretakerOverviewStatus = (typeof caretakerOverviewStatusSchema)[number];
@@ -42,6 +43,20 @@ export type CaretakerRideCard = {
   booked: boolean;
 };
 
+export type CaretakerFamilyUpdate = {
+  status: "draft" | "sent" | "not_sent";
+  kicker: "FAMILY UPDATE";
+  headline: string;
+  summary: string;
+  urgencyLabel: string;
+  recipientName: string;
+  relationshipLabel: string;
+  healthShared: boolean;
+  healthLabel: string;
+  sentLine: string | null;
+  whenLabel: string | null;
+};
+
 export type CaretakerDashboard = {
   dateLabel: string;
   viewerFirstName: string;
@@ -53,6 +68,7 @@ export type CaretakerDashboard = {
   overviewBadge: string | null;
   appointment: CaretakerAppointmentCard;
   ride: CaretakerRideCard | null;
+  familyUpdate: CaretakerFamilyUpdate | null;
   consentItems: CaretakerConsentItem[];
   activity: CaretakerTimelineItem[];
 };
@@ -169,6 +185,7 @@ export function buildCaretakerDashboard(input: {
     overviewBadge: overviewBadgeFor(status),
     appointment: appointmentCard(view, seed, now),
     ride: rideCard(view, seed),
+    familyUpdate: familyUpdateCard(view, senior, now),
     consentItems: consentItems(view, senior),
     activity: activityItems(view, senior),
   };
@@ -206,6 +223,127 @@ function rideCard(view: SessionView, seed: MariaSeedBundle): CaretakerRideCard |
     confirmationId: booked ? view.lastBooking?.confirmationId : undefined,
     booked,
   };
+}
+
+function familyUpdateFacts(input: {
+  recipientName?: string;
+  summary: string;
+  urgency?: "low" | "normal" | "high";
+}): Pick<
+  CaretakerFamilyUpdate,
+  "recipientName" | "relationshipLabel" | "healthShared" | "healthLabel" | "urgencyLabel" | "summary"
+> {
+  const analysis = familyMessageAnalysis({
+    recipientName: displayRecipientName(input.recipientName),
+    summary: input.summary,
+    urgency: input.urgency ?? "normal",
+    status: "pending",
+  });
+  return {
+    recipientName: analysis.recipientName,
+    relationshipLabel: analysis.relationshipLabel,
+    healthShared: analysis.healthShared,
+    healthLabel: analysis.healthLabel,
+    urgencyLabel: analysis.urgencyLabel,
+    summary: analysis.summary,
+  };
+}
+
+function familyUpdateCard(
+  view: SessionView,
+  senior: string,
+  now: Date,
+): CaretakerFamilyUpdate | null {
+  const notify = latestNotifyActivity(view);
+  const pending = isNotifyApproval(view.pendingApproval) ? view.pendingApproval : null;
+  const lastNotify = isNotifyApproval(view.lastApproval) ? view.lastApproval : null;
+
+  if (pending) {
+    const pendingInput = notifyCaretakerInputSchema.safeParse(pending.input);
+    const draft = pendingInput.success ? pendingInput.data : null;
+    const facts = familyUpdateFacts({
+      recipientName: notify?.recipientName ?? draft?.recipientName,
+      summary: notify?.summary ?? pending.preview ?? draft?.summary ?? "A note for your family.",
+      urgency: notify?.urgency ?? draft?.urgency,
+    });
+    if (pending.reason === "send_failed") {
+      return {
+        status: "not_sent",
+        kicker: "FAMILY UPDATE",
+        headline: "Not sent",
+        ...facts,
+        summary: notify?.summary ?? pending.preview ?? draft?.summary ?? "The family note was not sent.",
+        sentLine: null,
+        whenLabel: null,
+      };
+    }
+    return {
+      status: "draft",
+      kicker: "FAMILY UPDATE",
+      headline: "Draft — awaiting confirmation",
+      ...facts,
+      sentLine: null,
+      whenLabel: null,
+    };
+  }
+
+  if (lastNotify?.decision === "declined") {
+    const facts = familyUpdateFacts({
+      recipientName: lastNotify.recipientName ?? notify?.recipientName,
+      summary: notify?.summary ?? lastNotify.preview ?? `${senior} cancelled this message.`,
+      urgency: lastNotify.urgency ?? notify?.urgency,
+    });
+    return {
+      status: "not_sent",
+      kicker: "FAMILY UPDATE",
+      headline: "Not sent",
+      ...facts,
+      sentLine: null,
+      whenLabel: null,
+    };
+  }
+
+  if (notify?.sent) {
+    const facts = familyUpdateFacts({
+      recipientName: notify.recipientName,
+      summary: notify.summary,
+      urgency: notify.urgency,
+    });
+    return {
+      status: "sent",
+      kicker: "FAMILY UPDATE",
+      headline: "Sent",
+      ...facts,
+      sentLine: `Sent to ${facts.recipientName}`,
+      whenLabel: formatAppointmentWhen(notify.timestamp, now),
+    };
+  }
+
+  if (notify?.preview) {
+    const facts = familyUpdateFacts({
+      recipientName: notify.recipientName,
+      summary: notify.summary,
+      urgency: notify.urgency,
+    });
+    return {
+      status: "draft",
+      kicker: "FAMILY UPDATE",
+      headline: "Draft — awaiting confirmation",
+      ...facts,
+      sentLine: null,
+      whenLabel: null,
+    };
+  }
+
+  return null;
+}
+
+function latestNotifyActivity(view: SessionView): CaretakerActivityItem | undefined {
+  return [...view.caretakerActivity].reverse().find((item) => item.summary);
+}
+
+function displayRecipientName(name?: string): string {
+  return name?.trim() || resolveFamilyRecipient("").name;
 }
 
 function selectedRide(view: SessionView): UberRideOption | undefined {
@@ -274,6 +412,13 @@ function consentItems(view: SessionView, senior: string): CaretakerConsentItem[]
       tone: "pending",
       title: "Family update draft",
       detail: notify?.summary ?? view.pendingApproval?.preview ?? "Preview only — not sent yet.",
+    });
+  } else if (view.lastApproval?.tool === "notify_caretaker" && view.lastApproval.decision === "declined") {
+    items.push({
+      id: "notify_declined",
+      tone: "neutral",
+      title: "Family update cancelled",
+      detail: `${senior} declined to send the update.`,
     });
   }
 
@@ -383,11 +528,19 @@ function isRideApproval(
   return value?.tool === "book_ride" || value?.action === "book_ride";
 }
 
+function isNotifyApproval(
+  value: PendingApproval | LastApproval | null | undefined,
+): value is PendingApproval | LastApproval {
+  return value?.tool === "notify_caretaker" || value?.action === "notify_caretaker";
+}
+
 function sameCalendarDay(a: Date, b: Date): boolean {
+  const ad = new Date(a);
+  const bd = new Date(b);
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    ad.getUTCFullYear() === bd.getUTCFullYear() &&
+    ad.getUTCMonth() === bd.getUTCMonth() &&
+    ad.getUTCDate() === bd.getUTCDate()
   );
 }
 

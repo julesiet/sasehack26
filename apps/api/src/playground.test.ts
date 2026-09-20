@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  COMPOSIO_GMAIL_SEND_TOOL,
   PLAYGROUND_DEMO_TRANSCRIPT,
   playgroundResponseSchema,
 } from "@kasama/shared";
@@ -126,6 +127,16 @@ describe("runPlaygroundTurn", () => {
     const sessionId = "notify-test";
     const input = { summary: "Maria needs her meds", urgency: "high" };
 
+    // Mock Composio execute to avoid external API calls in tests
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: true,
+      logId: "mock_composio_log_123",
+    });
+
     // 1. No token -> Should draft
     const resultDraft = await runPlaygroundTurn(
       {
@@ -153,7 +164,7 @@ describe("runPlaygroundTurn", () => {
     // 2. With token -> Should send
     // We bypass runPlaygroundTurn here to test the tool invocation directly with a token
     const { invokeTool } = await import("./invoke-tool");
-    const sentResult = invokeTool("notify_caretaker", {
+    const sentResult = await invokeTool("notify_caretaker", {
       sessionId,
       actor: "senior",
       approvalToken: "valid-token",
@@ -166,6 +177,8 @@ describe("runPlaygroundTurn", () => {
       sent: true,
       preview: false,
     });
+
+    executeSpy.mockRestore();
 
     // The session store update usually happens via the harness, but we can check the audit log
     // or manually apply the event if needed. In the app, invokeTool is called by the harness.

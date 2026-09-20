@@ -138,20 +138,11 @@ if (lanHost) {
   );
 }
 
-// Never spawn node_modules/.bin/expo — that Unix shim is ENOENT on Windows
-// (the error path ends in `.bin\expo`). Run the CLI JS with this Node instead.
-let expoCli;
-try {
-  expoCli = requireFromMobile.resolve("expo/bin/cli");
-} catch {
-  console.error("Expo is not installed. From the repo root run: pnpm install");
-  process.exit(1);
-}
-
-const child = spawn(process.execPath, [expoCli, ...args], {
+const child = spawn("npx", ["expo", ...args], {
   cwd: mobileRoot,
   env: process.env,
   stdio: "inherit",
+  shell: true,
 });
 
 child.on("error", (error) => {

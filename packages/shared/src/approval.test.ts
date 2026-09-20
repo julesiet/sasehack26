@@ -77,6 +77,10 @@ describe("approval prompts", () => {
     expect(described.action).toBe("notify_caretaker");
     expect(described.preview).toContain("doctor");
     expect(described.detail).toContain("Preview only");
+    expect(described.prompt).toContain("Preview only. Nothing is sent yet.");
+    expect(described.prompt).toContain("James Alvarez, son");
+    expect(described.prompt).toContain("Health information is included");
+    expect(described.prompt).toContain("Should I send it?");
   });
 
   it("describes a medication reminder checkpoint", () => {

@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   COMPOSIO_DEFAULT_TOOL,
   COMPOSIO_GMAIL_CREATE_DRAFT_TOOL,
   COMPOSIO_GMAIL_SEND_TOOL,
   PLAYGROUND_DEMO_TRANSCRIPT,
   buildCaretakerDashboard,
+  approvedNotifyReply,
   conversationChatResponseSchema,
   conversationTurnResponseSchema,
   getMariaAppointment,
@@ -76,7 +77,7 @@ describe("POST /tools/:name", () => {
     expect(body.success).toBe(true);
     expect(body.preview).toBe(true);
     expect(body.sent).toBe(false);
-    expect(body.draft).toEqual({
+    expect(body.draft).toMatchObject({
       summary: "Maria is running late.",
       urgency: "high",
     });
@@ -119,12 +120,41 @@ describe("POST /tools/:name", () => {
     expect(auditLog.list()[0]?.executed?.attempted).toBe(false);
   });
 
-  it("sends a mocked caretaker message with a human approval token", async () => {
+  it("does not call Gmail when notify_caretaker is only a preview", async () => {
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute");
+    await app.request("/tools/notify_caretaker", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { summary: "Maria is running late.", urgency: "high" },
+        actor: "model",
+        sessionId: "notify-draft-no-gmail",
+      }),
+    });
+    expect(executeSpy).not.toHaveBeenCalled();
+    executeSpy.mockRestore();
+  });
+
+  it("sends a caretaker email to Jules's Gmail with a human approval token", async () => {
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: true,
+      logId: "gmail_send_1",
+    });
+
     const res = await app.request("/tools/notify_caretaker", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        input: { summary: "Maria's Uber is booked.", urgency: "low" },
+        input: {
+          summary: "Maria missed her medication reminder.",
+          urgency: "normal",
+          recipientName: "James Alvarez",
+        },
         actor: "senior",
         approvalToken: "tok_yes",
         sessionId: "notify-send-1",
@@ -136,8 +166,29 @@ describe("POST /tools/:name", () => {
     expect(body.success).toBe(true);
     expect(body.sent).toBe(true);
     expect(body.preview).toBe(false);
-    expect(String(body.summary)).toMatch(/email|sms/i);
-    expect(String(body.summary)).not.toMatch(/not implemented/i);
+    expect(body.draft.recipientEmail).toBe("juleselvandrade@gmail.com");
+    expect(body.draft.recipientName).toBe("James Alvarez");
+    expect(executeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+        arguments: expect.objectContaining({
+          recipient_email: "juleselvandrade@gmail.com",
+          subject: "Kasama family report for Jules — Maria, Normal urgency",
+          is_html: true,
+        }),
+      }),
+    );
+    const sentBody = String(
+      (executeSpy.mock.calls[0]?.[0] as { arguments?: { body?: string } } | undefined)?.arguments?.body,
+    );
+    expect(sentBody).toContain("<h1");
+    expect(sentBody).toContain("<table");
+    expect(sentBody).toContain("James Alvarez");
+    expect(sentBody).toContain("Maria missed her medication reminder.");
+    expect(sentBody).toContain("Dr. Chen — annual checkup");
+    expect(sentBody).toContain("Lisinopril");
+    expect(sentBody).toContain("juleselvandrade@gmail.com");
+    executeSpy.mockRestore();
 
     const events = auditLog.list();
     expect(events[0]?.approved?.allowed).toBe(true);
@@ -152,7 +203,35 @@ describe("POST /tools/:name", () => {
     expect(view.caretakerActivity).toHaveLength(1);
     expect(view.caretakerActivity[0]?.sent).toBe(true);
     expect(view.caretakerActivity[0]?.preview).toBe(false);
-    expect(view.caretakerActivity[0]?.summary).toBe("Maria's Uber is booked.");
+    expect(view.caretakerActivity[0]?.summary).toBe("Maria missed her medication reminder.");
+    expect(view.caretakerActivity[0]?.recipientName).toBe("James Alvarez");
+    expect(view.caretakerActivity[0]?.recipientId).toBe("contact_james");
+  });
+
+  it("falls back to a mock email when Composio is not configured", async () => {
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi
+      .spyOn(kasamaComposio, "execute")
+      .mockRejectedValue(new ComposioNotConfiguredError());
+
+    const res = await app.request("/tools/notify_caretaker", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: { summary: "Maria is running late.", urgency: "high" },
+        actor: "senior",
+        approvalToken: "tok_yes",
+        sessionId: "notify-send-fallback",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.sent).toBe(true);
+    expect(body.confirmationId).toMatch(/^notify_/);
+    expect(body.summary).toMatch(/email/i);
+    executeSpy.mockRestore();
   });
 
   it("allows get_appointment without approval and records the outcome", async () => {
@@ -456,35 +535,48 @@ describe("GET /sessions/:sessionId", () => {
   });
 
   it("lets senior and caretaker clients share the same sessionId", async () => {
-    await postTool("book_ride", {
-      input: { optionId: "uberx_1" },
-      actor: "senior",
-      approvalToken: "tok_yes",
-      sessionId: "shared-family",
-      consentGranted: true,
-    });
-    await postTool("notify_caretaker", {
-      input: { summary: "Maria's Uber is booked.", urgency: "low" },
-      actor: "caretaker",
-      approvalToken: "tok_caretaker",
-      sessionId: "shared-family",
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: true,
+      logId: "gmail_send_test",
     });
 
-    const seniorView = sessionViewSchema.parse(
-      await (await app.request("/sessions/shared-family")).json(),
-    );
-    const caretakerView = sessionViewSchema.parse(
-      await (await app.request("/sessions/shared-family")).json(),
-    );
+    try {
+      await postTool("book_ride", {
+        input: { optionId: "uberx_1" },
+        actor: "senior",
+        approvalToken: "tok_yes",
+        sessionId: "shared-family",
+        consentGranted: true,
+      });
+      await postTool("notify_caretaker", {
+        input: { summary: "Maria's Uber is booked.", urgency: "low" },
+        actor: "caretaker",
+        approvalToken: "tok_caretaker",
+        sessionId: "shared-family",
+      });
 
-    expect(seniorView).toEqual(caretakerView);
-    expect(seniorView.lastBooking?.optionId).toBe("uberx_1");
-    expect(seniorView.caretakerActivity).toHaveLength(1);
-    expect(seniorView.caretakerActivity[0]?.sent).toBe(true);
-    expect(seniorView.events.map((event) => event.whoAsked.actor)).toEqual([
-      "senior",
-      "caretaker",
-    ]);
+      const seniorView = sessionViewSchema.parse(
+        await (await app.request("/sessions/shared-family")).json(),
+      );
+      const caretakerView = sessionViewSchema.parse(
+        await (await app.request("/sessions/shared-family")).json(),
+      );
+
+      expect(seniorView).toEqual(caretakerView);
+      expect(seniorView.lastBooking?.optionId).toBe("uberx_1");
+      expect(seniorView.caretakerActivity).toHaveLength(1);
+      expect(seniorView.caretakerActivity[0]?.sent).toBe(true);
+      expect(seniorView.events.map((event) => event.whoAsked.actor)).toEqual([
+        "senior",
+        "caretaker",
+      ]);
+    } finally {
+      executeSpy.mockRestore();
+    }
   });
 
   it("keeps session events ordered and stable across polls", async () => {
@@ -615,6 +707,70 @@ describe("POST /approvals", () => {
     expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
   });
 
+  it("lets a caretaker confirm a notify draft", async () => {
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: true,
+      logId: "gmail_send_caretaker",
+    });
+
+    try {
+      await app.request("/tools/notify_caretaker", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          input: {
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            recipientName: "Sarah",
+          },
+          actor: "model",
+          sessionId: "caretaker-notify-1",
+        }),
+      });
+
+      const res = await app.request("/approvals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "caretaker-notify-1",
+          decision: "approve",
+          actor: "caretaker",
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.lastApproval.actor).toBe("caretaker");
+      expect(body.lastApproval.recipientName).toBe("Sarah");
+      expect(body.lastApproval.preview).toBe("Maria missed her medication reminder.");
+      expect(body.lastApproval.summary).not.toBe("Allowed: send_message");
+      expect(body.decision).toBe("approved");
+      expect(executeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+          arguments: expect.objectContaining({
+            recipient_email: "juleselvandrade@gmail.com",
+            subject: "Kasama family report for Jules — Maria, Normal urgency",
+            is_html: true,
+          }),
+        }),
+      );
+      const sentBody = String(
+        (executeSpy.mock.calls[0]?.[0] as { arguments?: { body?: string } } | undefined)?.arguments?.body,
+      );
+      expect(sentBody).toContain("<table");
+      expect(sentBody).toContain("Sarah");
+      expect(sentBody).toContain("Daughter");
+      expect(sentBody).toContain("Maria missed her medication reminder.");
+      expect(sentBody).toContain("Dr. Chen — annual checkup");
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
   it("cancels a drafted caretaker message and never sends it", async () => {
     await app.request("/tools/notify_caretaker", {
       method: "POST",
@@ -643,6 +799,61 @@ describe("POST /approvals", () => {
       false,
     );
     expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
+  });
+
+  it("does not speak send success when Gmail failed", async () => {
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: false,
+      error: "Gmail send failed.",
+      logId: "gmail_send_fail",
+    });
+
+    try {
+      await app.request("/tools/notify_caretaker", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          input: { summary: "Maria is going to the doctor.", urgency: "normal" },
+          actor: "model",
+          sessionId: "notify-fail-1",
+        }),
+      });
+
+      const res = await app.request("/approvals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "notify-fail-1",
+          decision: "approve",
+          actor: "senior",
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.reply).not.toBe(approvedNotifyReply());
+      expect(body.reply).toContain("Failed to send");
+
+      const view = sessionStore.get("notify-fail-1");
+      expect(view.conversation.failure).toEqual({
+        kind: "retry",
+        tool: "notify_caretaker",
+        summary: body.reply,
+      });
+      expect(view.caretakerActivity.some((item) => item.sent === true)).toBe(false);
+      expect(view.caretakerActivity.some((item) => item.preview === true)).toBe(false);
+      expect(view.lastApproval?.decision).not.toBe("approved");
+      expect(view.pendingApproval?.tool).toBe("notify_caretaker");
+
+      const dashboard = buildCaretakerDashboard({ view });
+      expect(dashboard.familyUpdate?.status).not.toBe("draft");
+      expect(dashboard.familyUpdate?.headline).not.toMatch(/Draft/);
+    } finally {
+      executeSpy.mockRestore();
+    }
   });
 
   it("rejects a model actor on the approval route", async () => {
