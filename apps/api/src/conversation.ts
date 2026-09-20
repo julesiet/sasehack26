@@ -609,12 +609,7 @@ async function decide(
   }
 
   if (NOTIFY.test(text) && !RIDE.test(text)) {
-    const opened = openNotifyCheckpoint(sessionId, draftNotifySummary(transcript));
-    return {
-      text: opened.text,
-      kind: opened.kind,
-      activeRequest: opened.activeRequest,
-    };
+    return openNotifyCheckpoint(sessionId, draftNotifySummary(transcript));
   }
 
   // Appointment question ("what time is my appointment").
