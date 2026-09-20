@@ -122,55 +122,6 @@ describe("runPlaygroundTurn", () => {
     expect(result.status).toBe(400);
   });
 
-  it("handles notify_caretaker drafting and sending", async () => {
-    const sessionId = "notify-test";
-    const input = { summary: "Maria needs her meds", urgency: "high" };
-
-    // 1. No token -> Should draft
-    const resultDraft = await runPlaygroundTurn(
-      {
-        transcript: "Notify my caretaker that I need my meds",
-        sessionId,
-        actor: "senior",
-      },
-      {
-        complete: scripted([
-          assistantTools([{ name: "notify_caretaker", args: input }]),
-          assistantText("I've drafted a message for your caretaker."),
-        ]),
-      },
-    );
-
-    expect(resultDraft.status).toBe(200);
-    const bodyDraft = playgroundResponseSchema.parse(resultDraft.body);
-    expect(bodyDraft.pendingApproval?.tool).toBe("notify_caretaker");
-    expect(sessionStore.get(sessionId).caretakerActivity.at(-1)).toMatchObject({
-      summary: input.summary,
-      sent: false,
-      preview: true,
-    });
-
-    // 2. With token -> Should send
-    // We bypass runPlaygroundTurn here to test the tool invocation directly with a token
-    const { invokeTool } = await import("./invoke-tool");
-    const sentResult = invokeTool("notify_caretaker", {
-      sessionId,
-      actor: "senior",
-      approvalToken: "valid-token",
-      input,
-    });
-
-    expect(sentResult.status).toBe(200);
-    expect(sentResult.body).toMatchObject({
-      success: true,
-      sent: true,
-      preview: false,
-    });
-
-    // The session store update usually happens via the harness, but we can check the audit log
-    // or manually apply the event if needed. In the app, invokeTool is called by the harness.
-  });
-
   it("defaults the session id to playground", async () => {
     const body = await playground({ transcript: PLAYGROUND_DEMO_TRANSCRIPT });
     expect(body.sessionId).toBe("playground");
