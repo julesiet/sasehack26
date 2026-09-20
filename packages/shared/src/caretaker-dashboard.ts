@@ -231,29 +231,15 @@ function familyUpdateCard(
   const pending = isNotifyApproval(view.pendingApproval) ? view.pendingApproval : null;
   const lastNotify = isNotifyApproval(view.lastApproval) ? view.lastApproval : null;
 
-  if (notify?.sent) {
-    const recipientName = displayRecipientName(notify.recipientName);
-    return {
-      status: "sent",
-      kicker: "FAMILY UPDATE",
-      headline: "Sent",
-      summary: notify.summary,
-      urgencyLabel: titleCaseUrgency(notify.urgency ?? "normal"),
-      recipientName,
-      sentLine: `Sent to ${recipientName}`,
-      whenLabel: formatAppointmentWhen(notify.timestamp, now),
-    };
-  }
-
-  if (notify?.preview || pending) {
-    const pendingInput = notifyCaretakerInputSchema.safeParse(pending?.input);
+  if (pending) {
+    const pendingInput = notifyCaretakerInputSchema.safeParse(pending.input);
     const draft = pendingInput.success ? pendingInput.data : null;
     return {
       status: "draft",
       kicker: "FAMILY UPDATE",
       headline: "Draft — awaiting confirmation",
       summary:
-        notify?.summary ?? pending?.preview ?? draft?.summary ?? "Preview only — not sent yet.",
+        notify?.summary ?? pending.preview ?? draft?.summary ?? "Preview only — not sent yet.",
       urgencyLabel: titleCaseUrgency(notify?.urgency ?? draft?.urgency ?? "normal"),
       recipientName: displayRecipientName(notify?.recipientName ?? draft?.recipientName),
       sentLine: null,
@@ -269,6 +255,33 @@ function familyUpdateCard(
       summary: `${senior} cancelled this message.`,
       urgencyLabel: titleCaseUrgency("normal"),
       recipientName: displayRecipientName(),
+      sentLine: null,
+      whenLabel: null,
+    };
+  }
+
+  if (notify?.sent) {
+    const recipientName = displayRecipientName(notify.recipientName);
+    return {
+      status: "sent",
+      kicker: "FAMILY UPDATE",
+      headline: "Sent",
+      summary: notify.summary,
+      urgencyLabel: titleCaseUrgency(notify.urgency ?? "normal"),
+      recipientName,
+      sentLine: `Sent to ${recipientName}`,
+      whenLabel: formatAppointmentWhen(notify.timestamp, now),
+    };
+  }
+
+  if (notify?.preview) {
+    return {
+      status: "draft",
+      kicker: "FAMILY UPDATE",
+      headline: "Draft — awaiting confirmation",
+      summary: notify.summary,
+      urgencyLabel: titleCaseUrgency(notify.urgency ?? "normal"),
+      recipientName: displayRecipientName(notify.recipientName),
       sentLine: null,
       whenLabel: null,
     };

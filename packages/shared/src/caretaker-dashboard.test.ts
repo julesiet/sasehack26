@@ -329,4 +329,40 @@ describe("caretaker dashboard projection", () => {
       summary: "Maria cancelled this message.",
     });
   });
+
+  it("treats leftover preview as cancelled when last notify approval was declined", () => {
+    const dashboard = buildCaretakerDashboard({
+      view: view({
+        pendingApproval: null,
+        lastApproval: {
+          tool: "notify_caretaker",
+          action: "notify_caretaker",
+          decision: "declined",
+          actor: "senior",
+          timestamp: NOW.toISOString(),
+          summary: "Okay. I will not send that message.",
+          prompt: "I can send this to your family. Should I send it?",
+        },
+        caretakerActivity: [
+          {
+            id: "act_preview",
+            timestamp: NOW.toISOString(),
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            sent: false,
+            preview: true,
+            recipientName: "James Alvarez",
+          },
+        ],
+      }),
+      seed: SEED,
+      now: NOW,
+    });
+
+    expect(dashboard.familyUpdate).toMatchObject({
+      status: "not_sent",
+      headline: "Not sent",
+      summary: "Maria cancelled this message.",
+    });
+  });
 });
