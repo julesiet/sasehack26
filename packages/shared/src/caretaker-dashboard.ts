@@ -275,6 +275,13 @@ function consentItems(view: SessionView, senior: string): CaretakerConsentItem[]
       title: "Family update draft",
       detail: notify?.summary ?? view.pendingApproval?.preview ?? "Preview only — not sent yet.",
     });
+  } else if (view.lastApproval?.tool === "notify_caretaker" && view.lastApproval.decision === "declined") {
+    items.push({
+      id: "notify_declined",
+      tone: "neutral",
+      title: "Family update cancelled",
+      detail: `${senior} declined to send the update.`,
+    });
   }
 
   if (items.length === 1) {
@@ -369,10 +376,12 @@ function isRideApproval(
 }
 
 function sameCalendarDay(a: Date, b: Date): boolean {
+  const ad = new Date(a);
+  const bd = new Date(b);
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    ad.getUTCFullYear() === bd.getUTCFullYear() &&
+    ad.getUTCMonth() === bd.getUTCMonth() &&
+    ad.getUTCDate() === bd.getUTCDate()
   );
 }
 

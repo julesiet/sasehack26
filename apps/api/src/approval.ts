@@ -39,11 +39,11 @@ function humanToken(actor: Actor): string {
   return `approval_${actor}_${Date.now()}`;
 }
 
-export function resolvePendingApproval(input: {
+export async function resolvePendingApproval(input: {
   sessionId: string;
   actor: "senior" | "caretaker";
   decision: ApprovalChoice;
-}): ResolvedApproval {
+}): Promise<ResolvedApproval> {
   const sessionId = resolveSessionId(input.sessionId);
   const pending = sessionStore.get(sessionId).pendingApproval;
 
@@ -76,7 +76,7 @@ export function resolvePendingApproval(input: {
   }
 
   const before = auditLog.list().length;
-  const invoked = invokeTool(pending.tool, {
+  const invoked = await invokeTool(pending.tool, {
     input: pending.input,
     actor: input.actor,
     approvalToken: humanToken(input.actor),
@@ -175,7 +175,7 @@ export function resolvePendingApproval(input: {
   };
 }
 
-export function decideApproval(raw: unknown): ApprovalHttpResult {
+export async function decideApproval(raw: unknown): Promise<ApprovalHttpResult> {
   const request = approvalRequestSchema.safeParse(raw);
   if (!request.success) {
     return {
@@ -192,7 +192,7 @@ export function decideApproval(raw: unknown): ApprovalHttpResult {
     };
   }
 
-  const resolved = resolvePendingApproval({
+  const resolved = await resolvePendingApproval({
     sessionId,
     actor: request.data.actor,
     decision: request.data.decision,

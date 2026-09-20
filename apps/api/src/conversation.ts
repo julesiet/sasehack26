@@ -106,20 +106,25 @@ function describeDay(iso: string, now: Date): string {
 
 /** "Dr. Chen — annual checkup" → "checkup with Dr. Chen"; falls back to the title. */
 function describeAppointment(appointment: Appointment): string {
+  if (!appointment || !appointment.title) return "your appointment";
   const [who, what] = appointment.title.split("—").map((part) => part.trim());
   if (who && what) return `${what} with ${who}`;
   return appointment.title;
 }
 
 /** `date` is YYYY-MM-DD. Sent as local noon so the calendar-day match is unambiguous. */
-function lookupAppointment(sessionId: string, date: string): Appointment | null {
-  const result = invokeTool("get_appointment", {
+async function lookupAppointment(sessionId: string, date: string): Promise<Appointment | null> {
+  const result = await invokeTool("get_appointment", {
     input: { date: `${date}T12:00:00` },
     actor: "model",
     sessionId,
   });
   if (result.status !== 200) return null;
-  return getAppointmentResultSchema.parse(result.body).appointment ?? null;
+  const parsed = getAppointmentResultSchema.safeParse(result.body);
+  if (!parsed.success) return null;
+  const appointment = parsed.data.appointment;
+  if (!appointment) return null;
+  return appointment;
 }
 
 function spokenProduct(text: string): "UberX" | "WAV" | undefined {
@@ -133,20 +138,21 @@ function pickBookingOption(
   product?: "UberX" | "WAV",
 ): { optionId: string; estimate?: string } {
   const options = sessionStore.get(sessionId).lastRideOptions;
-  const preferred = product
-    ? options.find((option) => option.product === product)
-    : options.find((option) => option.product === "WAV" || option.accessible);
-  const option = preferred ?? options[0];
+  if (product) {
+    const preferred = options.find((option) => option.product === product);
+    if (preferred) return { optionId: preferred.optionId, estimate: preferred.estimate };
+  }
+  const defaultOption = options.find((option) => option.product === "WAV" || option.accessible) ?? options[0];
   return {
-    optionId: option?.optionId ?? DEMO_UBER_WAV_OPTION_ID,
-    estimate: option?.estimate,
+    optionId: defaultOption?.optionId ?? DEMO_UBER_WAV_OPTION_ID,
+    estimate: defaultOption?.estimate,
   };
 }
 
-function openBookingCheckpoint(sessionId: string, active: ActiveRequest): HarnessTurnResult {
+async function openBookingCheckpoint(sessionId: string, active: ActiveRequest): Promise<HarnessTurnResult> {
   const before = auditLog.list().length;
   const { optionId } = pickBookingOption(sessionId, active.product);
-  invokeTool("book_ride", {
+  await invokeTool("book_ride", {
     input: { optionId },
     actor: "model",
     sessionId,
@@ -169,9 +175,9 @@ function draftNotifySummary(transcript: string): string {
   return `Maria asked me to let you know: ${transcript.trim()}`;
 }
 
-function openNotifyCheckpoint(sessionId: string, summary: string): HarnessTurnResult {
+async function openNotifyCheckpoint(sessionId: string, summary: string): Promise<HarnessTurnResult> {
   const before = auditLog.list().length;
-  invokeTool("notify_caretaker", {
+  await invokeTool("notify_caretaker", {
     input: { summary, urgency: "normal" },
     actor: "model",
     sessionId,
@@ -181,7 +187,7 @@ function openNotifyCheckpoint(sessionId: string, summary: string): HarnessTurnRe
   return {
     text: `${preview} ${pending?.prompt ?? notifyApprovalPrompt()}`,
     kind: "proposal",
-    activeRequest: sessionStore.getConversation(sessionId).activeRequest,
+    activeRequest: sessionStore.getConversation(sessionId).activeRequest ?? null,
     askedClarification: false,
     plan: planFromAuditEvents(auditLog.list().slice(before)),
     failure: null,
@@ -234,7 +240,7 @@ function hospitalInputFromActive(active: ActiveRequest) {
   });
 }
 
-function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
+async function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): Promise<HarnessTurnResult> {
   const active = decided.activeRequest;
   if (!active) return decided;
   const pending = sessionStore.get(sessionId).pendingApproval;
@@ -247,7 +253,7 @@ function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): Harn
       return decided;
     }
     const before = auditLog.list().length;
-    invokeTool("save_medication_reminder", {
+    await invokeTool("save_medication_reminder", {
       input: reminderInputFromActive(active),
       actor: "model",
       sessionId,
@@ -267,7 +273,7 @@ function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): Harn
       return decided;
     }
     const before = auditLog.list().length;
-    invokeTool("save_hospital_visit", {
+    await invokeTool("save_hospital_visit", {
       input: hospitalInputFromActive(active),
       actor: "model",
       sessionId,
@@ -307,27 +313,27 @@ function careRulesNeeded(
   );
 }
 
-function finishDecidedTurn(
+async function finishDecidedTurn(
   sessionId: string,
   transcript: string,
   state: ConversationState,
   now: Date,
   decided: HarnessTurnResult,
-): HarnessTurnResult {
-  let next = openCareCheckpoint(sessionId, maybeOpenBookingCheckpoint(sessionId, decided));
+): Promise<HarnessTurnResult> {
+  let next = await openCareCheckpoint(sessionId, await maybeOpenBookingCheckpoint(sessionId, decided));
   if (careRulesNeeded(transcript, state, next, sessionId)) {
-    next = openCareCheckpoint(
+    next = await openCareCheckpoint(
       sessionId,
-      maybeOpenBookingCheckpoint(
+      await maybeOpenBookingCheckpoint(
         sessionId,
-        applySpokenProduct(transcript, runRulesTurn(sessionId, transcript, state, now), state.activeRequest, sessionId),
+        applySpokenProduct(transcript, await runRulesTurn(sessionId, transcript, state, now), state.activeRequest, sessionId),
       ),
     );
   }
   return next;
 }
 
-function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
+async function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): Promise<HarnessTurnResult> {
   if (decided.activeRequest?.intent !== "ride" || decided.activeRequest.status !== "accepted") {
     return applyPendingPrompt(sessionId, decided);
   }
@@ -339,7 +345,7 @@ function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResul
   if (pending && pending.tool !== "book_ride") {
     return applyPendingPrompt(sessionId, decided);
   }
-  const opened = openBookingCheckpoint(sessionId, decided.activeRequest);
+  const opened = await openBookingCheckpoint(sessionId, decided.activeRequest);
   return {
     ...opened,
     plan: { steps: [...decided.plan.steps, ...opened.plan.steps] },
@@ -367,8 +373,8 @@ function applyPendingPrompt(sessionId: string, decided: HarnessTurnResult): Harn
   };
 }
 
-function searchRides(sessionId: string, destination: string, arriveBy: string): void {
-  const result = invokeTool("find_ride_options", {
+async function searchRides(sessionId: string, destination: string, arriveBy: string): Promise<void> {
+  const result = await invokeTool("find_ride_options", {
     input: {
       pickup: getMariaAppointment().pickup,
       destination,
@@ -399,6 +405,17 @@ function proposeRideToAppointment(
   spoken = "",
 ): Reply {
   const start = new Date(appointment.start);
+  if (Number.isNaN(start.getTime())) {
+    return {
+      text: "I'm sorry, I couldn't find the exact time for your appointment. Should I still try to set up a ride?",
+      kind: "proposal",
+      activeRequest: {
+        intent: "ride",
+        destination: appointment.location ?? "your appointment",
+        status: "proposed",
+      },
+    };
+  }
   const arriveBy = new Date(start);
   arriveBy.setMinutes(arriveBy.getMinutes() - 15);
   const destination = appointment.location ?? "your appointment";
@@ -425,12 +442,12 @@ function proposeRideToAppointment(
   };
 }
 
-function decide(
+async function decide(
   sessionId: string,
   transcript: string,
   state: ConversationState,
   now: Date,
-): Reply {
+): Promise<Reply> {
   const text = normalize(transcript);
   const active = state.activeRequest;
   const saysYes = YES.test(text);
@@ -601,9 +618,9 @@ function decide(
   // Appointment question ("what time is my appointment").
   if (APPOINTMENT_INFO.test(text) && DOCTOR.test(text)) {
     const date = dateFromWords(text, now) ?? isoDate(new Date(getMariaAppointment(now).start));
-    const appointment = lookupAppointment(sessionId, date);
+    const appointment = await lookupAppointment(sessionId, date);
     if (!appointment) {
-      const next = lookupAppointment(sessionId, isoDate(new Date(getMariaAppointment(now).start)));
+      const next = await lookupAppointment(sessionId, isoDate(new Date(getMariaAppointment(now).start)));
       const nextText = next
         ? ` Your next one is ${describeAppointment(next)} ${describeDay(next.start, now)} at ${formatTime(next.start)}.`
         : "";
@@ -634,11 +651,11 @@ function decide(
     if (DOCTOR.test(text)) {
       const seed = getMariaAppointment(now);
       const requestedDate = dateFromWords(text, now) ?? active?.date ?? isoDate(new Date(seed.start));
-      const appointment = lookupAppointment(sessionId, requestedDate);
+      const appointment = await lookupAppointment(sessionId, requestedDate);
       if (appointment) {
         return proposeRideToAppointment(sessionId, appointment, now, "", text);
       }
-      const next = lookupAppointment(sessionId, isoDate(new Date(seed.start)));
+      const next = await lookupAppointment(sessionId, isoDate(new Date(seed.start)));
       if (next) {
         return proposeRideToAppointment(
           sessionId,
@@ -692,14 +709,14 @@ function decide(
   };
 }
 
-function runRulesTurn(
+async function runRulesTurn(
   sessionId: string,
   transcript: string,
   state: ConversationState,
   now: Date,
-): HarnessTurnResult {
+): Promise<HarnessTurnResult> {
   const before = auditLog.list().length;
-  const reply = decide(sessionId, transcript, state, now);
+  const reply = await decide(sessionId, transcript, state, now);
   const plan = planFromAuditEvents(auditLog.list().slice(before));
   const failed = plan.steps.find((step) => step.status === "failed");
   return {
@@ -739,7 +756,7 @@ export async function runConversationTurn(
 
   let decided: HarnessTurnResult;
   if (pending && (saysYes || saysNo)) {
-    const resolved = resolvePendingApproval({
+    const resolved = await resolvePendingApproval({
       sessionId,
       actor: request.data.actor,
       decision: saysNo ? "decline" : "approve",
@@ -766,43 +783,43 @@ export async function runConversationTurn(
         state.activeRequest,
         sessionId,
       );
-      decided = finishDecidedTurn(
+      decided = await finishDecidedTurn(
         sessionId,
         request.data.transcript,
         state,
         now,
         fromModel.plan.steps.length === 0 && isCheckingFiller(fromModel.text)
-          ? applySpokenProduct(
+          ? await applySpokenProduct(
               request.data.transcript,
-              runRulesTurn(sessionId, request.data.transcript, state, now),
+              await runRulesTurn(sessionId, request.data.transcript, state, now),
               state.activeRequest,
               sessionId,
             )
           : fromModel,
       );
     } catch {
-      decided = finishDecidedTurn(
+      decided = await finishDecidedTurn(
         sessionId,
         request.data.transcript,
         state,
         now,
-        applySpokenProduct(
+        await applySpokenProduct(
           request.data.transcript,
-          runRulesTurn(sessionId, request.data.transcript, state, now),
+          await runRulesTurn(sessionId, request.data.transcript, state, now),
           state.activeRequest,
           sessionId,
         ),
       );
     }
   } else {
-    decided = finishDecidedTurn(
+    decided = await finishDecidedTurn(
       sessionId,
       request.data.transcript,
       state,
       now,
-      applySpokenProduct(
+      await applySpokenProduct(
         request.data.transcript,
-        runRulesTurn(sessionId, request.data.transcript, state, now),
+        await runRulesTurn(sessionId, request.data.transcript, state, now),
         state.activeRequest,
         sessionId,
       ),

@@ -205,11 +205,11 @@ type ExecutedCall = {
   body: Record<string, unknown>;
 };
 
-function executeKasamaTool(
+async function executeKasamaTool(
   sessionId: string,
   name: string,
   rawArgs: unknown,
-): { step: ConversationPlanStep | null; content: string; executed?: ExecutedCall } {
+): Promise<{ step: ConversationPlanStep | null; content: string; executed?: ExecutedCall }> {
   if (!isKnownTool(name)) {
     const content = JSON.stringify({ success: false, summary: `Unknown tool: ${name}` });
     return { step: null, content };
@@ -228,7 +228,7 @@ function executeKasamaTool(
     input = { ...input, timeLabel: formatHospitalTimeLabel(input.timeLabel) };
   }
 
-  const result = invokeTool(name, {
+  const result = await invokeTool(name, {
     input,
     actor: "model",
     sessionId,
@@ -499,7 +499,7 @@ export async function runHarnessTurn(input: {
       } catch {
         parsed = {};
       }
-      const ran = executeKasamaTool(input.sessionId, call.function.name, parsed);
+      const ran = await executeKasamaTool(input.sessionId, call.function.name, parsed);
       if (ran.step && ran.executed) {
         executed.push(ran.executed);
       }

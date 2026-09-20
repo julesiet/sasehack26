@@ -21,6 +21,8 @@ import {
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
 import { getUberProvider } from "./uber-provider";
+import { kasamaComposio } from "./composio";
+import { COMPOSIO_GMAIL_SEND_TOOL } from "@kasama/shared";
 
 export type ToolHttpResult = {
   status: 200 | 400 | 403 | 404;
@@ -28,10 +30,12 @@ export type ToolHttpResult = {
 };
 
 function isSameCalendarDay(a: Date, b: Date): boolean {
+  const ad = new Date(a);
+  const bd = new Date(b);
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    ad.getFullYear() === bd.getFullYear() &&
+    ad.getMonth() === bd.getMonth() &&
+    ad.getDate() === bd.getDate()
   );
 }
 
@@ -55,12 +59,15 @@ function formatTime(iso: string): string {
   });
 }
 
-function executeStub(name: ToolName, input: unknown, options?: { preview?: boolean }) {
+async function executeStub(name: ToolName, input: unknown, options?: { preview?: boolean }) {
   switch (name) {
     case "get_appointment": {
       const { date } = getAppointmentInputSchema.parse(input);
       const requested = new Date(date);
       const seedAppointment = getMariaAppointment();
+
+      // Log for debugging purposes in tests
+      console.log(`Requested: ${requested.toISOString()}, Seed: ${seedAppointment.start}`);
 
       if (!Number.isNaN(requested.getTime()) && isSameCalendarDay(requested, new Date(seedAppointment.start))) {
         const arrivalTarget = computeArrivalTarget(seedAppointment);
@@ -102,14 +109,41 @@ function executeStub(name: ToolName, input: unknown, options?: { preview?: boole
           draft: parsed,
         });
       }
-      return notifyCaretakerResultSchema.parse({
-        success: true,
-        confirmationId: `stub_notify_${parsed.urgency}`,
-        summary: `Mocked family email/SMS (${parsed.urgency}): ${parsed.summary}`,
-        preview: false,
-        sent: true,
-        draft: parsed,
-      });
+
+      try {
+        const composioResult = await kasamaComposio.execute({
+          toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+          arguments: {
+            body: parsed.summary,
+            subject: `Note from Kasama about Maria (${parsed.urgency} urgency)`,
+          },
+        });
+
+        if (!composioResult.successful) {
+          return notifyCaretakerResultSchema.parse({
+            success: false,
+            summary: `Failed to send notification: ${composioResult.error}`,
+            preview: false,
+            sent: false,
+          });
+        }
+
+        return notifyCaretakerResultSchema.parse({
+          success: true,
+          confirmationId: composioResult.logId ?? `composio_${Date.now()}`,
+          summary: `Notification sent to family (${parsed.urgency}): ${parsed.summary}`,
+          preview: false,
+          sent: true,
+          draft: parsed,
+        });
+      } catch (e) {
+        return notifyCaretakerResultSchema.parse({
+          success: false,
+          summary: `Unexpected error sending notification: ${e instanceof Error ? e.message : String(e)}`,
+          preview: false,
+          sent: false,
+        });
+      }
     }
     case "save_medication_reminder": {
       const parsed = saveMedicationReminderInputSchema.parse(input);
@@ -150,7 +184,7 @@ function executeStub(name: ToolName, input: unknown, options?: { preview?: boole
   }
 }
 
-export function invokeTool(name: string, raw: unknown): ToolHttpResult {
+export async function invokeTool(name: string, raw: unknown): Promise<ToolHttpResult> {
   if (!isKnownTool(name)) {
     return {
       status: 404,
@@ -249,7 +283,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     };
   }
 
-  const result = executeStub(name, input, { preview: decision.preview });
+  const result = await executeStub(name, input, { preview: decision.preview });
   const event = auditLog.append({
     whoAsked: {
       actor: request.data.actor,

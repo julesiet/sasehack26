@@ -235,7 +235,7 @@ export function createSessionStore(): SessionStore {
       // gathering and resets once the request resolves (proposal, answer, or dropped).
       if (askedClarification) {
         conversation.clarificationsAsked += 1;
-      } else if (activeRequest === null || activeRequest.status !== "gathering") {
+      } else if (activeRequest === null || activeRequest === undefined || activeRequest.status !== "gathering") {
         conversation.clarificationsAsked = 0;
       }
       conversation.activeRequest = activeRequest;
