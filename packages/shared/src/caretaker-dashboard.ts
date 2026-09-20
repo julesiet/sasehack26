@@ -55,6 +55,7 @@ export type CaretakerDashboard = {
   ride: CaretakerRideCard | null;
   consentItems: CaretakerConsentItem[];
   activity: CaretakerTimelineItem[];
+  narrative: string;
 };
 
 const EMPTY_VIEW: SessionView = {
@@ -171,6 +172,7 @@ export function buildCaretakerDashboard(input: {
     ride: rideCard(view, seed),
     consentItems: consentItems(view, senior),
     activity: activityItems(view, senior),
+    narrative: (view.caretakerNarrative ?? []).map((item) => `${item.timestamp}: ${item.text}`).join("\n"),
   };
 }
 

@@ -35,6 +35,7 @@ import {
   type SeniorTask,
   type ToolName,
   type UberRideOption,
+  generateCaretakerNarrative,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 
@@ -135,9 +136,11 @@ function eventsFor(sessionId: string): AuditEvent[] {
 }
 
 function toView(state: SessionState): SessionView {
+  const events = eventsFor(state.sessionId);
   return sessionViewSchema.parse({
     ...state,
-    events: eventsFor(state.sessionId),
+    events,
+    caretakerNarrative: generateCaretakerNarrative(events),
   });
 }
 

@@ -88,6 +88,10 @@ export const sessionViewSchema = z.object({
   lastHospitalVisit: sessionHospitalVisitSchema.nullable().default(null),
   tasks: z.array(seniorTaskSchema).default([]),
   caretakerActivity: z.array(caretakerActivityItemSchema),
+  caretakerNarrative: z.array(z.object({
+    timestamp: z.string(),
+    text: z.string(),
+  })).default([]),
   careSignal: careSignalSchema.nullable(),
   consentGranted: z.boolean(),
   /** Voice loop memory (#4): turns so far and the request Kasama is carrying. */
