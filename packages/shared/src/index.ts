@@ -35,5 +35,6 @@ export * from "./care-aware";
 export * from "./conversation";
 export * from "./playground";
 export * from "./composio";
+export * from "./escalation";
 export * from "./narrative";
 
