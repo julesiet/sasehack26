@@ -29,4 +29,5 @@ export * from "./caretaker-dashboard";
 export * from "./conversation";
 export * from "./playground";
 export * from "./composio";
+export * from "./escalation";
 
