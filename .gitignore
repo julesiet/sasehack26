@@ -90,3 +90,5 @@ aidlc/diagnostics/
 .claude/settings.local.json
 # END AI-DLC:gitignore
 
+/aidlc
+/aidlc
