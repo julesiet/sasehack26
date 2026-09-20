@@ -129,6 +129,9 @@ describe("runPlaygroundTurn", () => {
     // Mock Composio execute to avoid external API calls in tests
     const { kasamaComposio } = await import("./composio");
     const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "sess_mock",
+      toolSlug: "GMAIL_SEND_EMAIL",
       successful: true,
       logId: "mock_composio_log_123",
     });

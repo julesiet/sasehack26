@@ -70,6 +70,7 @@ const EMPTY_VIEW: SessionView = {
   lastHospitalVisit: null,
   tasks: [],
   caretakerActivity: [],
+  caretakerNarrative: [],
   careSignal: null,
   consentGranted: false,
   conversation: emptyConversationState(),

@@ -137,11 +137,15 @@ function eventsFor(sessionId: string): AuditEvent[] {
 
 function toView(state: SessionState): SessionView {
   const events = eventsFor(state.sessionId);
-  return sessionViewSchema.parse({
+  const parsed = sessionViewSchema.parse({
     ...state,
     events,
-    caretakerNarrative: generateCaretakerNarrative(events),
+    caretakerNarrative: [],
   });
+  return {
+    ...parsed,
+    caretakerNarrative: generateCaretakerNarrative(parsed),
+  };
 }
 
 function appendCaretakerActivity(

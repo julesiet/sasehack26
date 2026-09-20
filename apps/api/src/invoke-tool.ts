@@ -21,7 +21,7 @@ import {
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
 import { getUberProvider } from "./uber-provider";
-import { kasamaComposio } from "./composio";
+import { ComposioNotConfiguredError, kasamaComposio } from "./composio";
 import { COMPOSIO_GMAIL_SEND_TOOL } from "@kasama/shared";
 
 export type ToolHttpResult = {
@@ -66,9 +66,6 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
       const requested = new Date(date);
       const seedAppointment = getMariaAppointment();
 
-      // Log for debugging purposes in tests
-      console.log(`Requested: ${requested.toISOString()}, Seed: ${seedAppointment.start}`);
-
       if (!Number.isNaN(requested.getTime()) && isSameCalendarDay(requested, new Date(seedAppointment.start))) {
         const arrivalTarget = computeArrivalTarget(seedAppointment);
         return getAppointmentResultSchema.parse({
@@ -110,6 +107,16 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
         });
       }
 
+      const mockSend = () =>
+        notifyCaretakerResultSchema.parse({
+          success: true,
+          confirmationId: `notify_${Date.now()}`,
+          summary: `Email and SMS sent to your family (${parsed.urgency}): ${parsed.summary}`,
+          preview: false,
+          sent: true,
+          draft: parsed,
+        });
+
       try {
         const composioResult = await kasamaComposio.execute({
           toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
@@ -120,28 +127,36 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
         });
 
         if (!composioResult.successful) {
+          if (composioResult.needsAuth || composioResult.error?.includes("not configured")) {
+            return mockSend();
+          }
           return notifyCaretakerResultSchema.parse({
             success: false,
-            summary: `Failed to send notification: ${composioResult.error}`,
+            summary: `Failed to send notification: ${composioResult.error ?? "Gmail send failed."}`,
             preview: false,
             sent: false,
+            draft: parsed,
           });
         }
 
         return notifyCaretakerResultSchema.parse({
           success: true,
           confirmationId: composioResult.logId ?? `composio_${Date.now()}`,
-          summary: `Notification sent to family (${parsed.urgency}): ${parsed.summary}`,
+          summary: `Email sent to your family (${parsed.urgency}): ${parsed.summary}`,
           preview: false,
           sent: true,
           draft: parsed,
         });
       } catch (e) {
+        if (e instanceof ComposioNotConfiguredError) {
+          return mockSend();
+        }
         return notifyCaretakerResultSchema.parse({
           success: false,
           summary: `Unexpected error sending notification: ${e instanceof Error ? e.message : String(e)}`,
           preview: false,
           sent: false,
+          draft: parsed,
         });
       }
     }

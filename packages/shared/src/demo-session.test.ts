@@ -47,6 +47,7 @@ describe("getMariaDemoSession", () => {
       lastHospitalVisit: null,
       tasks: [],
       caretakerActivity: demo.caretakerActivity,
+      caretakerNarrative: [],
       careSignal: {
         label: "worth reviewing",
         note: seed.priorRequests.find((request) => request.flaggedConfusion)?.note ?? "",

@@ -59,6 +59,7 @@ export const conversationIntentSchema = z.enum([
   "appointment_info",
   "medication_reminder",
   "hospital_schedule",
+  "family_update",
   "unknown",
 ]);
 export type ConversationIntent = z.infer<typeof conversationIntentSchema>;

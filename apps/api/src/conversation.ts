@@ -187,7 +187,7 @@ async function openNotifyCheckpoint(sessionId: string, summary: string): Promise
   return {
     text: `${preview} ${pending?.prompt ?? notifyApprovalPrompt()}`,
     kind: "proposal",
-    activeRequest: sessionStore.getConversation(sessionId).activeRequest ?? null,
+    activeRequest: { intent: "family_update", status: "proposed" },
     askedClarification: false,
     plan: planFromAuditEvents(auditLog.list().slice(before)),
     failure: null,
@@ -295,12 +295,17 @@ function careRulesNeeded(
   sessionId: string,
 ): boolean {
   const pending = sessionStore.get(sessionId).pendingApproval;
-  if (pending?.tool === "save_medication_reminder" || pending?.tool === "save_hospital_visit") {
+  if (
+    pending?.tool === "save_medication_reminder" ||
+    pending?.tool === "save_hospital_visit" ||
+    pending?.tool === "notify_caretaker"
+  ) {
     return false;
   }
   if (
     decided.activeRequest?.intent === "medication_reminder" ||
-    decided.activeRequest?.intent === "hospital_schedule"
+    decided.activeRequest?.intent === "hospital_schedule" ||
+    decided.activeRequest?.intent === "family_update"
   ) {
     return false;
   }
@@ -607,12 +612,7 @@ async function decide(
   }
 
   if (NOTIFY.test(text) && !RIDE.test(text)) {
-    const opened = openNotifyCheckpoint(sessionId, draftNotifySummary(transcript));
-    return {
-      text: opened.text,
-      kind: opened.kind,
-      activeRequest: opened.activeRequest,
-    };
+    return await openNotifyCheckpoint(sessionId, draftNotifySummary(transcript));
   }
 
   // Appointment question ("what time is my appointment").

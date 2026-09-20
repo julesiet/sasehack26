@@ -26,6 +26,7 @@ function view(partial: Partial<SessionView> = {}): SessionView {
     lastHospitalVisit: null,
     tasks: [],
     caretakerActivity: [],
+    caretakerNarrative: [],
     careSignal: {
       label: "worth reviewing",
       note: "Asked the same question twice within 5 minutes.",

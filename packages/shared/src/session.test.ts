@@ -72,5 +72,6 @@ describe("session view contract", () => {
     expect(parsed.careSignal?.label).toBe("worth reviewing");
     expect(parsed.lastApproval).toBeNull();
     expect(parsed.lastRideOptions).toEqual([]);
+    expect(parsed.caretakerNarrative).toEqual([]);
   });
 });

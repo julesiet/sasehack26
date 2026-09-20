@@ -6,6 +6,7 @@ import {
   PLAYGROUND_DEMO_TRANSCRIPT,
   buildCaretakerDashboard,
   conversationTurnResponseSchema,
+  getMariaAppointment,
   playgroundResponseSchema,
   sessionViewSchema,
 } from "@kasama/shared";
@@ -22,6 +23,15 @@ beforeEach(() => {
   resetControlledUberProvider();
   process.env.MODEL_API_KEY = "";
 });
+
+function localDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const mariaAppointmentDay = localDateString(new Date(getMariaAppointment().start));
 
 describe("POST /tools/:name", () => {
   it("denies book_ride without approval and writes the audit log", async () => {
@@ -161,15 +171,11 @@ describe("POST /tools/:name", () => {
   });
 
   it("returns Maria's seeded appointment for tomorrow and null for other dates", async () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateStr = tomorrow.toISOString().slice(0, 10);
-
     const res = await app.request("/tools/get_appointment", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        input: { date: dateStr },
+        input: { date: mariaAppointmentDay },
         actor: "model",
       }),
     });
@@ -309,11 +315,7 @@ describe("GET /audit", () => {
 });
 
 describe("GET /sessions/:sessionId", () => {
-  const tomorrow = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
-  })();
+  const tomorrow = mariaAppointmentDay;
 
   async function postTool(
     name: string,
@@ -412,6 +414,8 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.consentGranted).toBe(true);
     expect(body.pendingApproval).toBeNull();
     expect(body.currentRequest?.tool).toBe("book_ride");
+    expect(body.caretakerNarrative.length).toBeGreaterThan(0);
+    expect(body.caretakerNarrative.map((item) => item.text).join(" ")).toMatch(/appointment/i);
 
     const dashboard = buildCaretakerDashboard({ view: body });
     expect(dashboard.overviewStatus).toBe("confirmed");

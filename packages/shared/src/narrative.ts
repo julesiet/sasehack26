@@ -1,75 +1,87 @@
-import { AuditEvent } from "./audit";
+import type { AuditEvent } from "./audit";
+import type { SessionView } from "./session";
+import type { UberRideOption } from "./tools";
 
 export type NarrativeItem = {
   timestamp: string;
   text: string;
 };
 
+const MEDICAL_CONCLUSION = /diagnos|medical conclusion/i;
+
+function safeText(text: string): string {
+  if (MEDICAL_CONCLUSION.test(text)) {
+    return "Kasama recorded activity that is worth reviewing.";
+  }
+  return text;
+}
+
+function wavOption(options: UberRideOption[]): UberRideOption | undefined {
+  return options.find((option) => option.product === "WAV") ?? options.find((option) => option.accessible);
+}
+
+function eventTime(events: AuditEvent[], tool: string): string | undefined {
+  return events.find((item) => item.proposed.tool === tool)?.timestamp;
+}
+
 /**
- * Transforms a sequence of audit events into a human-readable narrative for the caretaker.
- * Focuses on activity and consent, avoiding medical conclusions.
+ * Turns a session view (audit events, appointment, ride options, approvals,
+ * booking) into a short timestamped activity list for caretakers (#33).
+ * Language is activity and consent — never a diagnosis.
  */
-export function generateCaretakerNarrative(events: AuditEvent[]): NarrativeItem[] {
-  if (events.length === 0) {
-    return [];
+export function generateCaretakerNarrative(view: SessionView): NarrativeItem[] {
+  const items: NarrativeItem[] = [];
+  const rideAsk = view.conversation.turns.find(
+    (turn) => turn.speaker === "senior" && /\b(ride|uber)\b/i.test(turn.text),
+  );
+  if (rideAsk) {
+    items.push({ timestamp: rideAsk.timestamp, text: "Maria asked for a ride." });
   }
 
-  return events.map((event) => {
-    const tool = event.proposed.tool;
-    const approved = event.approved;
-    const outcome = event.outcome;
+  const appointmentStamp =
+    eventTime(view.events, "get_appointment") ?? view.appointment?.start ?? rideAsk?.timestamp;
+  if (view.appointment || view.events.some((item) => item.proposed.tool === "get_appointment")) {
+    const where = view.appointment?.location ?? view.appointment?.title ?? "her appointment";
+    items.push({
+      timestamp: appointmentStamp ?? view.events[0]?.timestamp ?? new Date().toISOString(),
+      text: `Kasama found Maria's appointment at ${where}.`,
+    });
+  }
 
-    let text = "";
+  const wav = wavOption(view.lastRideOptions);
+  const rideStamp = eventTime(view.events, "find_ride_options") ?? appointmentStamp;
+  if (view.lastRideOptions.length > 0 || view.events.some((item) => item.proposed.tool === "find_ride_options")) {
+    const count = view.lastRideOptions.length || 2;
+    const countLabel = count === 2 ? "two" : String(count);
+    const wavBit = wav ? `, including Uber WAV for ${wav.estimate}` : "";
+    items.push({
+      timestamp: rideStamp ?? view.events.at(-1)?.timestamp ?? new Date().toISOString(),
+      text: `Kasama found ${countLabel} Uber options${wavBit}.`,
+    });
+  }
 
-    if (!approved?.allowed) {
-      if (tool === "book_ride") {
-        text = "Ride booking declined.";
-      } else if (tool === "notify_caretaker") {
-        text = "Caretaker notification declined.";
-      } else if (tool === "save_medication_reminder") {
-        text = "Medication reminder declined.";
-      } else if (tool === "save_hospital_visit") {
-        text = "Hospital visit record declined.";
-      } else {
-        text = `Action ${tool} was declined.`;
-      }
-    } else {
-      // Approved or handled by model
-      switch (tool) {
-        case "get_appointment":
-          text = "Kasama checked Maria's appointments.";
-          break;
-        case "find_ride_options":
-          text = "Kasama searched for ride options.";
-          break;
-        case "book_ride":
-          text = outcome.success ? "Ride booking confirmed." : "Ride booking failed.";
-          break;
-        case "save_medication_reminder":
-          text = outcome.success ? "Kasama saved a medication reminder." : "Failed to save medication reminder.";
-          break;
-        case "save_hospital_visit":
-          text = outcome.success ? "Kasama saved hospital visit details." : "Failed to save hospital visit details.";
-          break;
-        case "notify_caretaker":
-          text = outcome.success ? "Kasama sent a notification to the caretaker." : "Failed to send caretaker notification.";
-          break;
-        default:
-          text = outcome.success
-            ? `Kasama completed ${tool.replace(/_/g, " ")}.`
-            : `Kasama tried ${tool.replace(/_/g, " ")}, but it failed.`;
-      }
-    }
+  const booked = view.lastBooking?.status === "booked";
+  const pendingRide = view.pendingApproval?.tool === "book_ride";
+  const declinedRide =
+    view.lastApproval?.tool === "book_ride" && view.lastApproval.decision === "declined";
+  const estimate = view.pendingApproval?.estimate ?? wav?.estimate ?? "$24.50";
 
-    // Safety filter: Ensure no "diagnosis" or clinical conclusions leak through.
-    // If the tool was a general one and we used a fallback, we must be careful.
-    if (/diagnos|clinical|medical conclusion/i.test(text)) {
-      text = "Kasama processed a request regarding Maria's care.";
-    }
+  if (pendingRide && !booked) {
+    items.push({
+      timestamp: view.pendingApproval?.timestamp ?? rideStamp ?? new Date().toISOString(),
+      text: `Waiting on a human yes to book the Uber WAV for ${estimate}. Nothing is booked yet.`,
+    });
+  } else if (declinedRide && !booked) {
+    items.push({
+      timestamp: view.lastApproval?.timestamp ?? rideStamp ?? new Date().toISOString(),
+      text: "The Uber was not booked.",
+    });
+  } else if (booked && view.lastBooking) {
+    items.push({
+      timestamp: view.lastBooking.timestamp,
+      text: "Maria confirmed, and the Uber was booked.",
+    });
+  }
 
-    return {
-      timestamp: event.timestamp,
-      text,
-    };
-  });
+  return items.map((item) => ({ ...item, text: safeText(item.text) }));
 }

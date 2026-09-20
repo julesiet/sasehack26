@@ -85,6 +85,18 @@ export async function resolvePendingApproval(input: {
   });
   const view = sessionStore.get(sessionId);
   if (pending.tool === "notify_caretaker") {
+    if (invoked.body.sent !== true || invoked.body.success === false) {
+      const summary =
+        typeof invoked.body.summary === "string" && invoked.body.summary
+          ? invoked.body.summary
+          : "Failed to send the family note.";
+      return {
+        reply: summary,
+        activeRequest: view.conversation.activeRequest,
+        plan: planFromAuditEvents(auditLog.list().slice(before)),
+        failure: { kind: "retry", tool: "notify_caretaker", summary },
+      };
+    }
     return {
       reply: approvedNotifyReply(),
       activeRequest: view.conversation.activeRequest,
