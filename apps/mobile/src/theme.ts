@@ -63,6 +63,21 @@ export const colors = {
   caretakerConsentPending: "#FFF6E8",
   caretakerConsentNeutral: "#F4F4F4",
   caretakerOk: "#1B8A4A",
+  careAwareSky: "#FFFFFF",
+  careAwareWash: "#FBE6D2",
+  careAwareWashDeep: "#F6C9A0",
+  careAwareTrack: "#EDE8E2",
+  careAwarePeak: "#FFF6EE",
+  careAwareNote: "#FFF8F4",
+  careAwareNoteLine: "#F0E6DC",
+  careAwareChipFast: "#D8F4E8",
+  careAwareChipMid: "#F8DDB0",
+  careAwareChipSlow: "#F5B8B0",
+  careAwareReviewWash: "#FFF8EC",
+  careAwareReviewBorder: "#E8B84A",
+  careAwareReviewLabel: "#E0A21A",
+  careAwareActionLine: "#E8E2DA",
+  careAwareActionFill: "#161513",
 } as const;
 
 export const type = {

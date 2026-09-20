@@ -105,7 +105,9 @@ describe("getMariaSeedBundle", () => {
     ]);
     expect(bundle.conversationChats.at(-1)?.turns).toEqual(bundle.conversationTurns);
     expect(bundle.wearableReadings).toHaveLength(7);
-    expect(bundle.priorRequests.length).toBeGreaterThan(0);
+    expect(bundle.priorRequests.filter((request) => request.flaggedConfusion)).toHaveLength(3);
+    expect(bundle.careAwareUsage.totalMinutes).toBe(12);
+    expect(bundle.careAwareResponse.dailySeconds).toHaveLength(7);
   });
 });
 
