@@ -7,10 +7,12 @@
  */
 const { spawn } = require("node:child_process");
 const { readFileSync } = require("node:fs");
+const { createRequire } = require("node:module");
 const { networkInterfaces } = require("node:os");
 const { resolve } = require("node:path");
 
 const mobileRoot = resolve(__dirname, "..");
+const requireFromMobile = createRequire(resolve(mobileRoot, "package.json"));
 const isWindows = process.platform === "win32";
 
 function loadEnvFile(file) {
@@ -136,22 +138,24 @@ if (lanHost) {
   );
 }
 
-// Windows shims are expo.cmd; spawning `.bin/expo` is ENOENT. .cmd also
-// needs `shell: true`. Keep the command relative so paths with spaces
-// (e.g. D:\VSCode Repos\...) are not split by cmd.exe.
-const expoCommand = isWindows
-  ? "node_modules/.bin/expo.cmd"
-  : "node_modules/.bin/expo";
+// Never spawn node_modules/.bin/expo — that Unix shim is ENOENT on Windows
+// (the error path ends in `.bin\expo`). Run the CLI JS with this Node instead.
+let expoCli;
+try {
+  expoCli = requireFromMobile.resolve("expo/bin/cli");
+} catch {
+  console.error("Expo is not installed. From the repo root run: pnpm install");
+  process.exit(1);
+}
 
-const child = spawn(expoCommand, args, {
+const child = spawn(process.execPath, [expoCli, ...args], {
   cwd: mobileRoot,
   env: process.env,
   stdio: "inherit",
-  shell: isWindows,
 });
 
 child.on("error", (error) => {
-  console.error(`Failed to start Expo (${expoCommand}): ${error.message}`);
+  console.error(`Failed to start Expo: ${error.message}`);
   process.exit(1);
 });
 
