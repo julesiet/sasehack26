@@ -5,7 +5,7 @@ Where to put work so every agent sees the same system.
 ## One layout
 
 ```text
-apps/mobile/src/screens/    iOS screens (app Home unchanged; Senior Home / Chat / Tasks; caretaker dashboard)
+apps/mobile/src/screens/    iOS screens (app Home unchanged; Senior Home / Chat history list + thread / Tasks; caretaker dashboard)
 apps/mobile/src/components/ Reusable pieces (orb, sun bowl, composer pill, chat bubble, ride option cards, ride status card, confirmation card, medication reminder card, hospital appointment card, compact tab bar, caretaker dashboard cards)
 apps/mobile/src/hooks/      Conversation state machine (record → transcribe → turn → speak)
 apps/mobile/src/lib/        API client

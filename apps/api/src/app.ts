@@ -9,7 +9,7 @@ import {
 import { auditLog } from "./audit-log";
 import { ComposioNotConfiguredError, kasamaComposio, type KasamaComposio } from "./composio";
 import { decideApproval } from "./approval";
-import { runConversationTurn } from "./conversation";
+import { runConversationChat, runConversationTurn } from "./conversation";
 import { invokeTool } from "./invoke-tool";
 import { runPlaygroundTurn } from "./playground";
 import type { ChatComplete } from "./model";
@@ -53,6 +53,7 @@ export function createApp({
       sessions: "GET /sessions/:sessionId",
       audit: "GET /audit",
       conversation: "POST /conversation/turn",
+      conversationChats: "POST /conversation/chats",
       playground: "POST /playground",
       approvals: "POST /approvals",
       transcribe: "POST /speech/transcribe",
@@ -119,6 +120,18 @@ export function createApp({
     }
 
     const result = await runConversationTurn(raw, complete ? { complete } : {});
+    return c.json(result.body, result.status);
+  });
+
+  app.post("/conversation/chats", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ success: false, summary: "Request body must be JSON." }, 400);
+    }
+
+    const result = runConversationChat(raw);
     return c.json(result.body, result.status);
   });
 

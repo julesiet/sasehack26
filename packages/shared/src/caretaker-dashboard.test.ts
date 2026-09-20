@@ -163,6 +163,7 @@ describe("caretaker dashboard projection", () => {
         ],
         consentGranted: true,
         conversation: {
+          ...emptyConversationState(),
           turns: [
             {
               id: "turn_1",
@@ -184,10 +185,6 @@ describe("caretaker dashboard projection", () => {
               text: "Thanks Kasama, that helps a lot. I'll be ready by 2:00.",
             },
           ],
-          activeRequest: null,
-          clarificationsAsked: 0,
-          plan: { steps: [] },
-          failure: null,
         },
       }),
     });

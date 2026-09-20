@@ -98,6 +98,12 @@ describe("getMariaSeedBundle", () => {
     expect(bundle.conversationTurns[0]?.text).toBe(
       "Please get me a ride to my doctor tomorrow.",
     );
+    expect(bundle.conversationChats.map((chat) => chat.title)).toEqual([
+      "Hospital visit",
+      "Medication reminder",
+      "Doctor ride",
+    ]);
+    expect(bundle.conversationChats.at(-1)?.turns).toEqual(bundle.conversationTurns);
     expect(bundle.wearableReadings).toHaveLength(7);
     expect(bundle.priorRequests.length).toBeGreaterThan(0);
   });
