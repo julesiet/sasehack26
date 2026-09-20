@@ -22,6 +22,7 @@ export * from "./policy";
 export * from "./audit";
 export * from "./invoke";
 export * from "./seed";
+export * from "./communication";
 export * from "./demo-session";
 export * from "./approval";
 export * from "./session";

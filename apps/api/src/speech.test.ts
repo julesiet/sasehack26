@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MARIA_PROFILE, elevenLabsSpeechSpeed } from "@kasama/shared";
 import {
   ELEVENLABS_STT_MODEL,
   ELEVENLABS_STT_URL,
@@ -10,6 +11,20 @@ import {
   createElevenLabsTranscriber,
   elevenLabsTtsUrl,
 } from "./speech";
+
+async function ttsBody(
+  options: Omit<Parameters<typeof createElevenLabsSpeaker>[0], "apiKey" | "fetchImpl"> = {},
+) {
+  let seen: { body: string } | null = null;
+  const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+    seen = { body: String(init?.body) };
+    return new Response(new Uint8Array([1]), { status: 200, headers: { "content-type": "audio/mpeg" } });
+  }) as typeof fetch;
+  await createElevenLabsSpeaker({ apiKey: "xi_test", fetchImpl, ...options })("Hello");
+  return JSON.parse(seen!.body) as {
+    voice_settings: { speed: number };
+  };
+}
 
 const clip = new Blob([new Uint8Array([9, 9, 9])], { type: "audio/m4a" });
 
@@ -74,9 +89,28 @@ describe("createElevenLabsSpeaker", () => {
     const headers = seen!.init.headers as Record<string, string>;
     expect(headers["xi-api-key"]).toBe("xi_test");
     expect(headers["accept"]).toBe("audio/mpeg");
-    const body = JSON.parse(String(seen!.init.body)) as { text: string; model_id: string };
+    const body = JSON.parse(String(seen!.init.body)) as {
+      text: string;
+      model_id: string;
+      voice_settings: { speed: number };
+    };
     expect(body.text).toBe("Should I set that up?");
     expect(body.model_id).toBe(ELEVENLABS_TTS_MODEL);
+    expect(body.voice_settings.speed).toBe(
+      elevenLabsSpeechSpeed(MARIA_PROFILE.communicationPreferences),
+    );
+    expect(body.voice_settings.speed).toBe(0.88);
+  });
+
+  it("uses default ElevenLabs speed when speaksSlowly is false", async () => {
+    const body = await ttsBody({
+      preferences: {
+        speaksSlowly: false,
+        prefersSimpleLanguage: false,
+        repeatsConfirmations: false,
+      },
+    });
+    expect(body.voice_settings.speed).toBe(1);
   });
 
   it("uses the documented Kasama voice when none is passed", async () => {

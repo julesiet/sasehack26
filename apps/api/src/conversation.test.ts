@@ -70,6 +70,7 @@ describe("runConversationTurn", () => {
 
     expect(reply.kind).toBe("proposal");
     expect(reply.reply).toBe("The Uber is $24.50. Should I book it?");
+    expect(reply.reply).not.toMatch(/\b(diagnos(?:is|e|ed)?|prescription|etiology|contraindication)\b/i);
     expect(reply.activeRequest?.status).toBe("accepted");
     expect(reply.pendingApproval?.tool).toBe("book_ride");
     expect(reply.pendingApproval?.estimate).toBe("$24.50");
