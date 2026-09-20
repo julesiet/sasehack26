@@ -76,6 +76,7 @@ export type ApplyConversationTurnInput = {
   failure: ConversationFailure | null;
   timestamp: string;
   extraKasamaTexts?: string[];
+  skipKasamaTurn?: boolean;
   chatId?: string;
 };
 
@@ -271,6 +272,7 @@ export function createSessionStore(): SessionStore {
       failure,
       timestamp,
       extraKasamaTexts,
+      skipKasamaTurn,
       chatId,
     }) {
       const state = getOrCreate(sessionId);
@@ -286,21 +288,23 @@ export function createSessionStore(): SessionStore {
         speaker: "senior",
         text: seniorText,
       });
-      for (const extra of extraKasamaTexts ?? []) {
+      if (!skipKasamaTurn) {
+        for (const extra of extraKasamaTexts ?? []) {
+          chat.turns.push({
+            id: nextTurnId(),
+            timestamp,
+            speaker: "kasama",
+            text: extra,
+          });
+        }
         chat.turns.push({
           id: nextTurnId(),
           timestamp,
           speaker: "kasama",
-          text: extra,
+          text: kasamaText,
+          kind,
         });
       }
-      chat.turns.push({
-        id: nextTurnId(),
-        timestamp,
-        speaker: "kasama",
-        text: kasamaText,
-        kind,
-      });
       applyChatTitleFromRequest(chat, activeRequest);
       conversation.turns = chat.turns;
 

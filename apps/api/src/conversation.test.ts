@@ -280,6 +280,72 @@ describe("runConversationTurn", () => {
     ]);
   });
 
+  it("does not chat UberX and WAV after a ride search — those stay on the cards", async () => {
+    const appointment = getMariaAppointment();
+    let calls = 0;
+    const result = await runConversationTurn(
+      { transcript: "Please get me a ride to my doctor tomorrow.", sessionId: "options-chat" },
+      {
+        complete: async () => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: {
+                    name: "get_appointment",
+                    arguments: JSON.stringify({ date: appointment.start }),
+                  },
+                },
+              ],
+            };
+          }
+          if (calls === 2) {
+            return {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_2",
+                  type: "function",
+                  function: {
+                    name: "find_ride_options",
+                    arguments: JSON.stringify({
+                      pickup: appointment.pickup,
+                      destination: appointment.destination,
+                      arriveBy: computeArrivalTarget(appointment),
+                    }),
+                  },
+                },
+              ],
+            };
+          }
+          return {
+            role: "assistant",
+            content:
+              "I found two Uber options: UberX for $18.00 and WAV for $24.50. Which one would you like?",
+          };
+        },
+      },
+    );
+
+    expect(result.status).toBe(200);
+    const body = conversationTurnResponseSchema.parse(result.body);
+    expect(body.kind).toBe("proposal");
+    expect(body.reply).toContain("Dr. Chen");
+    expect(body.reply).not.toMatch(/found two/i);
+    expect(body.reply).not.toMatch(/UberX/);
+    expect(body.pendingApproval).toBeNull();
+    const view = sessionStore.get("options-chat");
+    expect(view.lastRideOptions.map((option) => option.product)).toEqual(["UberX", "WAV"]);
+    expect(view.conversation.turns.map((item) => item.speaker)).toEqual(["senior"]);
+    expect(view.conversation.turns.some((item) => /found two/i.test(item.text))).toBe(false);
+  });
+
   it("opens the WAV checkpoint when Maria says she wants WAV", async () => {
     await turn("Get me a ride to my doctor tomorrow");
     const reply = await turn("I want WAV");

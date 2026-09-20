@@ -6,6 +6,7 @@ import {
   pendingHospitalVisit,
   pendingMedicationReminder,
   selectedRideOption,
+  announcesRideOptions,
   type ActiveRequest,
   type ConversationIntent,
   type ConversationTurn,
@@ -154,9 +155,11 @@ export function SeniorChatScreen({
         </Text>
       </View>
 
-      {turns.map((turn) => (
-        <ChatBubble key={turn.id} speaker={turn.speaker} text={turn.text} />
-      ))}
+      {turns
+        .filter((turn) => !(turn.speaker === "kasama" && announcesRideOptions(turn.text)))
+        .map((turn) => (
+          <ChatBubble key={turn.id} speaker={turn.speaker} text={turn.text} />
+        ))}
 
       {liveCards && rideIntent && (rideWork === "finding" || rideWork === "booking") ? (
         <View style={styles.cardWrap}>

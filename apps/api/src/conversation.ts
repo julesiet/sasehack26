@@ -2,6 +2,7 @@ import {
   DEMO_UBER_WAV_OPTION_ID,
   MAX_CLARIFICATIONS_PER_REQUEST,
   MARIA_PROFILE,
+  announcesRideOptions,
   bookingApprovalPrompt,
   pendingRideOptionId,
   conversationChatRequestSchema,
@@ -365,7 +366,7 @@ async function finishDecidedTurn(
       ),
     );
   }
-  return next;
+  return withoutRideOptionListing(sessionId, now, next);
 }
 
 async function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): Promise<HarnessTurnResult> {
@@ -430,7 +431,61 @@ type Reply = {
   activeRequest: ActiveRequest | null;
   askedClarification?: boolean;
   extraKasamaTexts?: string[];
+  skipKasamaTurn?: boolean;
 };
+
+function rideProposalText(appointment: Appointment, now: Date, preface = ""): string {
+  const start = new Date(appointment.start);
+  if (Number.isNaN(start.getTime())) {
+    return "I'm sorry, I couldn't find the exact time for your appointment. Should I still try to set up a ride?";
+  }
+  const arriveBy = new Date(start);
+  arriveBy.setMinutes(arriveBy.getMinutes() - 15);
+  const day = describeDay(appointment.start, now);
+  return (
+    `${preface}Your ${describeAppointment(appointment)} is ${day} at ${formatTime(appointment.start)}. ` +
+    `I can have an Uber pick you up at home around ${formatTime(arriveBy.toISOString())} so you arrive with time to spare. ` +
+    "Should I set that up?"
+  );
+}
+
+/**
+ * UberX / WAV are tappable cards. Never also chat a line that lists them.
+ * Speak the appointment/pickup instead, and skip that bubble when the cards
+ * are the selection.
+ */
+function withoutRideOptionListing(
+  sessionId: string,
+  now: Date,
+  decided: HarnessTurnResult,
+): HarnessTurnResult {
+  const view = sessionStore.get(sessionId);
+  if (view.pendingApproval?.tool === "book_ride") {
+    return decided;
+  }
+  const extras = (decided.extraKasamaTexts ?? []).filter((text) => !announcesRideOptions(text));
+  const listed = announcesRideOptions(decided.text);
+  if (!listed && extras.length === (decided.extraKasamaTexts ?? []).length) {
+    return decided;
+  }
+  const seed = getMariaAppointment(now);
+  const appointment = view.appointment ?? {
+    id: seed.id,
+    title: seed.title,
+    start: seed.start,
+    location: seed.destination,
+  };
+  const presentingCards =
+    decided.activeRequest?.intent === "ride" &&
+    decided.activeRequest.status === "proposed" &&
+    view.lastRideOptions.length > 0;
+  return {
+    ...decided,
+    text: listed ? rideProposalText(appointment, now) : decided.text,
+    extraKasamaTexts: extras,
+    skipKasamaTurn: presentingCards || decided.skipKasamaTurn,
+  };
+}
 
 async function proposeRideToAppointment(
   sessionId: string,
@@ -457,14 +512,8 @@ async function proposeRideToAppointment(
 
   await searchRides(sessionId, destination, arriveBy.toISOString());
 
-  const day = describeDay(appointment.start, now);
-  const text =
-    `${preface}Your ${describeAppointment(appointment)} is ${day} at ${formatTime(appointment.start)}. ` +
-    `I can have an Uber pick you up at home around ${formatTime(arriveBy.toISOString())} so you arrive with time to spare. ` +
-    "Should I set that up?";
-
   return {
-    text,
+    text: rideProposalText(appointment, now, preface),
     kind: "proposal",
     activeRequest: {
       intent: "ride",
@@ -757,6 +806,7 @@ async function runRulesTurn(
     plan,
     failure: failed ? { kind: "retry", tool: failed.tool, summary: failed.summary } : null,
     extraKasamaTexts: reply.extraKasamaTexts,
+    skipKasamaTurn: reply.skipKasamaTurn,
   };
 }
 
@@ -871,6 +921,7 @@ export async function runConversationTurn(
     failure: decided.failure,
     timestamp: now.toISOString(),
     extraKasamaTexts: decided.extraKasamaTexts,
+    skipKasamaTurn: decided.skipKasamaTurn,
     chatId: request.data.chatId,
   });
 

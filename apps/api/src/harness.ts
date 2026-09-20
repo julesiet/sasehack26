@@ -145,6 +145,8 @@ export type HarnessTurnResult = {
   plan: ConversationPlan;
   failure: ConversationFailure | null;
   extraKasamaTexts?: string[];
+  /** When true, speak the reply but do not add a Kasama chat bubble. */
+  skipKasamaTurn?: boolean;
 };
 
 function isoDate(d: Date): string {
@@ -198,6 +200,7 @@ function systemPrompt(now: Date, state: ConversationState): string {
     `Her next doctor visit is ${appointment.title} at ${appointment.start}, at ${appointment.destination} (lookup date ${isoDate(new Date(appointment.start))}).`,
     `When she asks for a ride to the doctor or "tomorrow", call get_appointment with ${tomorrowDate} then find_ride_options to that appointment. If the lookup is empty, use the visit above and still search rides. Do not ask her to restate the appointment.`,
     "If find_ride_options returns no live options, Uber search is still a stub — propose picking her up for the appointment anyway and ask whether you should set that up. Do not say the search failed.",
+    "After find_ride_options, the iPhone shows UberX and WAV cards Maria can tap. Do not list those options or their prices. Do not say you found two Uber options. Name the appointment, day, time, and pickup only.",
     `You may ask at most ${MAX_CLARIFICATIONS_PER_REQUEST} clarifying question per request. Already asked: ${state.clarificationsAsked}.`,
     `Active request: ${JSON.stringify(state.activeRequest)}.`,
   ].join(" ");

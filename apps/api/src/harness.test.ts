@@ -222,5 +222,6 @@ describe("runHarnessTurn", () => {
 
     expect(system).toContain("Speak in short, simple sentences she can hear.");
     expect(system).toContain("Never diagnose. Never change medication.");
+    expect(system).toContain("Do not list those options or their prices.");
   });
 });

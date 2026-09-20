@@ -18,11 +18,8 @@ export function RideOptionsCard({ options, selectedOptionId, disabled, onSelect 
   return (
     <View style={styles.card} accessibilityLabel="Select a ride">
       <View style={styles.header}>
-        <Ionicons name="car-outline" size={22} color={colors.pin} style={styles.headerIcon} />
-        <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>SELECT A RIDE</Text>
-          <Text style={styles.intro}>I found {options.length} Uber options.</Text>
-        </View>
+        <Ionicons name="car-outline" size={22} color={colors.pin} />
+        <Text style={styles.eyebrow}>SELECT A RIDE</Text>
       </View>
 
       <View style={styles.list}>
@@ -89,23 +86,12 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 10,
-  },
-  headerIcon: {
-    marginTop: 2,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 4,
   },
   eyebrow: {
     ...type.eyebrow,
     color: colors.pin,
-  },
-  intro: {
-    ...type.cardTitle,
-    color: colors.ink,
   },
   list: {
     gap: 12,
