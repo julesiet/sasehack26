@@ -42,3 +42,33 @@ export function withNotifyRecipient(draft: {
     recipientEmail: FAMILY_EMAIL_RECIPIENT,
   };
 }
+
+export function titleCaseUrgency(urgency: "low" | "normal" | "high"): string {
+  return urgency === "low" ? "Low" : urgency === "high" ? "High" : "Normal";
+}
+
+export function familyMessageCardCopy(input: {
+  recipientName: string;
+  summary: string;
+  urgency: "low" | "normal" | "high";
+  status: "pending" | "sent" | "cancelled";
+}): {
+  eyebrow: string;
+  recipientName: string;
+  intro: string;
+  summary: string;
+  urgencyLabel: string;
+} {
+  return {
+    eyebrow: "MESSAGE TO",
+    recipientName: input.recipientName,
+    intro:
+      input.status === "pending"
+        ? "Preview only.\nNothing is sent yet."
+        : input.status === "sent"
+          ? "Sent."
+          : "Not sent.",
+    summary: input.summary,
+    urgencyLabel: titleCaseUrgency(input.urgency),
+  };
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COMPOSIO_CARETAKER_RECIPIENT } from "./composio";
-import { FAMILY_EMAIL_RECIPIENT, resolveFamilyRecipient } from "./family";
+import { FAMILY_EMAIL_RECIPIENT, familyMessageCardCopy, resolveFamilyRecipient } from "./family";
 import { getMariaSeedBundle } from "./seed";
 
 describe("family recipients", () => {
@@ -25,5 +25,21 @@ describe("family recipients", () => {
     expect(FAMILY_EMAIL_RECIPIENT).toBe("juleselvandrade@gmail.com");
     expect(FAMILY_EMAIL_RECIPIENT).toBe(COMPOSIO_CARETAKER_RECIPIENT);
     expect(resolveFamilyRecipient("james alvarez").id).not.toBe("");
+  });
+});
+
+describe("family message card copy", () => {
+  it("builds the senior MESSAGE TO preview copy", () => {
+    const card = familyMessageCardCopy({
+      recipientName: "James Alvarez",
+      summary: "Maria missed her medication reminder.",
+      urgency: "normal",
+      status: "pending",
+    });
+    expect(card.eyebrow).toBe("MESSAGE TO");
+    expect(card.recipientName).toBe("James Alvarez");
+    expect(card.intro).toBe("Preview only.\nNothing is sent yet.");
+    expect(card.summary).toBe("Maria missed her medication reminder.");
+    expect(card.urgencyLabel).toBe("Normal");
   });
 });

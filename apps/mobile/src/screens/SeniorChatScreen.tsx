@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  notifyCaretakerInputSchema,
   pendingHospitalVisit,
   pendingMedicationReminder,
   selectedRideOption,
@@ -16,6 +17,7 @@ import {
 } from "@kasama/shared";
 import { ChatBubble } from "../components/ChatBubble";
 import { ConfirmationCard, type ConfirmationStatus } from "../components/ConfirmationCard";
+import { FamilyMessageCard, type FamilyMessageStatus } from "../components/FamilyMessageCard";
 import { HospitalAppointmentCard } from "../components/HospitalAppointmentCard";
 import { MedicationReminderCard } from "../components/MedicationReminderCard";
 import { RideOptionsCard } from "../components/RideOptionsCard";
@@ -60,6 +62,32 @@ function confirmationStatus(
   return null;
 }
 
+function familyMessageFromPending(
+  pendingApproval: PendingApproval | null,
+  justResolved: LastApproval | null,
+): {
+  recipientName: string;
+  summary: string;
+  urgency: "low" | "normal" | "high";
+  status: FamilyMessageStatus;
+} | null {
+  const tool = pendingApproval?.tool ?? justResolved?.tool;
+  if (tool !== "notify_caretaker") return null;
+  const parsed = notifyCaretakerInputSchema.safeParse(pendingApproval?.input);
+  return {
+    recipientName: parsed.success ? parsed.data.recipientName ?? "James Alvarez" : "James Alvarez",
+    summary: parsed.success
+      ? parsed.data.summary
+      : pendingApproval?.preview ?? justResolved?.summary ?? "A note for your family.",
+    urgency: parsed.success ? parsed.data.urgency : "normal",
+    status: pendingApproval
+      ? "pending"
+      : justResolved?.decision === "approved"
+        ? "sent"
+        : "cancelled",
+  };
+}
+
 /**
  * Chat thread after Kasama's first reply. The composer and tab bar stay
  * outside this screen so they stay fixed.
@@ -100,6 +128,8 @@ export function SeniorChatScreen({
   const rideIntent = intent === "ride" || intent === "unknown";
   const reminderIntent = intent === "medication_reminder" || intent === "unknown";
   const hospitalIntent = intent === "hospital_schedule" || intent === "unknown";
+  const notifyIntent = intent === "family_update" || intent === "unknown";
+  const notify = familyMessageFromPending(pendingApproval, justResolved);
   const showOptions =
     liveCards &&
     rideIntent &&
@@ -112,10 +142,11 @@ export function SeniorChatScreen({
     liveCards &&
     rideIntent &&
     Boolean(card && cardStatus && !reminder && !hospitalPending) &&
-    (pendingApproval?.tool === "book_ride" ||
-      pendingApproval?.tool === "notify_caretaker" ||
-      justResolved?.tool === "book_ride" ||
-      justResolved?.tool === "notify_caretaker");
+    (pendingApproval?.tool === "book_ride" || justResolved?.tool === "book_ride");
+  const showNotify =
+    liveCards &&
+    notifyIntent &&
+    (pendingApproval?.tool === "notify_caretaker" || justResolved?.tool === "notify_caretaker");
   const busy = phase === "thinking" || rideWork !== "none";
 
   useEffect(() => {
@@ -123,7 +154,7 @@ export function SeniorChatScreen({
       scroll.current?.scrollToEnd({ animated: true });
     });
     return () => cancelAnimationFrame(id);
-  }, [turns.length, cardStatus, lastRideOptions.length, rideWork, reminder, hospitalPending, lastHospitalVisit?.status]);
+  }, [turns.length, cardStatus, lastRideOptions.length, rideWork, reminder, hospitalPending, lastHospitalVisit?.status, showNotify]);
 
   return (
     <ScrollView
@@ -213,6 +244,20 @@ export function SeniorChatScreen({
           <HospitalAppointmentCard
             visit={lastHospitalVisit}
             status="cancelled"
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+          />
+        </View>
+      ) : null}
+
+      {showNotify && notify ? (
+        <View style={styles.cardWrap}>
+          <FamilyMessageCard
+            recipientName={notify.recipientName}
+            summary={notify.summary}
+            urgency={notify.urgency}
+            status={notify.status}
+            disabled={notify.status === "pending" && busy}
             onConfirm={onConfirm}
             onCancel={onCancel}
           />
