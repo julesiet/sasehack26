@@ -36,4 +36,4 @@ Every invoke writes: who asked, what was proposed, approval, whether execute was
 
 Signals are “worth reviewing.” Kasama must never diagnose, change a prescription, or book/charge without a human yes.
 
-`POST /composio/execute` may create a Gmail draft (`GMAIL_CREATE_EMAIL_DRAFT`) or send (`GMAIL_SEND_EMAIL`) when the HTTP caller asks. Default remains `GMAIL_GET_PROFILE`. Conversation still cannot send through Composio. `notify_caretaker` send is mocked until that path is wired. A model actor cannot self-approve a send.
+`POST /composio/execute` may create a Gmail draft (`GMAIL_CREATE_EMAIL_DRAFT`) or send (`GMAIL_SEND_EMAIL`) when the HTTP caller asks. Default remains `GMAIL_GET_PROFILE`. A `notify_caretaker` preview never calls Gmail; only a human-approved send invokes `GMAIL_SEND_EMAIL`, with a mock fallback when Composio is unconfigured or needs authorization. A model actor cannot self-approve a send.

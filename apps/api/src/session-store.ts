@@ -18,6 +18,7 @@ import {
   selectChat,
   sessionViewSchema,
   startNewChat,
+  withNotifyRecipient,
   type Actor,
   type ActiveRequest,
   type Appointment,
@@ -155,12 +156,14 @@ function appendCaretakerActivity(
   event: AuditEvent,
   sent: boolean,
 ): void {
-  const draft = notifyCaretakerInputSchema.parse(input);
+  const draft = withNotifyRecipient(notifyCaretakerInputSchema.parse(input));
   state.caretakerActivity.push({
     id: event.id,
     timestamp: event.timestamp,
     summary: draft.summary,
     urgency: draft.urgency,
+    recipientId: draft.recipientId,
+    recipientName: draft.recipientName,
     sent,
     preview: !sent,
   });

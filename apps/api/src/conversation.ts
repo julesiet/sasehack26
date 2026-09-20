@@ -12,9 +12,11 @@ import {
   getAppointmentResultSchema,
   getMariaAppointment,
   notifyApprovalPrompt,
+  resolveFamilyRecipient,
   resolveSessionId,
   saveHospitalVisitInputSchema,
   saveMedicationReminderInputSchema,
+  withNotifyRecipient,
   type ActiveRequest,
   type Appointment,
   type ConversationReplyKind,
@@ -177,10 +179,18 @@ function draftNotifySummary(transcript: string): string {
   return `Maria asked me to let you know: ${transcript.trim()}`;
 }
 
-async function openNotifyCheckpoint(sessionId: string, summary: string): Promise<HarnessTurnResult> {
+async function openNotifyCheckpoint(
+  sessionId: string,
+  summary: string,
+  transcript: string,
+): Promise<HarnessTurnResult> {
   const before = auditLog.list().length;
   await invokeTool("notify_caretaker", {
-    input: { summary, urgency: "normal" },
+    input: withNotifyRecipient({
+      summary,
+      urgency: "normal",
+      recipientName: resolveFamilyRecipient(transcript).name,
+    }),
     actor: "model",
     sessionId,
   });
@@ -609,7 +619,11 @@ async function decide(
   }
 
   if (NOTIFY.test(text) && !RIDE.test(text)) {
-    return openNotifyCheckpoint(sessionId, draftNotifySummary(transcript));
+    return await openNotifyCheckpoint(
+      sessionId,
+      draftNotifySummary(transcript),
+      transcript,
+    );
   }
 
   // Appointment question ("what time is my appointment").

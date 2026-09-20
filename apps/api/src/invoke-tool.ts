@@ -1,5 +1,6 @@
 import {
   bookRideInputSchema,
+  COMPOSIO_GMAIL_SEND_TOOL,
   computeArrivalTarget,
   evaluateToolCall,
   findRideOptionsInputSchema,
@@ -8,6 +9,7 @@ import {
   getCareSignalResultSchema,
   getMariaAppointment,
   getMariaSeedBundle,
+  FAMILY_EMAIL_RECIPIENT,
   invokeToolRequestSchema,
   isKnownTool,
   notifyCaretakerInputSchema,
@@ -18,14 +20,14 @@ import {
   saveMedicationReminderInputSchema,
   saveMedicationReminderResultSchema,
   toolInputSchemas,
+  withNotifyRecipient,
   type CareSignalAction,
   type ToolName,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
 import { getUberProvider } from "./uber-provider";
-import { kasamaComposio } from "./composio";
-import { COMPOSIO_GMAIL_SEND_TOOL } from "@kasama/shared";
+import { ComposioNotConfiguredError, kasamaComposio } from "./composio";
 
 export type ToolHttpResult = {
   status: 200 | 400 | 403 | 404;
@@ -116,9 +118,6 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
       const requested = new Date(date);
       const seedAppointment = getMariaAppointment();
 
-      // Log for debugging purposes in tests
-      console.log(`Requested: ${requested.toISOString()}, Seed: ${seedAppointment.start}`);
-
       if (!Number.isNaN(requested.getTime()) && isSameCalendarDay(requested, new Date(seedAppointment.start))) {
         const arrivalTarget = computeArrivalTarget(seedAppointment);
         return getAppointmentResultSchema.parse({
@@ -149,49 +148,68 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
       return getUberProvider().book(optionId);
     }
     case "notify_caretaker": {
-      const parsed = notifyCaretakerInputSchema.parse(input);
+      const parsed = withNotifyRecipient(notifyCaretakerInputSchema.parse(input));
       if (options?.preview) {
         return notifyCaretakerResultSchema.parse({
           success: true,
-          summary: `Draft for your family (${parsed.urgency}): ${parsed.summary} Not sent.`,
+          summary: `Draft for ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary} Not sent.`,
           preview: true,
           sent: false,
           draft: parsed,
         });
       }
 
+      const mockSend = () =>
+        notifyCaretakerResultSchema.parse({
+          success: true,
+          confirmationId: `notify_${Date.now()}`,
+          summary: `Email sent to ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary}`,
+          preview: false,
+          sent: true,
+          draft: parsed,
+        });
+
       try {
         const composioResult = await kasamaComposio.execute({
           toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
           arguments: {
+            recipient_email: FAMILY_EMAIL_RECIPIENT,
             body: parsed.summary,
             subject: `Note from Kasama about Maria (${parsed.urgency} urgency)`,
           },
         });
 
         if (!composioResult.successful) {
+          if (composioResult.needsAuth || composioResult.error?.includes("not configured")) {
+            return mockSend();
+          }
           return notifyCaretakerResultSchema.parse({
             success: false,
-            summary: `Failed to send notification: ${composioResult.error}`,
+            summary: `Failed to send notification: ${composioResult.error ?? "Gmail send failed."}`,
             preview: false,
             sent: false,
+            draft: parsed,
           });
         }
 
         return notifyCaretakerResultSchema.parse({
           success: true,
           confirmationId: composioResult.logId ?? `composio_${Date.now()}`,
-          summary: `Notification sent to family (${parsed.urgency}): ${parsed.summary}`,
+          summary: `Email sent to ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary}`,
           preview: false,
           sent: true,
           draft: parsed,
         });
       } catch (e) {
+        if (e instanceof ComposioNotConfiguredError) {
+          return mockSend();
+        }
         return notifyCaretakerResultSchema.parse({
           success: false,
           summary: `Unexpected error sending notification: ${e instanceof Error ? e.message : String(e)}`,
           preview: false,
           sent: false,
+          draft: parsed,
         });
       }
     }

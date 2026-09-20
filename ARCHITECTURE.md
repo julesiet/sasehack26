@@ -135,7 +135,7 @@ Live provider tools go through Composio Platform sessions (`apps/api/src/composi
 - `POST /composio/connect` — create or resume a session and return a Gmail Connect Link when the account is not connected
 - `POST /composio/execute` — `session.execute`. Default remains `GMAIL_GET_PROFILE` (`user_id: "me"`). Pass `toolSlug: "GMAIL_CREATE_EMAIL_DRAFT"` or `GMAIL_SEND_EMAIL` (documented at https://docs.composio.dev/toolkits/gmail.md). Omitted caretaker fields fill `GMAIL_CARETAKER_DRAFT_ARGUMENTS` / `GMAIL_CARETAKER_SEND_ARGUMENTS` (`juleselvandrade@gmail.com`). Successful drafts always include `data.draft_id` (copied from Composio's `id` when needed). `GMAIL_SEND_DRAFT` is rejected. `409` + Connect Link if Gmail is not authorized
 
-Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` drafts without a token and mocks email/SMS after a human yes. Do not send caretaker mail through Composio until that same policy still gates it.
+Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` drafts locally without a token and never calls Gmail for previews. After a human yes, it sends through Composio's `GMAIL_SEND_EMAIL` to `juleselvandrade@gmail.com`; missing configuration or authorization falls back to the CI-safe mock. The same policy gate remains in force.
 
 ## Shared contracts
 
@@ -161,7 +161,7 @@ If you add a tool, add it to `tools.ts`, map it in `TOOL_ACTIONS`, handle it in 
 
 `save_medication_reminder` and `save_hospital_visit` are local-only: a reminder becomes a Tasks item (first confirm hits a stub health-sync miss; Confirm on the error saves on-device). Hospital confirm stores St. Mary's details. Neither is live EHR, and neither is `change_medication`.
 
-Composio session tools (`GMAIL_GET_PROFILE`, `GMAIL_CREATE_EMAIL_DRAFT`, `GMAIL_SEND_EMAIL`) live on `POST /composio/*` until a Kasama tool is wired through `invokeTool` + policy. Conversation still cannot send.
+Composio session tools (`GMAIL_GET_PROFILE`, `GMAIL_CREATE_EMAIL_DRAFT`, `GMAIL_SEND_EMAIL`) live on `POST /composio/*`; human-approved `notify_caretaker` also invokes `GMAIL_SEND_EMAIL` through `invokeTool` after policy approval. Conversation previews still cannot send.
 
 ## Uber
 
@@ -171,11 +171,11 @@ Live Uber (official API or Browserbase) is issue `#14`. A later adapter implemen
 
 ## What is not built yet
 
-Live Uber (`#14`), notify UI (`#11`). Care-aware view (`#10`) is built: tapping Care notes on the caretaker dashboard opens usage, repeated questions, response time, and a worth-reviewing quote (never a diagnosis). Caretaker dashboard (`#9`) is built: designed family screen polls `GET /sessions/:sessionId`. Session HTTP (`#18`) is built. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. Ride-option cards (`#8`) are built on Chat (UberX + WAV from `lastRideOptions`). Medication-reminder, health-sync error, and hospital-scheduling cards (`#41`) are built on an open Chat thread; confirmed items appear on Tasks. Chat history (`#45`) is the Chat tab list of titled threads on `conversation.chats`. `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and mocks send after a human yes.
+Live Uber (`#14`), notify UI (`#11`). Care-aware view (`#10`) is built: tapping Care notes on the caretaker dashboard opens usage, repeated questions, response time, and a worth-reviewing quote (never a diagnosis). Caretaker dashboard (`#9`) is built: designed family screen polls `GET /sessions/:sessionId`. Session HTTP (`#18`) is built. Agent playground (`#13`) is built: `POST /playground` or `pnpm playground`. Ride-option cards (`#8`) are built on Chat (UberX + WAV from `lastRideOptions`). Medication-reminder, health-sync error, and hospital-scheduling cards (`#41`) are built on an open Chat thread; confirmed items appear on Tasks. Chat history (`#45`) is the Chat tab list of titled threads on `conversation.chats`. `notify_caretaker` (`#16`) drafts on `POST /tools/notify_caretaker` and sends through Composio Gmail after a human yes, with the CI-safe fallback described above.
 
-Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Maria's communication preferences (`#31`) drive TTS speed, device fallback rate, spoken ride-checkpoint repeats, and the harness simple-language line. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
+Voice loop (`#4`), harness (`#5`), and approval checkpoints (`#6`) are built: designed senior screen, on-device recording + speech, `POST /conversation/turn`, `POST /approvals`, `POST /speech/transcribe`. Maria's communication preferences (`#31`) drive TTS speed, device fallback rate, spoken ride-checkpoint repeats, and the harness simple-language line. Live speech-to-text needs `ELEVENLABS_API_KEY` in `apps/api/.env`; without it the screen falls back to typing. `notify_caretaker` previews locally and sends through Composio Gmail only after human approval, with an unconfigured/needs-auth mock fallback. `find_ride_options` / `book_ride` use the controlled Uber provider (UberX + WAV, $24.50 checkpoint price); live execute against Uber is still `#14`.
 
-Composio Platform sessions are on `POST /composio/connect` and `POST /composio/execute` (Gmail / `GMAIL_GET_PROFILE` default; `GMAIL_CREATE_EMAIL_DRAFT` or `GMAIL_SEND_EMAIL` when asked) for `senior_maria`. They are not wired into the conversation turn or `notify_caretaker` yet.
+Composio Platform sessions are on `POST /composio/connect` and `POST /composio/execute` (Gmail / `GMAIL_GET_PROFILE` default; `GMAIL_CREATE_EMAIL_DRAFT` or `GMAIL_SEND_EMAIL` when asked) for `senior_maria`. Human-approved `notify_caretaker` uses the same send tool; its preview remains local.
 
 Maria's seed data (`#2`) is built: `get_appointment` still uses Maria's seed (live calendar is out of scope; Composio later if cheap).
 
