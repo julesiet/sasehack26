@@ -277,8 +277,9 @@ export const MARIA_DASHBOARD_VIEWER: DashboardViewer = dashboardViewerSchema.par
 /** Family row on the caretaker dashboard. James is also the policy caretaker. */
 export const MARIA_FAMILY_CONTACTS: FamilyContact[] = [
   familyContactSchema.parse({ id: "contact_sarah", name: "Sarah", initial: "S" }),
-  familyContactSchema.parse({ id: "contact_james", name: "James", initial: "J" }),
+  familyContactSchema.parse({ id: "contact_james", name: "James Alvarez", initial: "J" }),
   familyContactSchema.parse({ id: "contact_emily", name: "Emily", initial: "E" }),
+  familyContactSchema.parse({ id: "contact_jules", name: "Jules", initial: "U" }),
 ];
 
 /** Same-day times for the seeded Maria ↔ Kasama ride thread. */

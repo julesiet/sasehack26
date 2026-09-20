@@ -83,6 +83,16 @@ export const caretakerUrgencySchema = z.enum(["low", "normal", "high"]);
 export const notifyCaretakerInputSchema = z.object({
   summary: z.string().min(1),
   urgency: caretakerUrgencySchema,
+  recipientId: z.string().min(1).optional(),
+  recipientName: z.string().min(1).optional(),
+});
+
+export const notifyCaretakerDraftSchema = z.object({
+  summary: z.string(),
+  urgency: caretakerUrgencySchema,
+  recipientId: z.string().optional(),
+  recipientName: z.string().optional(),
+  recipientEmail: z.string().email().optional(),
 });
 
 export const notifyCaretakerResultSchema = z.object({
@@ -91,12 +101,7 @@ export const notifyCaretakerResultSchema = z.object({
   summary: z.string(),
   preview: z.boolean().optional(),
   sent: z.boolean().optional(),
-  draft: z
-    .object({
-      summary: z.string(),
-      urgency: caretakerUrgencySchema,
-    })
-    .optional(),
+  draft: notifyCaretakerDraftSchema.optional(),
 });
 
 /** Local task only — never a prescription change. */

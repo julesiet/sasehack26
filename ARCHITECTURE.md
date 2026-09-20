@@ -139,7 +139,7 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 
 ## Shared contracts
 
-- `packages/shared/src/tools.ts` — tool names, inputs, results (Uber products: `UberX`, `WAV`; local `save_medication_reminder` / `save_hospital_visit`). Hospital `timeLabel` is speakable (`Thursday at 10:00 AM`); ISO stamps from ChatGPT are formatted before the card.
+- `packages/shared/src/tools.ts` — tool names, inputs, results (Uber products: `UberX`, `WAV`; local `save_medication_reminder` / `save_hospital_visit`). `notify_caretaker` inputs and draft results carry optional recipient identity fields. Hospital `timeLabel` is speakable (`Thursday at 10:00 AM`); ISO stamps from ChatGPT are formatted before the card.
 - `packages/shared/src/time-label.ts` — ISO → weekday + clock for hospital times
 - `packages/shared/src/policy.ts` — `POLICY_TABLE`, `evaluateAction`, `evaluateToolCall`
 - `packages/shared/src/audit.ts` — event shape + `createAuditLog()`
@@ -150,6 +150,7 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 - `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`, optional `GMAIL_CREATE_EMAIL_DRAFT` / `GMAIL_SEND_EMAIL`; `normalizeComposioExecuteData` copies a Gmail draft `id` onto `draft_id`
 - `packages/shared/src/playground.ts` — text playground (`#13`): `POST /playground` request/response, `PLAYGROUND_DEFAULT_SESSION_ID`, `PLAYGROUND_DEMO_TRANSCRIPT`, `MAX_PLAYGROUND_ADVANCE_TURNS`
 - `packages/shared/src/seed.ts` — Maria's demo fixtures: profile, tomorrow's doctor appointment (+ `computeArrivalTarget`), caretaker preferences/escalation rules, wearable trend, prior-request/confusion markers, care-aware usage and response times, dashboard viewer (Margaret), family contacts, and the seeded Maria ↔ Kasama ride turns. `getMariaSeedBundle()` is the single entry point for the caretaker dashboard (`#9`) and care-aware view (`#10`).
+- `packages/shared/src/family.ts` — resolves spoken family names to display contacts (James Alvarez by default) while pinning delivery to `COMPOSIO_CARETAKER_RECIPIENT` (Jules's Gmail).
 - `packages/shared/src/communication.ts` — maps `communicationPreferences` to ElevenLabs speed, device TTS rate, spoken confirmation repeats, and the harness simple-language line (`#31`). No in-app toggle.
 - `packages/shared/src/demo-session.ts` — iOS `default` session start state: appointment, UberX + WAV options, seeded WAV booking (`UBER-WAV-SEED`), senior approval, Lisinopril reminder, St. Mary's visit, Tasks items, and `conversation.chats` (hospital visit, medication reminder, doctor ride). Senior Chat history, caretaker activity, and Tasks all read this from `GET /sessions/default` — do not add a second transcript store.
 - `packages/shared/src/caretaker-dashboard.ts` — caretaker screen projection from `SessionView` + seed (overview status, care notes, appointment, selected ride, consent rows, activity).

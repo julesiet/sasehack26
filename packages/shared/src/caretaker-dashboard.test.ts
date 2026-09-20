@@ -54,8 +54,9 @@ describe("caretaker dashboard projection", () => {
     );
     expect(dashboard.contacts.map((contact) => contact.name)).toEqual([
       "Sarah",
-      "James",
+      "James Alvarez",
       "Emily",
+      "Jules",
     ]);
     expect(dashboard.overviewStatus).toBe("idle");
     expect(dashboard.overviewBadge).toBeNull();

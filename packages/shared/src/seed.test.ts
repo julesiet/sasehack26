@@ -91,8 +91,9 @@ describe("getMariaSeedBundle", () => {
     expect(bundle.dashboardViewer.firstName).toBe("Margaret");
     expect(bundle.familyContacts.map((contact) => contact.name)).toEqual([
       "Sarah",
-      "James",
+      "James Alvarez",
       "Emily",
+      "Jules",
     ]);
     expect(bundle.conversationTurns).toHaveLength(3);
     expect(bundle.conversationTurns[0]?.text).toBe(
