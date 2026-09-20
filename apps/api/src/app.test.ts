@@ -5,6 +5,7 @@ import {
   COMPOSIO_GMAIL_SEND_TOOL,
   PLAYGROUND_DEMO_TRANSCRIPT,
   buildCaretakerDashboard,
+  approvedNotifyReply,
   conversationChatResponseSchema,
   conversationTurnResponseSchema,
   getMariaAppointment,
@@ -523,35 +524,48 @@ describe("GET /sessions/:sessionId", () => {
   });
 
   it("lets senior and caretaker clients share the same sessionId", async () => {
-    await postTool("book_ride", {
-      input: { optionId: "uberx_1" },
-      actor: "senior",
-      approvalToken: "tok_yes",
-      sessionId: "shared-family",
-      consentGranted: true,
-    });
-    await postTool("notify_caretaker", {
-      input: { summary: "Maria's Uber is booked.", urgency: "low" },
-      actor: "caretaker",
-      approvalToken: "tok_caretaker",
-      sessionId: "shared-family",
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: true,
+      logId: "gmail_send_test",
     });
 
-    const seniorView = sessionViewSchema.parse(
-      await (await app.request("/sessions/shared-family")).json(),
-    );
-    const caretakerView = sessionViewSchema.parse(
-      await (await app.request("/sessions/shared-family")).json(),
-    );
+    try {
+      await postTool("book_ride", {
+        input: { optionId: "uberx_1" },
+        actor: "senior",
+        approvalToken: "tok_yes",
+        sessionId: "shared-family",
+        consentGranted: true,
+      });
+      await postTool("notify_caretaker", {
+        input: { summary: "Maria's Uber is booked.", urgency: "low" },
+        actor: "caretaker",
+        approvalToken: "tok_caretaker",
+        sessionId: "shared-family",
+      });
 
-    expect(seniorView).toEqual(caretakerView);
-    expect(seniorView.lastBooking?.optionId).toBe("uberx_1");
-    expect(seniorView.caretakerActivity).toHaveLength(1);
-    expect(seniorView.caretakerActivity[0]?.sent).toBe(true);
-    expect(seniorView.events.map((event) => event.whoAsked.actor)).toEqual([
-      "senior",
-      "caretaker",
-    ]);
+      const seniorView = sessionViewSchema.parse(
+        await (await app.request("/sessions/shared-family")).json(),
+      );
+      const caretakerView = sessionViewSchema.parse(
+        await (await app.request("/sessions/shared-family")).json(),
+      );
+
+      expect(seniorView).toEqual(caretakerView);
+      expect(seniorView.lastBooking?.optionId).toBe("uberx_1");
+      expect(seniorView.caretakerActivity).toHaveLength(1);
+      expect(seniorView.caretakerActivity[0]?.sent).toBe(true);
+      expect(seniorView.events.map((event) => event.whoAsked.actor)).toEqual([
+        "senior",
+        "caretaker",
+      ]);
+    } finally {
+      executeSpy.mockRestore();
+    }
   });
 
   it("keeps session events ordered and stable across polls", async () => {
@@ -710,6 +724,53 @@ describe("POST /approvals", () => {
       false,
     );
     expect(auditLog.list().some((event) => event.outcome.reason === "declined_by_human")).toBe(true);
+  });
+
+  it("does not speak send success when Gmail failed", async () => {
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: false,
+      error: "Gmail send failed.",
+      logId: "gmail_send_fail",
+    });
+
+    try {
+      await app.request("/tools/notify_caretaker", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          input: { summary: "Maria is going to the doctor.", urgency: "normal" },
+          actor: "model",
+          sessionId: "notify-fail-1",
+        }),
+      });
+
+      const res = await app.request("/approvals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "notify-fail-1",
+          decision: "approve",
+          actor: "senior",
+        }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.reply).not.toBe(approvedNotifyReply());
+      expect(body.reply).toContain("Failed to send");
+
+      const view = sessionStore.get("notify-fail-1");
+      expect(view.conversation.failure).toEqual({
+        kind: "retry",
+        tool: "notify_caretaker",
+        summary: body.reply,
+      });
+    } finally {
+      executeSpy.mockRestore();
+    }
   });
 
   it("rejects a model actor on the approval route", async () => {

@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  COMPOSIO_GMAIL_SEND_TOOL,
   computeArrivalTarget,
   conversationTurnResponseSchema,
   getMariaAppointment,
@@ -124,18 +125,31 @@ describe("runConversationTurn", () => {
   });
 
   it("previews a caretaker message and only sends after yes", async () => {
-    const draft = await turn("Please tell my family I am going to the doctor.");
-    expect(draft.kind).toBe("proposal");
-    expect(draft.pendingApproval?.tool).toBe("notify_caretaker");
-    expect(draft.pendingApproval?.preview).toBeTruthy();
-    expect(draft.reply).toContain("Should I send it?");
-    expect(sessionStore.get("voice-1").caretakerActivity.some((item) => item.sent)).toBe(false);
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: true,
+      logId: "gmail_send_test",
+    });
 
-    const sent = await turn("Yes");
-    expect(sent.pendingApproval).toBeNull();
-    const view = sessionStore.get("voice-1");
-    expect(view.caretakerActivity.some((item) => item.sent)).toBe(true);
-    expect(view.lastApproval?.decision).toBe("approved");
+    try {
+      const draft = await turn("Please tell my family I am going to the doctor.");
+      expect(draft.kind).toBe("proposal");
+      expect(draft.pendingApproval?.tool).toBe("notify_caretaker");
+      expect(draft.pendingApproval?.preview).toBeTruthy();
+      expect(draft.reply).toContain("Should I send it?");
+      expect(sessionStore.get("voice-1").caretakerActivity.some((item) => item.sent)).toBe(false);
+
+      const sent = await turn("Yes");
+      expect(sent.pendingApproval).toBeNull();
+      const view = sessionStore.get("voice-1");
+      expect(view.caretakerActivity.some((item) => item.sent)).toBe(true);
+      expect(view.lastApproval?.decision).toBe("approved");
+    } finally {
+      executeSpy.mockRestore();
+    }
   });
 
   it("asks exactly one clarification when the destination is missing", async () => {
