@@ -27,6 +27,7 @@ export * from "./approval";
 export * from "./session";
 export * from "./caretaker-dashboard";
 export * from "./conversation";
+export * from "./speech-debug";
 export * from "./playground";
 export * from "./composio";
 
