@@ -11,6 +11,7 @@ import {
   getMariaDemoSession,
   getMariaSeedBundle,
   notifyCaretakerInputSchema,
+  notifyCaretakerResultSchema,
   saveHospitalVisitInputSchema,
   saveHospitalVisitResultSchema,
   saveMedicationReminderInputSchema,
@@ -434,7 +435,10 @@ export function createSessionStore(): SessionStore {
       }
 
       if (tool === "notify_caretaker") {
-        appendCaretakerActivity(state, input, event, true);
+        const notifyResult = notifyCaretakerResultSchema.safeParse(result);
+        if (notifyResult.success && notifyResult.data.sent === true) {
+          appendCaretakerActivity(state, input, event, true);
+        }
       }
 
       if (tool === "save_medication_reminder" && result) {

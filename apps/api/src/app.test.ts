@@ -768,6 +768,7 @@ describe("POST /approvals", () => {
         tool: "notify_caretaker",
         summary: body.reply,
       });
+      expect(view.caretakerActivity.some((item) => item.sent === true)).toBe(false);
     } finally {
       executeSpy.mockRestore();
     }
