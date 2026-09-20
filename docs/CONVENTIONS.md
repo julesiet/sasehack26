@@ -6,7 +6,7 @@ Where to put work so every agent sees the same system.
 
 ```text
 apps/mobile/src/screens/    iOS screens (app Home unchanged; Senior Home / Chat history list + thread / Tasks; caretaker dashboard + care-aware view)
-apps/mobile/src/components/ Reusable pieces (orb, sun bowl, composer pill, chat bubble, ride option cards, ride status card, confirmation card, medication reminder card, hospital appointment card, family message card, compact tab bar, caretaker dashboard cards)
+apps/mobile/src/components/ Reusable pieces (orb, sun bowl, composer pill, chat bubble, ride option cards, ride status card, confirmation card, medication reminder card, hospital appointment card, family message card (MESSAGE TO), caretaker dashboard cards including FAMILY UPDATE, compact tab bar)
 apps/mobile/src/hooks/      Conversation state machine (record → transcribe → turn → speak)
 apps/mobile/src/lib/        API client
 apps/mobile/src/theme.ts    Design tokens
