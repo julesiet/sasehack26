@@ -80,11 +80,11 @@ if (lanHost) {
   console.log(`Expo Go host ${lanHost} (from apps/mobile/.env)`);
 }
 
-const expoBin = resolve(mobileRoot, "node_modules/.bin/expo");
-const child = spawn(expoBin, args, {
+const child = spawn("npx", ["expo", ...args], {
   cwd: mobileRoot,
   env: process.env,
   stdio: "inherit",
+  shell: true,
 });
 
 child.on("exit", (code, signal) => {
