@@ -317,7 +317,11 @@ function careRulesNeeded(
   sessionId: string,
 ): boolean {
   const pending = sessionStore.get(sessionId).pendingApproval;
-  if (pending?.tool === "save_medication_reminder" || pending?.tool === "save_hospital_visit") {
+  if (
+    pending?.tool === "save_medication_reminder" ||
+    pending?.tool === "save_hospital_visit" ||
+    pending?.tool === "notify_caretaker"
+  ) {
     return false;
   }
   if (

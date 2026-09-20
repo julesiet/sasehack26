@@ -71,6 +71,7 @@ export type CaretakerDashboard = {
   familyUpdate: CaretakerFamilyUpdate | null;
   consentItems: CaretakerConsentItem[];
   activity: CaretakerTimelineItem[];
+  narrative: string;
 };
 
 const EMPTY_VIEW: SessionView = {
@@ -85,6 +86,7 @@ const EMPTY_VIEW: SessionView = {
   lastHospitalVisit: null,
   tasks: [],
   caretakerActivity: [],
+  caretakerNarrative: [],
   careSignal: null,
   consentGranted: false,
   conversation: emptyConversationState(),
@@ -188,6 +190,7 @@ export function buildCaretakerDashboard(input: {
     familyUpdate: familyUpdateCard(view, senior, now),
     consentItems: consentItems(view, senior),
     activity: activityItems(view, senior),
+    narrative: (view.caretakerNarrative ?? []).map((item) => `${item.timestamp}: ${item.text}`).join("\n"),
   };
 }
 

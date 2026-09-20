@@ -520,6 +520,8 @@ describe("GET /sessions/:sessionId", () => {
     expect(body.consentGranted).toBe(true);
     expect(body.pendingApproval).toBeNull();
     expect(body.currentRequest?.tool).toBe("book_ride");
+    expect(body.caretakerNarrative.length).toBeGreaterThan(0);
+    expect(body.caretakerNarrative.map((item) => item.text).join(" ")).toMatch(/appointment/i);
 
     const dashboard = buildCaretakerDashboard({ view: body });
     expect(dashboard.overviewStatus).toBe("confirmed");

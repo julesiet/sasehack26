@@ -91,7 +91,7 @@ Flow: parse name → Zod input → `evaluateToolCall` → stub execute if allowe
 
 Omitted `sessionId` is stored as `default` (`DEFAULT_SESSION_ID` in `packages/shared/src/session.ts`). Senior and caretaker clients share one `sessionId` and poll the same view.
 
-`GET /sessions/:sessionId` returns a `sessionViewSchema` projection from the process-local store (`apps/api/src/session-store.ts`): current request, pending approval, last approval, last Uber options, appointment, last Uber booking, last medication reminder, last hospital visit, tasks, caretaker activity, Maria-seed care signal (`"worth reviewing"`), consent, `conversation.chats` plus the active chat's `turns`, and that session's audit events in append order. Unknown ids return an empty pollable view (200), not 404. The caretaker screen polls this for Maria's yes/no.
+`GET /sessions/:sessionId` returns a `sessionViewSchema` projection from the process-local store (`apps/api/src/session-store.ts`): current request, pending approval, last approval, last Uber options, appointment, last Uber booking, last medication reminder, last hospital visit, tasks, caretaker activity, caretaker narrative (`caretakerNarrative` from audit + session, `#33`), Maria-seed care signal (`"worth reviewing"`), consent, `conversation.chats` plus the active chat's `turns`, and that session's audit events in append order. Unknown ids return an empty pollable view (200), not 404. The caretaker screen polls this for Maria's yes/no.
 
 `POST /conversation/chats` body `{ sessionId?, chatId? }` starts a new thread or selects an existing one. New chats are explicit — topics do not split on their own.
 
@@ -145,7 +145,8 @@ Calendar stays seeded; Uber uses the controlled provider. `notify_caretaker` dra
 - `packages/shared/src/audit.ts` — event shape + `createAuditLog()`
 - `packages/shared/src/invoke.ts` — HTTP request schema
 - `packages/shared/src/approval.ts` — pending/last approval, `POST /approvals` body/response, $24.50 demo prompt helpers
-- `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`, `pendingApproval`, `lastApproval`, `lastRideOptions`, `lastMedicationReminder`, `lastHospitalVisit`, `tasks`
+- `packages/shared/src/session.ts` — session view Zod types (`sessionViewSchema`, `DEFAULT_SESSION_ID`); includes `conversation`, `pendingApproval`, `lastApproval`, `lastRideOptions`, `lastMedicationReminder`, `lastHospitalVisit`, `tasks`, `caretakerNarrative`
+- `packages/shared/src/narrative.ts` — caretaker activity copy from a `SessionView` (`generateCaretakerNarrative`). Ride beats mention the appointment, Uber WAV $24.50, and that nothing is booked until a human yes; a decline says the Uber was not booked. Never a diagnosis.
 - `packages/shared/src/conversation.ts` — voice loop contracts: turn request/response, chats (`conversationChatSchema`, topic titles, `startNewChat`), `activeRequest`, `plan`, `failure`, `pendingApproval`, `MAX_CLARIFICATIONS_PER_REQUEST`, `MAX_TOOL_ROUNDS_PER_TURN`, transcribe response
 - `packages/shared/src/composio.ts` — Composio connect/execute schemas; default toolkit `gmail`, default tool `GMAIL_GET_PROFILE`, optional `GMAIL_CREATE_EMAIL_DRAFT` / `GMAIL_SEND_EMAIL`; `normalizeComposioExecuteData` copies a Gmail draft `id` onto `draft_id`
 - `packages/shared/src/playground.ts` — text playground (`#13`): `POST /playground` request/response, `PLAYGROUND_DEFAULT_SESSION_ID`, `PLAYGROUND_DEMO_TRANSCRIPT`, `MAX_PLAYGROUND_ADVANCE_TURNS`
