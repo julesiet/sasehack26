@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { conversationTurnSchema, type ConversationTurn } from "./conversation";
+import { conversationChatSchema, conversationTurnSchema, type ConversationChat, type ConversationTurn } from "./conversation";
 import { caretakerUrgencySchema } from "./tools";
 
 /**
@@ -240,6 +240,11 @@ function atTime(referenceDate: Date, hours: number, minutes: number): string {
   return d.toISOString();
 }
 
+/** Seeded Chat / caretaker activity for the iOS `default` session. */
+export const MARIA_DEMO_CHAT_HOSPITAL_ID = "chat_hospital";
+export const MARIA_DEMO_CHAT_MEDICATION_ID = "chat_medication";
+export const MARIA_DEMO_CHAT_RIDE_ID = "chat_ride";
+
 /**
  * Seeded Chat / caretaker activity for the iOS `default` session.
  * Chat history UI must read these turns from the session — do not fork a second store.
@@ -270,6 +275,81 @@ export function getMariaDemoConversationTurns(
   ];
 }
 
+function getMariaDemoHospitalTurns(referenceDate: Date): ConversationTurn[] {
+  return [
+    conversationTurnSchema.parse({
+      id: "seed_hospital_1",
+      timestamp: atTime(referenceDate, 7, 10),
+      speaker: "senior",
+      text: "Schedule an appointment at St. Mary's for my annual physical.",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_hospital_2",
+      timestamp: atTime(referenceDate, 7, 12),
+      speaker: "kasama",
+      text: "I saved the appointment details for St. Mary's Hospital. That's Thursday at 10:00 AM.",
+      kind: "answer",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_hospital_3",
+      timestamp: atTime(referenceDate, 7, 15),
+      speaker: "senior",
+      text: "Thank you.",
+    }),
+  ];
+}
+
+function getMariaDemoMedicationTurns(referenceDate: Date): ConversationTurn[] {
+  return [
+    conversationTurnSchema.parse({
+      id: "seed_med_1",
+      timestamp: atTime(referenceDate, 7, 38),
+      speaker: "senior",
+      text: "Remind me to take Lisinopril every 4 days.",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_med_2",
+      timestamp: atTime(referenceDate, 7, 40),
+      speaker: "kasama",
+      text: "I saved the Lisinopril reminder. It is on your Tasks list. Kasama did not change any medication.",
+      kind: "answer",
+    }),
+    conversationTurnSchema.parse({
+      id: "seed_med_3",
+      timestamp: atTime(referenceDate, 7, 42),
+      speaker: "senior",
+      text: "Thanks.",
+    }),
+  ];
+}
+
+/** Oldest first. History UI sorts newest-first from last-turn time. */
+export function getMariaDemoChats(referenceDate: Date = new Date()): ConversationChat[] {
+  return [
+    conversationChatSchema.parse({
+      id: MARIA_DEMO_CHAT_HOSPITAL_ID,
+      title: "Hospital visit",
+      intent: "hospital_schedule",
+      startedAt: atTime(referenceDate, 7, 10),
+      turns: getMariaDemoHospitalTurns(referenceDate),
+    }),
+    conversationChatSchema.parse({
+      id: MARIA_DEMO_CHAT_MEDICATION_ID,
+      title: "Medication reminder",
+      intent: "medication_reminder",
+      startedAt: atTime(referenceDate, 7, 38),
+      turns: getMariaDemoMedicationTurns(referenceDate),
+    }),
+    conversationChatSchema.parse({
+      id: MARIA_DEMO_CHAT_RIDE_ID,
+      title: "Doctor ride",
+      intent: "ride",
+      startedAt: atTime(referenceDate, 8, 42),
+      turns: getMariaDemoConversationTurns(referenceDate),
+    }),
+  ];
+}
+
 export const mariaSeedBundleSchema = z.object({
   profile: seniorProfileSchema,
   appointment: seedAppointmentSchema,
@@ -280,6 +360,7 @@ export const mariaSeedBundleSchema = z.object({
   dashboardViewer: dashboardViewerSchema,
   familyContacts: z.array(familyContactSchema),
   conversationTurns: z.array(conversationTurnSchema),
+  conversationChats: z.array(conversationChatSchema),
 });
 export type MariaSeedBundle = z.infer<typeof mariaSeedBundleSchema>;
 
@@ -296,5 +377,6 @@ export function getMariaSeedBundle(referenceDate: Date = new Date()): MariaSeedB
     dashboardViewer: MARIA_DASHBOARD_VIEWER,
     familyContacts: MARIA_FAMILY_CONTACTS,
     conversationTurns: getMariaDemoConversationTurns(referenceDate),
+    conversationChats: getMariaDemoChats(referenceDate),
   });
 }

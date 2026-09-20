@@ -20,12 +20,14 @@ import {
   spokenTextForTts,
   type ActiveRequest,
   type ApprovalChoice,
+  type ConversationChat,
   type ConversationReplyKind,
   type ConversationTurn,
   type LastApproval,
   type PendingApproval,
   type SessionBooking,
   type SessionHospitalVisit,
+  type SessionView,
   type SeniorTask,
   type UberRideOption,
 } from "@kasama/shared";
@@ -34,6 +36,7 @@ import {
   fetchKasamaVoice,
   fetchSession,
   postApproval,
+  postConversationChat,
   postConversationTurn,
   transcribeRecording,
 } from "../lib/api";
@@ -76,6 +79,10 @@ export type ConversationUiState = {
   /** Saved/declined card for the decision we just made. Cleared on the next turn. */
   justResolved: LastApproval | null;
   turns: ConversationTurn[];
+  chats: ConversationChat[];
+  activeChatId: string | null;
+  /** Null means the Chat tab is showing the list. */
+  openedChatId: string | null;
   lastRideOptions: UberRideOption[];
   lastBooking: SessionBooking | null;
   lastHospitalVisit: SessionHospitalVisit | null;
@@ -89,6 +96,21 @@ const MAX_RECORDING_MS = 15_000;
 const SPEECH_LANGUAGE = "en-US";
 const RIDE_WORDS = /\b(ride|uber|pickup|taxi|car|wheelchair|wav|uberx)\b/i;
 const MARIA_PREFS = MARIA_PROFILE.communicationPreferences;
+
+function sessionConversationFields(session: SessionView) {
+  return {
+    turns: session.conversation.turns,
+    chats: session.conversation.chats ?? [],
+    activeChatId: session.conversation.activeChatId ?? null,
+    lastRideOptions: session.lastRideOptions,
+    lastBooking: session.lastBooking,
+    lastHospitalVisit: session.lastHospitalVisit,
+    tasks: session.tasks,
+    activeRequest: session.conversation.activeRequest,
+    lastApproval: session.lastApproval,
+    pendingApproval: session.pendingApproval,
+  };
+}
 
 function looksLikeRide(text: string): boolean {
   return RIDE_WORDS.test(text);
@@ -106,6 +128,9 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     lastApproval: null,
     justResolved: null,
     turns: [],
+    chats: [],
+    activeChatId: null,
+    openedChatId: null,
     lastRideOptions: [],
     lastBooking: null,
     lastHospitalVisit: null,
@@ -145,12 +170,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
           if (prev.phase !== "idle" || prev.turns.length > 0) return prev;
           return {
             ...prev,
-            turns: session.conversation.turns,
-            lastRideOptions: session.lastRideOptions,
-            lastBooking: session.lastBooking,
-            lastApproval: session.lastApproval,
-            pendingApproval: session.pendingApproval,
-            activeRequest: session.conversation.activeRequest,
+            ...sessionConversationFields(session),
           };
         });
       })
@@ -234,36 +254,39 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         speaker: "senior",
         text: clean,
       };
-      setState((prev) => ({
-        ...prev,
-        phase: "thinking",
-        seniorText: clean,
-        notice: null,
-        justResolved: null,
-        rideWork:
-          looksLikeRide(clean) && prev.lastRideOptions.length === 0 && !prev.lastBooking
-            ? "finding"
-            : "none",
-        turns: [...prev.turns, localTurn],
-      }));
+      setState((prev) => {
+        const chatId = prev.openedChatId ?? prev.activeChatId;
+        return {
+          ...prev,
+          phase: "thinking",
+          seniorText: clean,
+          notice: null,
+          justResolved: null,
+          openedChatId: prev.openedChatId ?? prev.activeChatId,
+          rideWork:
+            looksLikeRide(clean) && prev.lastRideOptions.length === 0 && !prev.lastBooking
+              ? "finding"
+              : "none",
+          turns: [...prev.turns, localTurn],
+          chats: prev.chats.map((chat) =>
+            chat.id === chatId ? { ...chat, turns: [...chat.turns, localTurn] } : chat,
+          ),
+        };
+      });
       try {
-        const reply = await postConversationTurn(clean, sessionId);
+        const chatId = state.openedChatId ?? state.activeChatId ?? undefined;
+        const reply = await postConversationTurn(clean, sessionId, chatId);
         const session = await fetchSession(sessionId);
         if (mounted.current) {
           setState((prev) => ({
             ...prev,
+            ...sessionConversationFields(session),
             pendingApproval: reply.pendingApproval,
-            lastApproval: session.lastApproval,
             justResolved:
               !reply.pendingApproval && prev.pendingApproval && session.lastApproval
                 ? session.lastApproval
                 : null,
-            turns: session.conversation.turns,
-            lastRideOptions: session.lastRideOptions,
-            lastBooking: session.lastBooking,
-            lastHospitalVisit: session.lastHospitalVisit,
-            tasks: session.tasks,
-            activeRequest: session.conversation.activeRequest,
+            openedChatId: prev.openedChatId ?? session.conversation.activeChatId,
             rideWork: "none",
           }));
         }
@@ -279,7 +302,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         });
       }
     },
-    [patch, sessionId, speak],
+    [patch, sessionId, speak, state.activeChatId, state.openedChatId],
   );
 
   const stopListening = useCallback(async () => {
@@ -386,15 +409,11 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         if (mounted.current) {
           setState((prev) => ({
             ...prev,
+            ...sessionConversationFields(session),
             pendingApproval: result.pendingApproval,
             lastApproval: result.lastApproval ?? session.lastApproval,
             justResolved: result.lastApproval ?? session.lastApproval,
-            turns: session.conversation.turns,
-            lastRideOptions: session.lastRideOptions,
-            lastBooking: session.lastBooking,
-            lastHospitalVisit: session.lastHospitalVisit,
-            tasks: session.tasks,
-            activeRequest: session.conversation.activeRequest,
+            openedChatId: prev.openedChatId ?? session.conversation.activeChatId,
             rideWork: "none",
           }));
         }
@@ -418,6 +437,55 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     },
     [sendTurn, state.pendingApproval, state.phase],
   );
+
+  const openChatList = useCallback(() => {
+    patch({ openedChatId: null });
+  }, [patch]);
+
+  const openCurrentThread = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      openedChatId: prev.activeChatId ?? prev.openedChatId,
+    }));
+  }, []);
+
+  const openChat = useCallback(
+    async (chatId: string) => {
+      try {
+        const result = await postConversationChat(sessionId, chatId);
+        if (!mounted.current) return;
+        setState((prev) => ({
+          ...prev,
+          turns: result.conversation.turns,
+          chats: result.conversation.chats,
+          activeChatId: result.conversation.activeChatId,
+          openedChatId: result.chatId,
+        }));
+      } catch {
+        patch({ openedChatId: chatId });
+      }
+    },
+    [patch, sessionId],
+  );
+
+  const startNewChat = useCallback(async () => {
+    try {
+      const result = await postConversationChat(sessionId);
+      if (!mounted.current) return;
+      setState((prev) => ({
+        ...prev,
+        turns: result.conversation.turns,
+        chats: result.conversation.chats,
+        activeChatId: result.conversation.activeChatId,
+        openedChatId: result.chatId,
+      }));
+    } catch {
+      patch({
+        phase: "error",
+        notice: "Kasama could not start a new chat. Please try again.",
+      });
+    }
+  }, [patch, sessionId]);
 
   const repeatLastReply = useCallback(() => {
     if (state.kasamaText && state.kasamaKind) {
@@ -444,5 +512,9 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     repeatLastReply,
     openSettings,
     recheckMic,
+    openChat,
+    startNewChat,
+    openChatList,
+    openCurrentThread,
   };
 }

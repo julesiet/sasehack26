@@ -4,6 +4,8 @@ import {
   MARIA_PROFILE,
   bookingApprovalPrompt,
   pendingRideOptionId,
+  conversationChatRequestSchema,
+  conversationChatResponseSchema,
   conversationTurnRequestSchema,
   conversationTurnResponseSchema,
   findRideOptionsResultSchema,
@@ -55,7 +57,7 @@ export type ConversationTurnDeps = {
 };
 
 export type ConversationHttpResult = {
-  status: 200 | 400;
+  status: 200 | 400 | 404;
   body: Record<string, unknown>;
 };
 
@@ -728,6 +730,9 @@ export async function runConversationTurn(
   }
 
   const sessionId = resolveSessionId(request.data.sessionId);
+  if (request.data.chatId) {
+    sessionStore.startOrSelectChat({ sessionId, chatId: request.data.chatId, timestamp: now.toISOString() });
+  }
   const state = sessionStore.getConversation(sessionId);
   const complete =
     options.complete ?? (process.env.MODEL_API_KEY?.trim() ? openaiChatComplete : undefined);
@@ -820,6 +825,7 @@ export async function runConversationTurn(
     failure: decided.failure,
     timestamp: now.toISOString(),
     extraKasamaTexts: decided.extraKasamaTexts,
+    chatId: request.data.chatId,
   });
 
   const body: ConversationTurnResponse = conversationTurnResponseSchema.parse({
@@ -831,6 +837,36 @@ export async function runConversationTurn(
     plan: view.conversation.plan,
     failure: view.conversation.failure,
     pendingApproval: view.pendingApproval,
+  });
+  return { status: 200, body };
+}
+
+export function runConversationChat(raw: unknown): ConversationHttpResult {
+  const request = conversationChatRequestSchema.safeParse(raw);
+  if (!request.success) {
+    return {
+      status: 400,
+      body: { success: false, summary: "Invalid request.", issues: request.error.issues },
+    };
+  }
+
+  const sessionId = resolveSessionId(request.data.sessionId);
+  const view = sessionStore.startOrSelectChat({
+    sessionId,
+    chatId: request.data.chatId,
+  });
+  const chatId = request.data.chatId ?? view.conversation.activeChatId;
+  if (!chatId || (request.data.chatId && view.conversation.activeChatId !== request.data.chatId)) {
+    return {
+      status: 404,
+      body: { success: false, summary: "That chat is not on this session." },
+    };
+  }
+
+  const body = conversationChatResponseSchema.parse({
+    sessionId,
+    chatId,
+    conversation: view.conversation,
   });
   return { status: 200, body };
 }

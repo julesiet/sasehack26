@@ -28,6 +28,7 @@ import {
 import { colors, radius, size, type } from "../theme";
 import { SeniorChatScreen } from "./SeniorChatScreen";
 import { TasksScreen } from "./TasksScreen";
+import { ChatHistoryScreen } from "./ChatHistoryScreen";
 
 type Props = {
   onBack: () => void;
@@ -57,9 +58,9 @@ function orbModeFor(phase: ConversationPhase): OrbMode {
 }
 
 /**
- * Senior mode. Home is the sun welcome. Chat is only the last started
- * conversation. Tasks lists confirmed reminders and saved hospital visits.
- * Composer stays on Home and Chat, above a compact tab bar.
+ * Senior mode. Home is the sun welcome. Chat is the history list, then a
+ * titled thread. Tasks lists confirmed reminders and saved hospital visits.
+ * Composer stays on Home and on an open thread, above a compact tab bar.
  */
 export function SeniorScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
@@ -72,16 +73,22 @@ export function SeniorScreen({ onBack }: Props) {
     repeatLastReply,
     openSettings,
     recheckMic,
+    openChat,
+    startNewChat,
+    openChatList,
+    openCurrentThread,
   } = useKasamaConversation();
   const [draft, setDraft] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<SeniorTab>("home");
   const inputRef = useRef<TextInput>(null);
   const chatStarted = Boolean(state.kasamaText) || state.turns.some((turn) => turn.speaker === "kasama");
-  const openedChat = useRef(false);
+  const chatAvailable = chatStarted || state.chats.length > 0;
+  const openedThread = state.chats.find((chat) => chat.id === state.openedChatId);
   const onHome = tab === "home";
   const onChat = tab === "chat";
   const onTasks = tab === "tasks";
+  const onList = onChat && !openedThread;
 
   useEffect(() => {
     if (
@@ -105,11 +112,26 @@ export function SeniorScreen({ onBack }: Props) {
   }, [onTasks, state.notice, state.phase]);
 
   useEffect(() => {
-    if (state.kasamaText && !openedChat.current) {
-      openedChat.current = true;
-      setTab("chat");
+    if (tab !== "home") return;
+    if (
+      state.phase !== "thinking" &&
+      state.phase !== "speaking" &&
+      state.phase !== "clarify" &&
+      state.phase !== "approving"
+    ) {
+      return;
     }
-  }, [state.kasamaText]);
+    const chatId = state.openedChatId ?? state.activeChatId;
+    if (!chatId) return;
+    if (!state.openedChatId) openCurrentThread();
+    setTab("chat");
+  }, [
+    openCurrentThread,
+    state.activeChatId,
+    state.openedChatId,
+    state.phase,
+    tab,
+  ]);
 
   const handleSubmit = () => {
     const text = draft.trim();
@@ -119,10 +141,11 @@ export function SeniorScreen({ onBack }: Props) {
   };
 
   const selectTab = (next: SeniorTab) => {
-    if (next === "chat" && !chatStarted) {
+    if (next === "chat" && !chatAvailable) {
       setTab("home");
       return;
     }
+    if (next === "chat") openChatList();
     setTab(next);
   };
 
@@ -157,11 +180,23 @@ export function SeniorScreen({ onBack }: Props) {
             <View style={[styles.pane, { paddingTop: insets.top + 12 }]}>
               <TasksScreen tasks={state.tasks} />
             </View>
-          ) : onChat && chatStarted ? (
+          ) : onList ? (
+            <View style={[styles.pane, { paddingTop: insets.top + 12 }]}>
+              <ChatHistoryScreen
+                chats={state.chats}
+                activeChatId={state.activeChatId}
+                onOpen={(chatId) => void openChat(chatId)}
+                onNewChat={() => void startNewChat()}
+              />
+            </View>
+          ) : onChat && openedThread ? (
             <View style={[styles.pane, { paddingTop: insets.top + 12 }]}>
               <SeniorChatScreen
+                title={openedThread.title}
+                intent={openedThread.intent}
+                liveCards={openedThread.id === state.activeChatId}
                 phase={state.phase}
-                turns={state.turns}
+                turns={openedThread.turns}
                 pendingApproval={state.pendingApproval}
                 justResolved={state.justResolved}
                 lastRideOptions={state.lastRideOptions}
@@ -170,6 +205,7 @@ export function SeniorScreen({ onBack }: Props) {
                 activeRequest={state.activeRequest}
                 rideWork={state.rideWork}
                 notice={state.notice}
+                onBack={openChatList}
                 onSelectRide={(option) => void selectRideOption(option)}
                 onConfirm={() => void decideApproval("approve")}
                 onCancel={() => void decideApproval("decline")}
@@ -184,7 +220,7 @@ export function SeniorScreen({ onBack }: Props) {
           )}
         </View>
 
-        {!onTasks ? (
+        {!onTasks && !onList ? (
           <View style={styles.composer}>
             <ComposerPill
               ref={inputRef}
@@ -203,7 +239,7 @@ export function SeniorScreen({ onBack }: Props) {
       <SeniorTabBar
         active={tab}
         bottomInset={insets.bottom}
-        chatAvailable={chatStarted}
+        chatAvailable={chatAvailable}
         onChange={selectTab}
       />
 

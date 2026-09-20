@@ -85,7 +85,7 @@ function FrequencyTrack({ days }: { days: number }) {
         const n = index + 1;
         const filled = n === 1 || n === count;
         return (
-          <View key={n} style={styles.trackItem}>
+          <View key={n} style={[styles.trackItem, index > 0 ? styles.trackItemGrow : null]}>
             {index > 0 ? <View style={styles.trackLine} /> : null}
             <View style={[styles.dot, filled ? styles.dotFilled : styles.dotMuted]}>
               <Text style={[styles.dotLabel, filled ? styles.dotLabelFilled : styles.dotLabelMuted]}>{n}</Text>
@@ -220,13 +220,14 @@ const styles = StyleSheet.create({
   trackItem: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  trackItemGrow: {
     flex: 1,
   },
   trackLine: {
     flex: 1,
     height: 2,
     backgroundColor: colors.careBlueMuted,
-    marginRight: 4,
   },
   dot: {
     width: 28,
