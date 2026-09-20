@@ -202,7 +202,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
   const speak = useCallback(
     async (text: string, kind: ConversationReplyKind, pending: PendingApproval | null = null) => {
       const spoken = spokenTextForTts(text, MARIA_PREFS, {
-        repeatConfirmation: pending?.tool === "book_ride",
+        repeatConfirmation: pending?.tool === "book_ride" || pending?.tool === "notify_caretaker",
       });
       const settle = () =>
         patch({

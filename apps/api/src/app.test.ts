@@ -173,10 +173,21 @@ describe("POST /tools/:name", () => {
         toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
         arguments: expect.objectContaining({
           recipient_email: "juleselvandrade@gmail.com",
-          body: "Maria missed her medication reminder.",
+          subject: "Kasama family report for Jules — Maria, Normal urgency",
+          is_html: true,
         }),
       }),
     );
+    const sentBody = String(
+      (executeSpy.mock.calls[0]?.[0] as { arguments?: { body?: string } } | undefined)?.arguments?.body,
+    );
+    expect(sentBody).toContain("<h1");
+    expect(sentBody).toContain("<table");
+    expect(sentBody).toContain("James Alvarez");
+    expect(sentBody).toContain("Maria missed her medication reminder.");
+    expect(sentBody).toContain("Dr. Chen — annual checkup");
+    expect(sentBody).toContain("Lisinopril");
+    expect(sentBody).toContain("juleselvandrade@gmail.com");
     executeSpy.mockRestore();
 
     const events = auditLog.list();
@@ -742,10 +753,19 @@ describe("POST /approvals", () => {
           toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
           arguments: expect.objectContaining({
             recipient_email: "juleselvandrade@gmail.com",
-            body: "Maria missed her medication reminder.",
+            subject: "Kasama family report for Jules — Maria, Normal urgency",
+            is_html: true,
           }),
         }),
       );
+      const sentBody = String(
+        (executeSpy.mock.calls[0]?.[0] as { arguments?: { body?: string } } | undefined)?.arguments?.body,
+      );
+      expect(sentBody).toContain("<table");
+      expect(sentBody).toContain("Sarah");
+      expect(sentBody).toContain("Daughter");
+      expect(sentBody).toContain("Maria missed her medication reminder.");
+      expect(sentBody).toContain("Dr. Chen — annual checkup");
     } finally {
       executeSpy.mockRestore();
     }

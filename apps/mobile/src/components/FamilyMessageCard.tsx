@@ -1,8 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { familyMessageCardCopy } from "@kasama/shared";
+import { familyMessageCardCopy, type FamilyMessageStatus } from "@kasama/shared";
 import { colors, radius, size, type } from "../theme";
-
-export type FamilyMessageStatus = "pending" | "sent" | "cancelled";
 
 type Props = {
   recipientName: string;
@@ -31,23 +29,32 @@ export function FamilyMessageCard({
   const [introFirst, introRest] = copy.intro.split("\n");
   const accessibilityLabel =
     status === "pending"
-      ? `${copy.eyebrow}. ${copy.recipientName}. Preview only. Nothing is sent yet.`
+      ? `${copy.eyebrow}. Preview only. Nothing is sent yet. ${copy.recipientName}, ${copy.relationshipLabel}. ${copy.summary}. Urgency ${copy.urgencyLabel}. Health information ${copy.healthLabel}.`
       : status === "sent"
-        ? `${copy.eyebrow}. Sent.`
-        : `${copy.eyebrow}. Not sent.`;
+        ? `${copy.eyebrow}. Sent. ${copy.recipientName}. ${copy.summary}.`
+        : `${copy.eyebrow}. Not sent. ${copy.recipientName}. ${copy.summary}.`;
 
   return (
     <View style={styles.card} accessibilityLabel={accessibilityLabel}>
       <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
-      <Text style={styles.recipient}>{copy.recipientName}</Text>
       <View style={styles.introBlock}>
         <Text style={styles.intro}>{introFirst}</Text>
         {introRest ? <Text style={styles.intro}>{introRest}</Text> : null}
       </View>
-      <Text style={styles.summary}>{copy.summary}</Text>
-      <View style={styles.urgency}>
-        <Text style={styles.urgencyLabel}>Urgency</Text>
-        <Text style={styles.urgencyValue}>{copy.urgencyLabel}</Text>
+
+      <View style={styles.facts}>
+        <Fact label="Recipient" value={copy.recipientName} />
+        <View style={styles.divider} />
+        <Fact label="Relationship" value={copy.relationshipLabel} />
+        <View style={styles.divider} />
+        <Fact label="Message" value={copy.summary} />
+        <View style={styles.divider} />
+        <Fact label="Urgency" value={copy.urgencyLabel} />
+        <View style={styles.divider} />
+        <Fact
+          label="Health information"
+          value={`${copy.healthLabel}. ${copy.healthDetail}`}
+        />
       </View>
 
       {status === "pending" ? (
@@ -86,6 +93,15 @@ export function FamilyMessageCard({
   );
 }
 
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.fact}>
+      <Text style={styles.factLabel}>{label}</Text>
+      <Text style={styles.factValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.chatCard,
@@ -99,10 +115,6 @@ const styles = StyleSheet.create({
     ...type.eyebrow,
     color: colors.bowlTop,
   },
-  recipient: {
-    ...type.reply,
-    color: colors.ink,
-  },
   introBlock: {
     gap: 4,
   },
@@ -110,20 +122,23 @@ const styles = StyleSheet.create({
     ...type.cardTitle,
     color: colors.ink,
   },
-  summary: {
-    ...type.transcript,
-    color: colors.ink,
+  facts: {
+    gap: 12,
   },
-  urgency: {
+  fact: {
     gap: 4,
   },
-  urgencyLabel: {
+  factLabel: {
     ...type.label,
     color: colors.inkSoft,
   },
-  urgencyValue: {
-    ...type.cardTitle,
+  factValue: {
+    ...type.transcript,
     color: colors.ink,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.chatLine,
   },
   actions: {
     flexDirection: "row",

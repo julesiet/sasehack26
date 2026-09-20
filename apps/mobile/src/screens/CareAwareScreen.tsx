@@ -6,8 +6,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   buildCareAwareView,
   DEFAULT_SESSION_ID,
+  familyMessageAnalysis,
   formatSeconds,
-  titleCaseUrgency,
   type CareAwareAction,
   type CareAwareResponseTone,
   type CareAwareUsagePeriod,
@@ -25,6 +25,12 @@ type Props = {
 const NOTIFY_DAUGHTER_SUMMARY = "Maria missed her medication reminder.";
 const NOTIFY_DAUGHTER_RECIPIENT = "Sarah";
 const NOTIFY_DAUGHTER_URGENCY = "normal" as const;
+const NOTIFY_DAUGHTER_ANALYSIS = familyMessageAnalysis({
+  recipientName: NOTIFY_DAUGHTER_RECIPIENT,
+  summary: NOTIFY_DAUGHTER_SUMMARY,
+  urgency: NOTIFY_DAUGHTER_URGENCY,
+  status: "pending",
+});
 
 const CHIP: Record<CareAwareResponseTone, string> = {
   fast: colors.careAwareChipFast,
@@ -262,10 +268,16 @@ export function CareAwareScreen({
             <Text style={styles.sheetTitle}>{action?.label}</Text>
             {notifySheet ? (
               <>
-                <Text style={styles.sheetBody}>Recipient: {NOTIFY_DAUGHTER_RECIPIENT}</Text>
-                <Text style={styles.sheetBody}>{NOTIFY_DAUGHTER_SUMMARY}</Text>
+                <Text style={styles.sheetIntro}>Preview only. Nothing is sent yet.</Text>
+                <Text style={styles.sheetBody}>Recipient: {NOTIFY_DAUGHTER_ANALYSIS.recipientName}</Text>
                 <Text style={styles.sheetBody}>
-                  Urgency: {titleCaseUrgency(NOTIFY_DAUGHTER_URGENCY)}
+                  Relationship: {NOTIFY_DAUGHTER_ANALYSIS.relationshipLabel}
+                </Text>
+                <Text style={styles.sheetBody}>Message: {NOTIFY_DAUGHTER_ANALYSIS.summary}</Text>
+                <Text style={styles.sheetBody}>Urgency: {NOTIFY_DAUGHTER_ANALYSIS.urgencyLabel}</Text>
+                <Text style={styles.sheetBody}>
+                  Health information: {NOTIFY_DAUGHTER_ANALYSIS.healthLabel}.{" "}
+                  {NOTIFY_DAUGHTER_ANALYSIS.healthDetail}
                 </Text>
                 {notifyBusy ? <Text style={styles.sheetMeta}>Working…</Text> : null}
                 {notifyError ? <Text style={styles.sheetError}>{notifyError}</Text> : null}
@@ -564,6 +576,12 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontFamily: "Georgia",
     fontSize: 26,
+    color: colors.caretakerInk,
+  },
+  sheetIntro: {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: "600",
     color: colors.caretakerInk,
   },
   sheetBody: {

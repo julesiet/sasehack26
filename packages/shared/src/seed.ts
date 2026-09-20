@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { conversationChatSchema, conversationTurnSchema, type ConversationChat, type ConversationTurn } from "./conversation";
+import { familyContactSchema, MARIA_FAMILY_CONTACTS } from "./family";
 import { caretakerUrgencySchema } from "./tools";
 
 /**
@@ -255,13 +256,6 @@ export const MARIA_CARE_AWARE_RESPONSE: CareAwareResponse = careAwareResponseSch
   eveningAverageSeconds: 5.8,
 });
 
-export const familyContactSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  initial: z.string().min(1),
-});
-export type FamilyContact = z.infer<typeof familyContactSchema>;
-
 export const dashboardViewerSchema = z.object({
   firstName: z.string(),
   relationship: z.string(),
@@ -273,14 +267,6 @@ export const MARIA_DASHBOARD_VIEWER: DashboardViewer = dashboardViewerSchema.par
   firstName: "Margaret",
   relationship: "family",
 });
-
-/** Family row on the caretaker dashboard. James is also the policy caretaker. */
-export const MARIA_FAMILY_CONTACTS: FamilyContact[] = [
-  familyContactSchema.parse({ id: "contact_sarah", name: "Sarah", initial: "S" }),
-  familyContactSchema.parse({ id: "contact_james", name: "James Alvarez", initial: "J" }),
-  familyContactSchema.parse({ id: "contact_emily", name: "Emily", initial: "E" }),
-  familyContactSchema.parse({ id: "contact_jules", name: "Jules", initial: "U" }),
-];
 
 /** Same-day times for the seeded Maria ↔ Kasama ride thread. */
 function atTime(referenceDate: Date, hours: number, minutes: number): string {

@@ -10,6 +10,7 @@ import {
   getMariaAppointment,
   getMariaSeedBundle,
   FAMILY_EMAIL_RECIPIENT,
+  familyEmailCopy,
   invokeToolRequestSchema,
   isKnownTool,
   notifyCaretakerInputSchema,
@@ -170,12 +171,14 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
         });
 
       try {
+        const email = familyEmailCopy(parsed);
         const composioResult = await kasamaComposio.execute({
           toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
           arguments: {
             recipient_email: FAMILY_EMAIL_RECIPIENT,
-            body: parsed.summary,
-            subject: `Note from Kasama about Maria (${parsed.urgency} urgency)`,
+            body: email.body,
+            subject: email.subject,
+            is_html: email.isHtml,
           },
         });
 

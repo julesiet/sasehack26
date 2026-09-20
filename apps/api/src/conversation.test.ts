@@ -158,6 +158,10 @@ describe("runConversationTurn", () => {
     expect(draft.kind).toBe("proposal");
     expect(draft.pendingApproval?.tool).toBe("notify_caretaker");
     expect(draft.pendingApproval?.preview).toMatch(/missed.*medication/i);
+    expect(draft.reply).toContain("Preview only. Nothing is sent yet.");
+    expect(draft.reply).toContain("James Alvarez, son");
+    expect(draft.reply).toContain("Health information is included");
+    expect(draft.reply).toContain("Should I send it?");
     const input = sessionStore.get("voice-1").pendingApproval?.input as {
       recipientName?: string;
       summary?: string;

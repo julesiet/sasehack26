@@ -273,6 +273,9 @@ describe("caretaker dashboard projection", () => {
       summary: "Maria missed her medication reminder.",
       urgencyLabel: "Normal",
       recipientName: "James Alvarez",
+      relationshipLabel: "Son",
+      healthShared: true,
+      healthLabel: "Yes",
       sentLine: null,
       whenLabel: null,
     });
@@ -303,6 +306,9 @@ describe("caretaker dashboard projection", () => {
       summary: "Maria missed her medication reminder.",
       urgencyLabel: "Normal",
       recipientName: "James Alvarez",
+      relationshipLabel: "Son",
+      healthShared: true,
+      healthLabel: "Yes",
       sentLine: "Sent to James Alvarez",
       whenLabel: formatAppointmentWhen(NOW.toISOString(), NOW),
     });
@@ -317,6 +323,9 @@ describe("caretaker dashboard projection", () => {
           timestamp: NOW.toISOString(),
           summary: "Okay. I will not send that message.",
           prompt: "I can send this to your family. Should I send it?",
+          preview: "Maria missed her medication reminder.",
+          recipientName: "James Alvarez",
+          urgency: "normal",
         },
       }),
       seed: SEED,
@@ -326,7 +335,11 @@ describe("caretaker dashboard projection", () => {
       status: "not_sent",
       kicker: "FAMILY UPDATE",
       headline: "Not sent",
-      summary: "Maria cancelled this message.",
+      summary: "Maria missed her medication reminder.",
+      recipientName: "James Alvarez",
+      relationshipLabel: "Son",
+      healthShared: true,
+      healthLabel: "Yes",
     });
   });
 
@@ -362,7 +375,11 @@ describe("caretaker dashboard projection", () => {
     expect(dashboard.familyUpdate).toMatchObject({
       status: "not_sent",
       headline: "Not sent",
-      summary: "Maria cancelled this message.",
+      summary: "Maria missed her medication reminder.",
+      recipientName: "James Alvarez",
+      relationshipLabel: "Son",
+      healthShared: true,
+      healthLabel: "Yes",
     });
   });
 

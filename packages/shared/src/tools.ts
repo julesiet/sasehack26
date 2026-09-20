@@ -79,6 +79,7 @@ export const bookRideResultSchema = z.object({
 });
 
 export const caretakerUrgencySchema = z.enum(["low", "normal", "high"]);
+export type CaretakerUrgency = z.infer<typeof caretakerUrgencySchema>;
 
 export const notifyCaretakerInputSchema = z.object({
   summary: z.string().min(1),

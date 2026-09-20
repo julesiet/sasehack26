@@ -1,6 +1,6 @@
 import { selectedRideOption, type LastApproval, type PendingApproval } from "./approval";
 import { emptyConversationState, allConversationTurns } from "./conversation";
-import { resolveFamilyRecipient, titleCaseUrgency } from "./family";
+import { familyMessageAnalysis, resolveFamilyRecipient } from "./family";
 import { getMariaSeedBundle, type MariaSeedBundle } from "./seed";
 import type { CaretakerActivityItem, SessionView } from "./session";
 import { notifyCaretakerInputSchema, type UberProduct, type UberRideOption } from "./tools";
@@ -50,6 +50,9 @@ export type CaretakerFamilyUpdate = {
   summary: string;
   urgencyLabel: string;
   recipientName: string;
+  relationshipLabel: string;
+  healthShared: boolean;
+  healthLabel: string;
   sentLine: string | null;
   whenLabel: string | null;
 };
@@ -222,6 +225,30 @@ function rideCard(view: SessionView, seed: MariaSeedBundle): CaretakerRideCard |
   };
 }
 
+function familyUpdateFacts(input: {
+  recipientName?: string;
+  summary: string;
+  urgency?: "low" | "normal" | "high";
+}): Pick<
+  CaretakerFamilyUpdate,
+  "recipientName" | "relationshipLabel" | "healthShared" | "healthLabel" | "urgencyLabel" | "summary"
+> {
+  const analysis = familyMessageAnalysis({
+    recipientName: displayRecipientName(input.recipientName),
+    summary: input.summary,
+    urgency: input.urgency ?? "normal",
+    status: "pending",
+  });
+  return {
+    recipientName: analysis.recipientName,
+    relationshipLabel: analysis.relationshipLabel,
+    healthShared: analysis.healthShared,
+    healthLabel: analysis.healthLabel,
+    urgencyLabel: analysis.urgencyLabel,
+    summary: analysis.summary,
+  };
+}
+
 function familyUpdateCard(
   view: SessionView,
   senior: string,
@@ -234,14 +261,18 @@ function familyUpdateCard(
   if (pending) {
     const pendingInput = notifyCaretakerInputSchema.safeParse(pending.input);
     const draft = pendingInput.success ? pendingInput.data : null;
+    const facts = familyUpdateFacts({
+      recipientName: notify?.recipientName ?? draft?.recipientName,
+      summary: notify?.summary ?? pending.preview ?? draft?.summary ?? "A note for your family.",
+      urgency: notify?.urgency ?? draft?.urgency,
+    });
     if (pending.reason === "send_failed") {
       return {
         status: "not_sent",
         kicker: "FAMILY UPDATE",
         headline: "Not sent",
+        ...facts,
         summary: notify?.summary ?? pending.preview ?? draft?.summary ?? "The family note was not sent.",
-        urgencyLabel: titleCaseUrgency(notify?.urgency ?? draft?.urgency ?? "normal"),
-        recipientName: displayRecipientName(notify?.recipientName ?? draft?.recipientName),
         sentLine: null,
         whenLabel: null,
       };
@@ -250,50 +281,55 @@ function familyUpdateCard(
       status: "draft",
       kicker: "FAMILY UPDATE",
       headline: "Draft — awaiting confirmation",
-      summary:
-        notify?.summary ?? pending.preview ?? draft?.summary ?? "Preview only — not sent yet.",
-      urgencyLabel: titleCaseUrgency(notify?.urgency ?? draft?.urgency ?? "normal"),
-      recipientName: displayRecipientName(notify?.recipientName ?? draft?.recipientName),
+      ...facts,
       sentLine: null,
       whenLabel: null,
     };
   }
 
   if (lastNotify?.decision === "declined") {
+    const facts = familyUpdateFacts({
+      recipientName: lastNotify.recipientName ?? notify?.recipientName,
+      summary: notify?.summary ?? lastNotify.preview ?? `${senior} cancelled this message.`,
+      urgency: lastNotify.urgency ?? notify?.urgency,
+    });
     return {
       status: "not_sent",
       kicker: "FAMILY UPDATE",
       headline: "Not sent",
-      summary: `${senior} cancelled this message.`,
-      urgencyLabel: titleCaseUrgency("normal"),
-      recipientName: displayRecipientName(),
+      ...facts,
       sentLine: null,
       whenLabel: null,
     };
   }
 
   if (notify?.sent) {
-    const recipientName = displayRecipientName(notify.recipientName);
+    const facts = familyUpdateFacts({
+      recipientName: notify.recipientName,
+      summary: notify.summary,
+      urgency: notify.urgency,
+    });
     return {
       status: "sent",
       kicker: "FAMILY UPDATE",
       headline: "Sent",
-      summary: notify.summary,
-      urgencyLabel: titleCaseUrgency(notify.urgency ?? "normal"),
-      recipientName,
-      sentLine: `Sent to ${recipientName}`,
+      ...facts,
+      sentLine: `Sent to ${facts.recipientName}`,
       whenLabel: formatAppointmentWhen(notify.timestamp, now),
     };
   }
 
   if (notify?.preview) {
+    const facts = familyUpdateFacts({
+      recipientName: notify.recipientName,
+      summary: notify.summary,
+      urgency: notify.urgency,
+    });
     return {
       status: "draft",
       kicker: "FAMILY UPDATE",
       headline: "Draft — awaiting confirmation",
-      summary: notify.summary,
-      urgencyLabel: titleCaseUrgency(notify.urgency ?? "normal"),
-      recipientName: displayRecipientName(notify.recipientName),
+      ...facts,
       sentLine: null,
       whenLabel: null,
     };
