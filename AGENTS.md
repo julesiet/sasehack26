@@ -56,9 +56,11 @@ pnpm ios              # Expo → iOS Simulator (Mac only; own terminal)
 pnpm typecheck
 pnpm test
 pnpm playground # text playground (no iOS). Optional: -- "Please get me a ride…"
+pnpm demo:rehearse # 3-minute ride script against live-demo (no iOS)
+pnpm demo:pdf # write docs/demo/kasama-3-minute-demo.pdf
 ```
 
-GitHub Actions on pull requests and `main` runs `pnpm typecheck` and `pnpm test` (`.github/workflows/ci.yml`). No `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, or `COMPOSIO_API_KEY` is required.
+GitHub Actions on pull requests and `main` runs `pnpm typecheck` and `pnpm test` (`.github/workflows/ci.yml`). No `MODEL_API_KEY`, `ELEVENLABS_API_KEY`, `COMPOSIO_API_KEY`, or `KASAMA_DEMO` is required.
 
 `pnpm dev`, `pnpm start`, `pnpm start:tunnel`, and `pnpm ios` are long-running. Do not chain them in one terminal. Port 3001 / 8081 in use means that process is already up — do not start a second copy. `pnpm playground` is not long-running.
 
@@ -75,6 +77,8 @@ pnpm playground -- --session-id issue-11-email "send an email to james alvarez s
 
 Or `POST /playground` on a running API (`pnpm dev:api`). Same policy + audit as the voice loop. Default `until` is `checkpoint` (stops at the $24.50 prompt, never books, and never auto-approves send). Use a unique `--session-id` so you do not collide with the iOS `default` session. Confirm the JSON has appointment context, ride options, `pendingApproval`, and `lastBooking: null` for the ride demo line. For a family email, expect `pendingApproval.tool` `notify_caretaker`, a missed-medication preview, and `lastBooking: null` — nothing is sent. Failed tools must still return `failure.kind` `retry` or `handoff`. A failed Gmail send keeps `pendingApproval` so Confirm can retry; it does not mark the email as sent or leave FAMILY UPDATE as Draft.
 
+For the 3-minute live demo (`#12`), set `KASAMA_DEMO=1` so ChatGPT cannot change the spoken copy, reset the iOS session to `live-demo`, and follow [docs/demo/kasama-3-minute-demo.pdf](docs/demo/kasama-3-minute-demo.pdf). `pnpm demo:rehearse` runs those same lines in-process (it does book the controlled Uber). `pnpm demo:pdf` regenerates the sheet from `packages/shared/src/demo-script.ts`. Designed loading / error / mic / handoff screens stay `blocked:design`; the script reuses existing senior states and the typed fallback.
+
 There is no product website. `http://localhost:3001` is the API. The app is Expo Go (`pnpm start` / `pnpm dev`) or the Simulator (`pnpm ios`, Mac only). `pnpm start` detects this computer's LAN IPv4 so Expo Go on a phone gets `exp://<ip>:8081` and `EXPO_PUBLIC_API_URL=http://<ip>:3001`. Same Wi-Fi as the phone. Override in `apps/mobile/.env` if the wrong NIC is chosen (Mac: `ipconfig getifaddr en0`; Windows: `ipconfig` → IPv4 Address). Restart Expo after changing `.env`. Windows cannot run `pnpm ios`. If the QR cannot connect, `pnpm start:tunnel` (API still needs the LAN IP; allow ports 3001 and 8081).
 
 ## Current API
@@ -83,8 +87,9 @@ There is no product website. `http://localhost:3001` is the API. The app is Expo
 - `GET /health` — `{ ok: true, service: "kasama-api" }`
 - `POST /tools/:name` — validate → policy → audit → session projection → stub execute
 - `GET /sessions/:sessionId` — in-memory session view (current request, pending approval, last approval, last Uber options, appointment, last Uber booking, last medication reminder, last hospital visit, tasks, caretaker activity, caretaker narrative, care signal, session events, `conversation.chats`). The iOS `default` session starts with `getMariaDemoSession()` (three titled chats — hospital visit, medication reminder, doctor ride — plus seeded WAV). Other ids start empty.
+- `POST /sessions/:sessionId/reset` — `{ preset?: "seed" | "live-demo" }` restores that session. `seed` is Maria's booked WAV start (iOS `default` first open). `live-demo` keeps hospital + medication history but leaves the ride unbooked so the 3-minute script can book on stage. A `live-demo` reset also resets the controlled Uber provider so the first confirmation is `UBER-WAV-0001`.
 - `GET /audit` — `{ events: [...] }` all process-local events; optional `?sessionId=` filters. Cleared on process restart
-- `POST /conversation/turn` — `{ transcript, sessionId?, chatId? }` → Kasama's reply + `kind` + `plan` + `failure` + `pendingApproval`. Optional `chatId` selects that thread first. ChatGPT plans when `MODEL_API_KEY` is set; otherwise the rules-based turn. Every tool still goes through policy + audit. ChatGPT is never allowed to book or send. A spoken yes after a ride plan opens the $24.50 checkpoint; a second yes (or tap) books as `senior`.
+- `POST /conversation/turn` — `{ transcript, sessionId?, chatId? }` → Kasama's reply + `kind` + `plan` + `failure` + `pendingApproval`. Optional `chatId` selects that thread first. ChatGPT plans when `MODEL_API_KEY` is set unless `KASAMA_DEMO=1` (rules-based copy for the live demo). Every tool still goes through policy + audit. ChatGPT is never allowed to book or send. A spoken yes after a ride plan opens the $24.50 checkpoint; a second yes (or tap) books as `senior`.
 - `POST /conversation/chats` — `{ sessionId?, chatId? }` → `{ sessionId, chatId, conversation }`. Omit `chatId` to start a new empty thread (explicit only). Pass `chatId` to select an existing thread.
 - `POST /playground` — text playground (`#13`). `{ transcript, sessionId?, until?: "checkpoint" | "turn" }` → reply + `plan` + Maria seed + `appointment` + `rideOptions` + `pendingApproval` + `events`. Default `until` is `checkpoint`: it accepts a conversational ride plan so you can see the $24.50 prompt, then stops. A spoken family email stops at the `notify_caretaker` preview. It never books, sends, or spends. Default `sessionId` is `playground` (not the iOS `default`). Same policy + audit as conversation. Also `pnpm playground`.
 - `POST /approvals` — `{ decision: "approve" | "decline", sessionId?, actor?: "senior" | "caretaker" }` → resolve the pending checkpoint. Same policy + audit as tools. Model actors are rejected.

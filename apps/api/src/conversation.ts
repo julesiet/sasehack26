@@ -11,6 +11,7 @@ import {
   findRideOptionsResultSchema,
   getAppointmentResultSchema,
   getMariaAppointment,
+  isKasamaDemoEnabled,
   notifyApprovalPrompt,
   resolveFamilyRecipient,
   resolveSessionId,
@@ -49,6 +50,7 @@ import { sessionStore } from "./session-store";
  * One conversational turn for the voice loop (#4) and harness (#5).
  *
  * ChatGPT plans when `MODEL_API_KEY` is set (or a complete function is injected).
+ * `KASAMA_DEMO=1` skips ChatGPT so the 3-minute script stays on the rules-based copy.
  * Otherwise the original rules-based turn runs so the demo works without a key.
  * Every tool call still goes through `invokeTool` so policy and audit stay real.
  */
@@ -777,8 +779,9 @@ export async function runConversationTurn(
     sessionStore.startOrSelectChat({ sessionId, chatId: request.data.chatId, timestamp: now.toISOString() });
   }
   const state = sessionStore.getConversation(sessionId);
-  const complete =
-    options.complete ?? (process.env.MODEL_API_KEY?.trim() ? openaiChatComplete : undefined);
+  const complete = isKasamaDemoEnabled()
+    ? undefined
+    : (options.complete ?? (process.env.MODEL_API_KEY?.trim() ? openaiChatComplete : undefined));
 
   const pending = sessionStore.get(sessionId).pendingApproval;
   const spoken = normalize(request.data.transcript);

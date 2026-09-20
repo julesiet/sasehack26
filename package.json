@@ -11,7 +11,9 @@
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
-    "playground": "pnpm --filter @kasama/api playground"
+    "playground": "pnpm --filter @kasama/api playground",
+    "demo:rehearse": "pnpm --filter @kasama/api demo:rehearse",
+    "demo:pdf": "pnpm --filter @kasama/api demo:pdf"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

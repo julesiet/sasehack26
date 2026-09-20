@@ -67,7 +67,23 @@ The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, t
 
 Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env` (the key needs Speech to Text **and** Text to Speech). Without it the Senior screen asks you to type and uses iOS speech for replies. The Simulator uses your Mac's microphone.
 
-ChatGPT plans each turn when `MODEL_API_KEY` is in `apps/api/.env` (OpenAI Chat Completions, default `gpt-4o-mini`). Without it the API uses the rules-based turn so the demo line still works.
+ChatGPT plans each turn when `MODEL_API_KEY` is in `apps/api/.env` (OpenAI Chat Completions, default `gpt-4o-mini`). Without it the API uses the rules-based turn so the demo line still works. For a live judged demo set `KASAMA_DEMO=1` so ChatGPT cannot change the copy even if a key is present.
+
+3-minute demo (`#12`) — print the sheet, reset the session, do not improvise:
+
+```sh
+# apps/api/.env
+KASAMA_DEMO=1
+
+pnpm demo:pdf          # docs/demo/kasama-3-minute-demo.pdf
+pnpm demo:rehearse     # books the controlled Uber; checks the printed lines
+# API already running:
+curl -s http://localhost:3001/sessions/default/reset \
+  -H 'content-type: application/json' \
+  -d '{"preset":"live-demo"}'
+```
+
+Then Senior mode: say **Please get me a ride to my doctor tomorrow.** Tap **Wheelchair Uber** (or say **Choose the accessible one.**). Tap **Confirm**. Switch to Caretaker. If the mic fails, type the same line — do not rephrase.
 
 Text playground (no iOS) — the way to exercise intent, tools, and policy without the Simulator. Coding agents should run this after conversation / tool / policy changes. Appointment, Uber options, and the $24.50 checkpoint; never a silent booking:
 

@@ -15,6 +15,7 @@ beforeEach(() => {
   sessionStore.clear();
   resetControlledUberProvider();
   process.env.MODEL_API_KEY = "";
+  process.env.KASAMA_DEMO = "";
 });
 
 async function turn(transcript: string, sessionId = "voice-1") {
@@ -649,5 +650,27 @@ describe("runConversationTurn", () => {
     expect(reply.reply).toContain("What is this appointment for");
     expect(reply.reply).not.toMatch(/cannot schedule/i);
     expect(reply.activeRequest?.intent).toBe("hospital_schedule");
+  });
+
+  it("keeps the rules-based demo line when KASAMA_DEMO is set even if ChatGPT is injected", async () => {
+    process.env.KASAMA_DEMO = "1";
+    const result = await runConversationTurn(
+      {
+        transcript: "Please get me a ride to my doctor tomorrow.",
+        sessionId: "demo-lock-1",
+      },
+      {
+        complete: async () => ({
+          role: "assistant",
+          content: "I will diagnose your symptoms and book whatever is cheapest.",
+        }),
+      },
+    );
+    expect(result.status).toBe(200);
+    const reply = conversationTurnResponseSchema.parse(result.body);
+    expect(reply.kind).toBe("proposal");
+    expect(reply.reply).toContain("Dr. Chen");
+    expect(reply.reply).toMatch(/Should I set that up\?$/);
+    expect(reply.reply).not.toMatch(/diagnos|cheapest/i);
   });
 });

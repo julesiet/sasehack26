@@ -9,6 +9,7 @@ import {
   findRideOptionsResultSchema,
   getAppointmentResultSchema,
   getMariaDemoSession,
+  getMariaLiveDemoSession,
   getMariaSeedBundle,
   notifyCaretakerInputSchema,
   notifyCaretakerResultSchema,
@@ -37,6 +38,7 @@ import {
   type SessionHospitalVisit,
   type SessionMedicationReminder,
   type SessionRequest,
+  type SessionResetPreset,
   type SessionView,
   type SeniorTask,
   type ToolName,
@@ -105,7 +107,10 @@ function seedCareSignal(): CareSignal {
   };
 }
 
-function emptyState(sessionId: string): SessionState {
+function emptyState(
+  sessionId: string,
+  preset: SessionResetPreset = "seed",
+): SessionState {
   const blank: SessionState = {
     sessionId,
     currentRequest: null,
@@ -122,6 +127,22 @@ function emptyState(sessionId: string): SessionState {
     consentGranted: false,
     conversation: emptyConversationState(),
   };
+  if (preset === "live-demo") {
+    const live = getMariaLiveDemoSession();
+    return {
+      ...blank,
+      appointment: live.appointment,
+      lastRideOptions: live.lastRideOptions,
+      lastBooking: live.lastBooking,
+      lastApproval: live.lastApproval,
+      lastMedicationReminder: live.lastMedicationReminder,
+      lastHospitalVisit: live.lastHospitalVisit,
+      tasks: live.tasks,
+      caretakerActivity: live.caretakerActivity,
+      consentGranted: live.consentGranted,
+      conversation: live.conversation,
+    };
+  }
   if (sessionId !== DEFAULT_SESSION_ID) {
     return blank;
   }
@@ -209,6 +230,7 @@ export type SessionStore = {
   applyConversationTurn: (input: ApplyConversationTurnInput) => SessionView;
   startOrSelectChat: (input: { sessionId: string; chatId?: string; timestamp?: string }) => SessionView;
   declinePending: (input: { sessionId: string; actor: Actor }) => SessionView;
+  reset: (sessionId: string, preset?: SessionResetPreset) => SessionView;
   clear: () => void;
 };
 
@@ -607,6 +629,13 @@ export function createSessionStore(): SessionStore {
         }
       }
       return toView(state);
+    },
+    reset(sessionId, preset = "seed") {
+      auditLog.clearSession(sessionId);
+      sessions.delete(sessionId);
+      const created = emptyState(sessionId, preset);
+      sessions.set(sessionId, created);
+      return toView(created);
     },
     clear() {
       sessions.clear();

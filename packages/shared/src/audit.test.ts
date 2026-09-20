@@ -26,4 +26,26 @@ describe("createAuditLog", () => {
     expect(event.executed?.attempted).toBe(false);
     expect(event.outcome.denied).toBe(true);
   });
+
+  it("can drop events for one session without clearing the rest", () => {
+    const log = createAuditLog();
+    log.append({
+      whoAsked: { actor: "model", sessionId: "keep" },
+      proposed: { tool: "get_appointment", input: {} },
+      approved: { allowed: true, approvalTokenPresent: false },
+      executed: { tool: "get_appointment", attempted: true },
+      outcome: { success: true, summary: "ok" },
+    });
+    log.append({
+      whoAsked: { actor: "senior", sessionId: "drop" },
+      proposed: { tool: "book_ride", input: {} },
+      approved: { allowed: true, by: "senior", approvalTokenPresent: true },
+      executed: { tool: "book_ride", attempted: true },
+      outcome: { success: true, summary: "ok" },
+    });
+
+    log.clearSession("drop");
+
+    expect(log.list().map((event) => event.whoAsked.sessionId)).toEqual(["keep"]);
+  });
 });

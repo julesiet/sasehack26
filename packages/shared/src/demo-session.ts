@@ -26,6 +26,16 @@ export type MariaDemoSession = {
   conversation: ConversationState;
 };
 
+/** Unbooked start for the live 3-minute demo (#12). History stays; the ride does not. */
+export type MariaLiveDemoSession = Omit<
+  MariaDemoSession,
+  "lastBooking" | "lastApproval" | "consentGranted"
+> & {
+  lastBooking: null;
+  lastApproval: null;
+  consentGranted: false;
+};
+
 /** Demo Uber rows the senior Chat already knows (UberX + WAV). */
 export function getMariaDemoRideOptions(): UberRideOption[] {
   return [
@@ -143,6 +153,35 @@ export function getMariaDemoSession(referenceDate: Date = new Date()): MariaDemo
       chats: seed.conversationChats,
       activeChatId: rideChat?.id ?? MARIA_DEMO_CHAT_RIDE_ID,
       turns: rideChat?.turns ?? seed.conversationTurns,
+    },
+  };
+}
+
+/**
+ * iOS `default` session for a live booking demo. Hospital + medication threads
+ * stay so Chat and Tasks are not empty. The doctor-ride thread and WAV booking
+ * are omitted so caretaker Overview starts idle and Maria can book on stage.
+ */
+export function getMariaLiveDemoSession(
+  referenceDate: Date = new Date(),
+): MariaLiveDemoSession {
+  const seeded = getMariaDemoSession(referenceDate);
+  const chats = seeded.conversation.chats.filter((chat) => chat.id !== MARIA_DEMO_CHAT_RIDE_ID);
+  return {
+    appointment: seeded.appointment,
+    lastRideOptions: [],
+    lastBooking: null,
+    lastApproval: null,
+    lastMedicationReminder: seeded.lastMedicationReminder,
+    lastHospitalVisit: seeded.lastHospitalVisit,
+    tasks: seeded.tasks,
+    caretakerActivity: [],
+    consentGranted: false,
+    conversation: {
+      ...emptyConversationState(),
+      chats,
+      activeChatId: null,
+      turns: [],
     },
   };
 }

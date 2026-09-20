@@ -113,3 +113,12 @@ export type CaretakerActivityItem = z.infer<typeof caretakerActivityItemSchema>;
 export type CaretakerNarrativeItem = z.infer<typeof caretakerNarrativeItemSchema>;
 export type CareSignal = z.infer<typeof careSignalSchema>;
 export type SessionView = z.infer<typeof sessionViewSchema>;
+
+/** `POST /sessions/:sessionId/reset` — restore Maria seed or the unbooked live demo. */
+export const sessionResetPresetSchema = z.enum(["seed", "live-demo"]);
+export type SessionResetPreset = z.infer<typeof sessionResetPresetSchema>;
+
+export const sessionResetRequestSchema = z.object({
+  preset: sessionResetPresetSchema.default("seed"),
+});
+export type SessionResetRequest = z.infer<typeof sessionResetRequestSchema>;
