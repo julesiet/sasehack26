@@ -365,4 +365,44 @@ describe("caretaker dashboard projection", () => {
       summary: "Maria cancelled this message.",
     });
   });
+
+  it("does not show FAMILY UPDATE as draft after a failed notify send", () => {
+    const dashboard = buildCaretakerDashboard({
+      view: view({
+        pendingApproval: {
+          tool: "notify_caretaker",
+          action: "notify_caretaker",
+          reason: "send_failed",
+          summary: "Failed to send notification: Gmail send failed.",
+          prompt: "I can send this to your family. Should I send it?",
+          detail: "Preview only — not sent yet.",
+          preview: "Maria missed her medication reminder.",
+          input: {
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            recipientName: "James Alvarez",
+          },
+          timestamp: NOW.toISOString(),
+          status: "pending",
+        },
+        lastApproval: null,
+        caretakerActivity: [
+          {
+            id: "act_preview",
+            timestamp: NOW.toISOString(),
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            sent: false,
+            preview: false,
+            recipientName: "James Alvarez",
+          },
+        ],
+      }),
+      seed: SEED,
+      now: NOW,
+    });
+
+    expect(dashboard.familyUpdate?.status).not.toBe("draft");
+    expect(dashboard.familyUpdate?.headline).not.toMatch(/Draft/);
+  });
 });

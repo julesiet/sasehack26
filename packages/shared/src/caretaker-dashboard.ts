@@ -234,6 +234,18 @@ function familyUpdateCard(
   if (pending) {
     const pendingInput = notifyCaretakerInputSchema.safeParse(pending.input);
     const draft = pendingInput.success ? pendingInput.data : null;
+    if (pending.reason === "send_failed") {
+      return {
+        status: "not_sent",
+        kicker: "FAMILY UPDATE",
+        headline: "Not sent",
+        summary: notify?.summary ?? pending.preview ?? draft?.summary ?? "The family note was not sent.",
+        urgencyLabel: titleCaseUrgency(notify?.urgency ?? draft?.urgency ?? "normal"),
+        recipientName: displayRecipientName(notify?.recipientName ?? draft?.recipientName),
+        sentLine: null,
+        whenLabel: null,
+      };
+    }
     return {
       status: "draft",
       kicker: "FAMILY UPDATE",

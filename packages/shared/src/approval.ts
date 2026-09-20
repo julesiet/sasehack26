@@ -55,6 +55,10 @@ export const lastApprovalSchema = z.object({
   timestamp: z.string(),
   summary: z.string(),
   prompt: z.string().optional(),
+  /** Draft caretaker text, kept so the just-resolved MESSAGE TO card stays honest. */
+  preview: z.string().optional(),
+  recipientName: z.string().optional(),
+  urgency: z.enum(["low", "normal", "high"]).optional(),
 });
 export type LastApproval = z.infer<typeof lastApprovalSchema>;
 

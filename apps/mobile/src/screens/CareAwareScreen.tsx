@@ -91,7 +91,11 @@ export function CareAwareScreen({
   }
 
   async function cancelNotify() {
-    if (notifyBusy || !notifyReady) return;
+    if (notifyBusy) return;
+    if (!notifyReady) {
+      setAction(null);
+      return;
+    }
     setNotifyBusy(true);
     try {
       await postApproval("decline", sessionId, "caretaker");
@@ -103,6 +107,15 @@ export function CareAwareScreen({
     } finally {
       setNotifyBusy(false);
     }
+  }
+
+  function dismissSheet() {
+    if (notifyBusy) return;
+    if (notifySheet) {
+      void cancelNotify();
+      return;
+    }
+    setAction(null);
   }
 
   return (
@@ -238,15 +251,11 @@ export function CareAwareScreen({
         visible={action !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          if (!notifyBusy) setAction(null);
-        }}
+        onRequestClose={dismissSheet}
       >
         <Pressable
           style={styles.backdrop}
-          onPress={() => {
-            if (!notifyBusy) setAction(null);
-          }}
+          onPress={dismissSheet}
           accessibilityLabel="Close"
         >
           <Pressable style={styles.sheet}>

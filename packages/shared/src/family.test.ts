@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { COMPOSIO_CARETAKER_RECIPIENT } from "./composio";
-import { FAMILY_EMAIL_RECIPIENT, familyMessageCardCopy, resolveFamilyRecipient } from "./family";
+import {
+  FAMILY_EMAIL_RECIPIENT,
+  familyMessageCardCopy,
+  familyMessageFromApproval,
+  resolveFamilyRecipient,
+} from "./family";
 import { getMariaSeedBundle } from "./seed";
 
 describe("family recipients", () => {
@@ -42,4 +47,38 @@ describe("family message card copy", () => {
     expect(card.summary).toBe("Maria missed her medication reminder.");
     expect(card.urgencyLabel).toBe("Normal");
   });
+
+  it("keeps the draft recipient and summary on the just-resolved MESSAGE TO card", () => {
+    const card = familyMessageFromApproval(null, {
+      tool: "notify_caretaker",
+      action: "notify_caretaker",
+      decision: "approved",
+      actor: "senior",
+      timestamp: "2026-09-19T12:00:00.000Z",
+      summary: "Allowed: send_message",
+      preview: "Maria missed her medication reminder.",
+      recipientName: "Jules",
+      urgency: "normal",
+    });
+    expect(card?.recipientName).toBe("Jules");
+    expect(card?.summary).toBe("Maria missed her medication reminder.");
+    expect(card?.status).toBe("sent");
+  });
+
+  it("does not default James when the confirmed draft was Sarah", () => {
+    const card = familyMessageFromApproval(null, {
+      tool: "notify_caretaker",
+      action: "notify_caretaker",
+      decision: "approved",
+      actor: "caretaker",
+      timestamp: "2026-09-19T12:00:00.000Z",
+      summary: "Allowed: send_message",
+      preview: "Maria missed her medication reminder.",
+      recipientName: "Sarah",
+      urgency: "normal",
+    });
+    expect(card?.recipientName).toBe("Sarah");
+    expect(card?.summary).not.toBe("Allowed: send_message");
+  });
 });
+

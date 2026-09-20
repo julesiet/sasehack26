@@ -733,6 +733,9 @@ describe("POST /approvals", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.lastApproval.actor).toBe("caretaker");
+      expect(body.lastApproval.recipientName).toBe("Sarah");
+      expect(body.lastApproval.preview).toBe("Maria missed her medication reminder.");
+      expect(body.lastApproval.summary).not.toBe("Allowed: send_message");
       expect(body.decision).toBe("approved");
       expect(executeSpy).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -821,6 +824,13 @@ describe("POST /approvals", () => {
         summary: body.reply,
       });
       expect(view.caretakerActivity.some((item) => item.sent === true)).toBe(false);
+      expect(view.caretakerActivity.some((item) => item.preview === true)).toBe(false);
+      expect(view.lastApproval?.decision).not.toBe("approved");
+      expect(view.pendingApproval?.tool).toBe("notify_caretaker");
+
+      const dashboard = buildCaretakerDashboard({ view });
+      expect(dashboard.familyUpdate?.status).not.toBe("draft");
+      expect(dashboard.familyUpdate?.headline).not.toMatch(/Draft/);
     } finally {
       executeSpy.mockRestore();
     }

@@ -43,6 +43,7 @@ describe("runConversationTurn", () => {
       "find_ride_options",
     ]);
     expect(reply.failure).toBeNull();
+    expect(sessionStore.get("voice-1").lastRideOptions.length).toBeGreaterThan(0);
   });
 
   it("looks up the appointment and ride options through the audited tool path", async () => {

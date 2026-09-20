@@ -426,13 +426,13 @@ type Reply = {
   extraKasamaTexts?: string[];
 };
 
-function proposeRideToAppointment(
+async function proposeRideToAppointment(
   sessionId: string,
   appointment: Appointment,
   now: Date,
   preface = "",
   spoken = "",
-): Reply {
+): Promise<Reply> {
   const start = new Date(appointment.start);
   if (Number.isNaN(start.getTime())) {
     return {
@@ -449,7 +449,7 @@ function proposeRideToAppointment(
   arriveBy.setMinutes(arriveBy.getMinutes() - 15);
   const destination = appointment.location ?? "your appointment";
 
-  searchRides(sessionId, destination, arriveBy.toISOString());
+  await searchRides(sessionId, destination, arriveBy.toISOString());
 
   const day = describeDay(appointment.start, now);
   const text =
@@ -697,7 +697,7 @@ async function decide(
       const destination = transcript.trim().replace(/[.!?]+$/, "");
       const arriveBy = new Date(now);
       arriveBy.setMinutes(arriveBy.getMinutes() + 30);
-      searchRides(sessionId, destination, arriveBy.toISOString());
+      await searchRides(sessionId, destination, arriveBy.toISOString());
       return {
         text: `I can have an Uber pick you up at home and take you to ${destination}. Should I set that up?`,
         kind: "proposal",

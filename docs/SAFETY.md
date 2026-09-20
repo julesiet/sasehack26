@@ -18,7 +18,7 @@ Human-readable policy. The encoded table is `packages/shared/src/policy.ts`. If 
 | Share health information | Explicit consent + recipient on allow-list |
 | Diagnose | Never |
 
-`book_ride` also counts as `spend_money`. `notify_caretaker` is `draft_caretaker_message` until a human token is present, then `send_message`. `save_medication_reminder` adds a Tasks item after a human yes; it is never `change_medication`. A stub health-sync miss is recoverable (retry or save locally). `save_hospital_visit` stores local appointment details after a human yes.
+`book_ride` also counts as `spend_money`. `notify_caretaker` is `draft_caretaker_message` until a human token is present, then `send_message`. A failed Gmail send stays at the human checkpoint for retry; it is not treated as sent and FAMILY UPDATE is not a leftover Draft. `save_medication_reminder` adds a Tasks item after a human yes; it is never `change_medication`. A stub health-sync miss is recoverable (retry or save locally). `save_hospital_visit` stores local appointment details after a human yes.
 
 ## Actors
 
