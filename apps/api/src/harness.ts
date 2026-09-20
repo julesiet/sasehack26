@@ -196,7 +196,7 @@ function systemPrompt(now: Date, state: ConversationState): string {
     `Today is ${today}. Tomorrow is ${tomorrowDate}. Use those calendar dates — never a past year.`,
     `Maria lives at ${appointment.pickup}. Accessibility: ${MARIA_PROFILE.accessibilityNeeds.join(", ")}.`,
     `Her next doctor visit is ${appointment.title} at ${appointment.start}, at ${appointment.destination} (lookup date ${isoDate(new Date(appointment.start))}).`,
-    `When she asks for a ride to the doctor or "tomorrow", call get_appointment with ${tomorrowDate} then find_ride_options to that appointment. If the lookup is empty, use the visit above and still search rides. Do not ask her to restate the appointment.`,
+    `When she asks for a ride to the doctor without a clock time, call get_appointment with ${tomorrowDate} then find_ride_options to that appointment. If she names a day or clock time (today, Thursday at 3 pm), use that for find_ride_options.arriveBy and say that day — do not say tomorrow unless she asked for tomorrow or that is the day she named. If the lookup is empty, still search rides to her doctor's office at the time she said. Do not ask her to restate the appointment.`,
     "If find_ride_options returns no live options, Uber search is still a stub — propose picking her up for the appointment anyway and ask whether you should set that up. Do not say the search failed.",
     `You may ask at most ${MAX_CLARIFICATIONS_PER_REQUEST} clarifying question per request. Already asked: ${state.clarificationsAsked}.`,
     `Active request: ${JSON.stringify(state.activeRequest)}.`,

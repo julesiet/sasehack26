@@ -1,6 +1,10 @@
 import { formatHospitalTimeLabel, formatIsoTimeLabel, MARIA_NEARBY_HOSPITAL } from "@kasama/shared";
 
 const STOP_MED_NAMES = new Set(["my", "the", "a", "an", "some", "this"]);
+const CLOCK_RE = /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i;
+const DAY_WORD_RE =
+  /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 export function looksLikeMedicationReminder(text: string): boolean {
   const medWords =
@@ -58,10 +62,8 @@ export function looksLikeHospitalSchedule(text: string, isRide: boolean): boolea
 export function parseAppointmentTime(text: string): string | undefined {
   const iso = formatIsoTimeLabel(text);
   if (iso) return iso;
-  const day = text.match(
-    /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)\b/i,
-  );
-  const time = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
+  const day = text.match(DAY_WORD_RE);
+  const time = text.match(CLOCK_RE);
   if (!time) return undefined;
   const hour = Number(time[1]);
   const minute = (time[2] ?? "00").padStart(2, "0");
@@ -70,6 +72,42 @@ export function parseAppointmentTime(text: string): string | undefined {
   if (!day) return clock;
   const weekday = day[1].charAt(0).toUpperCase() + day[1].slice(1).toLowerCase();
   return `${weekday} at ${clock}`;
+}
+
+export function spokenClockPresent(text: string): boolean {
+  return CLOCK_RE.test(text);
+}
+
+/** Resolve a spoken day and/or clock into a local Date. */
+export function spokenDateTime(text: string, now: Date): Date | undefined {
+  const clock = text.match(CLOCK_RE);
+  const dayMatch = text.match(DAY_WORD_RE);
+  if (!clock && !dayMatch) return undefined;
+
+  const when = new Date(now);
+  if (dayMatch) {
+    const word = dayMatch[1].toLowerCase();
+    if (word === "tomorrow") {
+      when.setDate(when.getDate() + 1);
+    } else if (word !== "today") {
+      const want = WEEKDAYS.indexOf(word);
+      const add = (want - when.getDay() + 7) % 7;
+      when.setDate(when.getDate() + add);
+    }
+  }
+
+  if (clock) {
+    let hour = Number(clock[1]);
+    const minute = Number(clock[2] ?? 0);
+    if (/p/i.test(clock[3] ?? "") && hour < 12) hour += 12;
+    if (/a/i.test(clock[3] ?? "") && hour === 12) hour = 0;
+    when.setHours(hour, minute, 0, 0);
+    if (!dayMatch && when.getTime() <= now.getTime()) {
+      when.setDate(when.getDate() + 1);
+    }
+  }
+
+  return when;
 }
 
 /** Never show a raw ISO stamp on the hospital card. */

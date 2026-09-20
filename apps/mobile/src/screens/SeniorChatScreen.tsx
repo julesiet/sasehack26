@@ -87,7 +87,14 @@ export function SeniorChatScreen({
   onOpenSettings,
 }: Props) {
   const scroll = useRef<ScrollView>(null);
-  const card = confirmationFromPending(pendingApproval, justResolved, lastRideOptions, lastBooking);
+  const card = confirmationFromPending(
+    pendingApproval,
+    justResolved,
+    lastRideOptions,
+    lastBooking,
+    new Date(),
+    activeRequest,
+  );
   const cardStatus = confirmationStatus(pendingApproval, justResolved, lastBooking, rideWork);
   const selected = selectedRideOption(lastRideOptions, pendingApproval, activeRequest?.product);
   const reminder = pendingMedicationReminder(pendingApproval);

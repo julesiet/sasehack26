@@ -5,6 +5,7 @@ import {
   formatSpeakableTimeLabel,
   parseAppointmentTime,
   parseMedicationReminder,
+  spokenDateTime,
   tidyAppointmentReason,
 } from "./care-intent";
 
@@ -21,6 +22,17 @@ describe("care intent", () => {
 
   it("formats Thursday at 10 AM like the hospital card", () => {
     expect(parseAppointmentTime("thursday at 10 am")).toBe("Thursday at 10:00 AM");
+  });
+
+  it("resolves a spoken ride clock onto today when that time is still ahead", () => {
+    const now = new Date(2026, 8, 20, 9, 0, 0);
+    const when = spokenDateTime("get me a ride at 3 pm", now);
+    expect(when).toBeDefined();
+    expect(when?.getFullYear()).toBe(2026);
+    expect(when?.getMonth()).toBe(8);
+    expect(when?.getDate()).toBe(20);
+    expect(when?.getHours()).toBe(15);
+    expect(when?.getMinutes()).toBe(0);
   });
 
   it("formats ISO timestamps as weekday and clock", () => {

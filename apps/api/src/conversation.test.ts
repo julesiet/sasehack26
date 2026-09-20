@@ -673,4 +673,45 @@ describe("runConversationTurn", () => {
     expect(reply.reply).toMatch(/Should I set that up\?$/);
     expect(reply.reply).not.toMatch(/diagnos|cheapest/i);
   });
+
+  it("uses the spoken clock instead of tomorrow's seeded appointment", async () => {
+    const now = new Date(2026, 8, 20, 9, 0, 0);
+    const result = await runConversationTurn(
+      { transcript: "Get me a ride to my doctor at 3 pm", sessionId: "spoken-time" },
+      now,
+    );
+    const reply = conversationTurnResponseSchema.parse(result.body);
+    expect(reply.kind).toBe("proposal");
+    expect(reply.reply).toContain("3:00 PM");
+    expect(reply.reply).not.toMatch(/\btomorrow\b/i);
+    expect(reply.reply).toMatch(/\btoday\b/i);
+    expect(reply.activeRequest).toMatchObject({
+      intent: "ride",
+      status: "proposed",
+    });
+    expect(reply.activeRequest?.arriveBy).toBeDefined();
+    expect(new Date(reply.activeRequest?.arriveBy ?? "").getHours()).toBe(15);
+    const search = auditLog.list().find((event) => event.proposed.tool === "find_ride_options");
+    expect(new Date(String((search?.proposed.input as { arriveBy?: string })?.arriveBy)).getHours()).toBe(15);
+  });
+
+  it("keeps a spoken pickup time while asking where to go", async () => {
+    const now = new Date(2026, 8, 20, 9, 0, 0);
+    const asked = await runConversationTurn(
+      { transcript: "I need a ride at 3 pm", sessionId: "spoken-place" },
+      now,
+    );
+    const where = conversationTurnResponseSchema.parse(asked.body);
+    expect(where.kind).toBe("clarification");
+    expect(where.activeRequest?.arriveBy).toBeDefined();
+
+    const result = await runConversationTurn(
+      { transcript: "the grocery store", sessionId: "spoken-place" },
+      now,
+    );
+    const reply = conversationTurnResponseSchema.parse(result.body);
+    expect(reply.reply).toContain("3:00 PM");
+    expect(reply.reply).toContain("grocery store");
+    expect(reply.reply).not.toMatch(/\btomorrow\b/i);
+  });
 });

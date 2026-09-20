@@ -32,3 +32,28 @@ export function formatHospitalTimeLabel(raw: string): string {
 export function replaceIsoTimeLabels(raw: string): string {
   return raw.replace(ISO_STAMP, (match) => formatIsoTimeLabel(match) ?? match);
 }
+
+function localYmd(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** "today" / "tomorrow" / weekday from a pickup datetime. */
+export function formatRelativeDay(iso: string, now: Date = new Date()): string {
+  const target = new Date(iso);
+  if (localYmd(target) === localYmd(now)) return "today";
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (localYmd(target) === localYmd(tomorrow)) return "tomorrow";
+  return target.toLocaleDateString("en-US", { weekday: "long" });
+}
+
+/** Confirmation-card pickup line, e.g. `Today at 3:00 PM`. */
+export function formatPickupWhen(iso: string, now: Date = new Date()): string {
+  const day = formatRelativeDay(iso, now);
+  const clock = new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const label = day.charAt(0).toUpperCase() + day.slice(1);
+  return `${label} at ${clock}`;
+}

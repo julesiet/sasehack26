@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatHospitalTimeLabel, formatIsoTimeLabel, replaceIsoTimeLabels } from "./time-label";
+import {
+  formatHospitalTimeLabel,
+  formatIsoTimeLabel,
+  formatPickupWhen,
+  replaceIsoTimeLabels,
+} from "./time-label";
 
 describe("hospital time labels", () => {
   it("formats an ISO stamp as weekday and clock", () => {
@@ -15,5 +20,15 @@ describe("hospital time labels", () => {
     expect(
       replaceIsoTimeLabels("Annual physical. · 2026-09-20T10:00:00.000Z"),
     ).toBe("Annual physical. · Sunday at 10:00 AM");
+  });
+});
+
+describe("ride pickup labels", () => {
+  it("says today or tomorrow from the pickup datetime, not a hardcoded day", () => {
+    const now = new Date(2026, 8, 20, 9, 0, 0);
+    const today = new Date(2026, 8, 20, 15, 0, 0);
+    const tomorrow = new Date(2026, 8, 21, 10, 15, 0);
+    expect(formatPickupWhen(today.toISOString(), now)).toBe("Today at 3:00 PM");
+    expect(formatPickupWhen(tomorrow.toISOString(), now)).toBe("Tomorrow at 10:15 AM");
   });
 });

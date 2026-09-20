@@ -1,7 +1,9 @@
 import {
+  formatPickupWhen,
   getMariaAppointment,
   rideProductTitle,
   selectedRideOption,
+  type ActiveRequest,
   type LastApproval,
   type PendingApproval,
   type SessionBooking,
@@ -38,10 +40,16 @@ export function rideConfirmationData(
   now: Date = new Date(),
   selected?: UberRideOption,
   lastBooking?: SessionBooking | null,
+  pickupAt?: string,
 ): ConfirmationCardData {
   const appointment = getMariaAppointment(now);
-  const pickup = new Date(appointment.start);
-  pickup.setMinutes(pickup.getMinutes() - 30);
+  const pickup = pickupAt
+    ? new Date(pickupAt)
+    : (() => {
+        const arrive = new Date(appointment.start);
+        arrive.setMinutes(arrive.getMinutes() - 15);
+        return arrive;
+      })();
   const product = selected?.product;
   return {
     kind: "ride",
@@ -53,7 +61,7 @@ export function rideConfirmationData(
     reasonLabel: "Appointment",
     reason: "Annual checkup with Dr. Chen",
     timeLabel: "Pickup time",
-    time: `Tomorrow at ${formatClock(pickup.toISOString())}`,
+    time: formatPickupWhen(pickup.toISOString(), now),
     estimate: selected?.estimate ?? "$24.50",
     product,
     productLabel: product ? rideProductTitle(product) : undefined,
@@ -67,11 +75,12 @@ export function confirmationFromPending(
   options: UberRideOption[] = [],
   lastBooking: SessionBooking | null = null,
   now: Date = new Date(),
+  activeRequest: ActiveRequest | null = null,
 ): ConfirmationCardData | null {
   const tool = pending?.tool ?? justResolved?.tool;
   if (tool === "book_ride") {
     const selected = selectedRideOption(options, pending);
-    const ride = rideConfirmationData(now, selected, lastBooking);
+    const ride = rideConfirmationData(now, selected, lastBooking, activeRequest?.arriveBy);
     if (pending?.estimate) ride.estimate = pending.estimate;
     return ride;
   }

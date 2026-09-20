@@ -87,8 +87,10 @@ export type ConversationChat = z.infer<typeof conversationChatSchema>;
 export const activeRequestSchema = z.object({
   intent: conversationIntentSchema,
   destination: z.string().optional(),
-  /** ISO date (YYYY-MM-DD) Kasama resolved from words like "tomorrow". */
+  /** ISO date (YYYY-MM-DD) Kasama resolved from words like "tomorrow" or a spoken clock. */
   date: z.string().optional(),
+  /** ISO datetime for the Uber arrive-by / pickup window Maria named. */
+  arriveBy: z.string().optional(),
   appointmentId: z.string().optional(),
   product: uberProductSchema.optional(),
   medicationName: z.string().optional(),
