@@ -25,7 +25,7 @@ packages/shared Zod schemas and inferred types
 
 ## Run
 
-Needs a Mac, Xcode, Node 20, and pnpm 9.
+Needs Node 20 and pnpm 9. iOS Simulator also needs a Mac and Xcode. A Windows PC can run the API and Expo; scan the QR in Expo Go on a phone (same Wi-Fi).
 
 ```sh
 corepack enable
@@ -41,21 +41,23 @@ pnpm dev:api
 
 Listens on `http://localhost:3001` and on your LAN. Check `GET /health`. Poll a session with `GET /sessions/:sessionId` (omit `sessionId` on tool calls to use `default`).
 
-Expo Go on a phone (same Wi-Fi as the Mac):
-
-```sh
-# apps/mobile/.env — this Mac's IP, not localhost
-# ipconfig getifaddr en0
-EXPO_PUBLIC_API_URL=http://192.168.x.x:3001
-```
+Expo Go on a phone (same Wi-Fi as this computer):
 
 ```sh
 pnpm start
 ```
 
-Or `pnpm dev` (API + Expo). Scan the QR in Expo Go. Restart Expo after changing `.env`.
+Or `pnpm dev` (API + Expo). `pnpm start` detects this computer's Wi-Fi IP so the QR is `exp://<lan-ip>:8081` and the app talks to `http://<lan-ip>:3001`. Scan the QR in Expo Go. Windows: allow Node through the firewall if Windows asks (ports 3001 and 8081). If the QR still cannot connect (guest Wi-Fi, VPN, firewall), use `pnpm start:tunnel` — the API still needs the LAN IP and those ports.
 
-iOS Simulator:
+Override the IP in `apps/mobile/.env` if the wrong NIC is chosen, then restart Expo:
+
+```sh
+# Mac: ipconfig getifaddr en0
+# Windows: ipconfig  →  IPv4 Address
+EXPO_PUBLIC_API_URL=http://192.168.x.x:3001
+```
+
+iOS Simulator (Mac only):
 
 ```sh
 pnpm ios
@@ -65,7 +67,23 @@ The Simulator can use `http://localhost:3001`. Tap **Dev** on the home screen, t
 
 Speech-to-text and Kasama's voice run on the API through ElevenLabs. Put `ELEVENLABS_API_KEY` in `apps/api/.env` (the key needs Speech to Text **and** Text to Speech). Without it the Senior screen asks you to type and uses iOS speech for replies. The Simulator uses your Mac's microphone.
 
-ChatGPT plans each turn when `MODEL_API_KEY` is in `apps/api/.env` (OpenAI Chat Completions, default `gpt-4o-mini`). Without it the API uses the rules-based turn so the demo line still works.
+ChatGPT plans each turn when `MODEL_API_KEY` is in `apps/api/.env` (OpenAI Chat Completions, default `gpt-4o-mini`). Without it the API uses the rules-based turn so the demo line still works. For a live judged demo set `KASAMA_DEMO=1` so ChatGPT cannot change the copy even if a key is present.
+
+3-minute demo (`#12`) — print the sheet, reset the session, do not improvise:
+
+```sh
+# apps/api/.env
+KASAMA_DEMO=1
+
+pnpm demo:pdf          # docs/demo/kasama-3-minute-demo.pdf
+pnpm demo:rehearse     # books the controlled Uber; checks the printed lines
+# API already running:
+curl -s http://localhost:3001/sessions/default/reset \
+  -H 'content-type: application/json' \
+  -d '{"preset":"live-demo"}'
+```
+
+Then Senior mode: say **Please get me a ride to my doctor tomorrow.** Tap **Wheelchair Uber** (or say **Choose the accessible one.**). Tap **Confirm**. Switch to Caretaker. If the mic fails, type the same line — do not rephrase.
 
 Text playground (no iOS) — the way to exercise intent, tools, and policy without the Simulator. Coding agents should run this after conversation / tool / policy changes. Appointment, Uber options, and the $24.50 checkpoint; never a silent booking:
 
@@ -84,7 +102,9 @@ Copy `.env.example` into `apps/api/.env` and `apps/mobile/.env` when you add key
 ```text
 PORT=3001
 EXPO_PUBLIC_API_URL=http://localhost:3001
-# Expo Go: http://<mac-lan-ip>:3001
+# Expo Go: pnpm start detects the LAN IP. Override with http://<lan-ip>:3001
+#   Mac: ipconfig getifaddr en0
+#   Windows: ipconfig → IPv4 Address
 ELEVENLABS_API_KEY=
 MODEL_API_KEY=
 MODEL_NAME=

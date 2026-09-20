@@ -41,6 +41,7 @@ export type AuditLog = {
   append: (input: AuditEventInput) => AuditEvent;
   list: () => AuditEvent[];
   clear: () => void;
+  clearSession: (sessionId: string) => void;
 };
 
 export function createAuditLog(): AuditLog {
@@ -63,6 +64,13 @@ export function createAuditLog(): AuditLog {
     clear() {
       events.length = 0;
       seq = 0;
+    },
+    clearSession(sessionId) {
+      for (let i = events.length - 1; i >= 0; i -= 1) {
+        if (events[i]?.whoAsked.sessionId === sessionId) {
+          events.splice(i, 1);
+        }
+      }
     },
   };
 }

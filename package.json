@@ -6,11 +6,14 @@
     "dev": "turbo dev",
     "dev:api": "turbo dev --filter=@kasama/api",
     "start": "turbo start --filter=@kasama/mobile",
+    "start:tunnel": "pnpm --filter @kasama/mobile start:tunnel",
     "ios": "turbo ios --filter=@kasama/mobile",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
-    "playground": "pnpm --filter @kasama/api playground"
+    "playground": "pnpm --filter @kasama/api playground",
+    "demo:rehearse": "pnpm --filter @kasama/api demo:rehearse",
+    "demo:pdf": "pnpm --filter @kasama/api demo:pdf"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

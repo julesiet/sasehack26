@@ -4,15 +4,20 @@ import {
   MARIA_PROFILE,
   bookingApprovalPrompt,
   pendingRideOptionId,
+  conversationChatRequestSchema,
+  conversationChatResponseSchema,
   conversationTurnRequestSchema,
   conversationTurnResponseSchema,
   findRideOptionsResultSchema,
   getAppointmentResultSchema,
   getMariaAppointment,
+  isKasamaDemoEnabled,
   notifyApprovalPrompt,
+  resolveFamilyRecipient,
   resolveSessionId,
   saveHospitalVisitInputSchema,
   saveMedicationReminderInputSchema,
+  withNotifyRecipient,
   type ActiveRequest,
   type Appointment,
   type ConversationReplyKind,
@@ -45,6 +50,7 @@ import { sessionStore } from "./session-store";
  * One conversational turn for the voice loop (#4) and harness (#5).
  *
  * ChatGPT plans when `MODEL_API_KEY` is set (or a complete function is injected).
+ * `KASAMA_DEMO=1` skips ChatGPT so the 3-minute script stays on the rules-based copy.
  * Otherwise the original rules-based turn runs so the demo works without a key.
  * Every tool call still goes through `invokeTool` so policy and audit stay real.
  */
@@ -55,7 +61,7 @@ export type ConversationTurnDeps = {
 };
 
 export type ConversationHttpResult = {
-  status: 200 | 400;
+  status: 200 | 400 | 404;
   body: Record<string, unknown>;
 };
 
@@ -66,7 +72,7 @@ const DOCTOR = /\b(doctor'?s?|dr\.?|appointment|check ?up|clinic|chen|physician)
 const APPOINTMENT_INFO = /\b(what time|when is|when'?s|what day|do i have|remind me)\b/;
 const VAGUE_PLACE = /\b(somewhere|anywhere|i don'?t know|not sure|dunno|um+|uh+)\b/;
 const NOTIFY =
-  /\b(tell|text|message|notify|let (my )?(family|son|daughter|james|caretaker) know)\b/;
+  /\b(tell|text|message|notify|email|e-mail|send (an |a )?(email|e-mail|message)|let (my )?(family|son|daughter|james|jules|caretaker) know)\b/;
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^\p{L}\p{N}'\s.-]/gu, " ").replace(/\s+/g, " ").trim();
@@ -106,20 +112,25 @@ function describeDay(iso: string, now: Date): string {
 
 /** "Dr. Chen — annual checkup" → "checkup with Dr. Chen"; falls back to the title. */
 function describeAppointment(appointment: Appointment): string {
+  if (!appointment || !appointment.title) return "your appointment";
   const [who, what] = appointment.title.split("—").map((part) => part.trim());
   if (who && what) return `${what} with ${who}`;
   return appointment.title;
 }
 
 /** `date` is YYYY-MM-DD. Sent as local noon so the calendar-day match is unambiguous. */
-function lookupAppointment(sessionId: string, date: string): Appointment | null {
-  const result = invokeTool("get_appointment", {
+async function lookupAppointment(sessionId: string, date: string): Promise<Appointment | null> {
+  const result = await invokeTool("get_appointment", {
     input: { date: `${date}T12:00:00` },
     actor: "model",
     sessionId,
   });
   if (result.status !== 200) return null;
-  return getAppointmentResultSchema.parse(result.body).appointment ?? null;
+  const parsed = getAppointmentResultSchema.safeParse(result.body);
+  if (!parsed.success) return null;
+  const appointment = parsed.data.appointment;
+  if (!appointment) return null;
+  return appointment;
 }
 
 function spokenProduct(text: string): "UberX" | "WAV" | undefined {
@@ -133,20 +144,21 @@ function pickBookingOption(
   product?: "UberX" | "WAV",
 ): { optionId: string; estimate?: string } {
   const options = sessionStore.get(sessionId).lastRideOptions;
-  const preferred = product
-    ? options.find((option) => option.product === product)
-    : options.find((option) => option.product === "WAV" || option.accessible);
-  const option = preferred ?? options[0];
+  if (product) {
+    const preferred = options.find((option) => option.product === product);
+    if (preferred) return { optionId: preferred.optionId, estimate: preferred.estimate };
+  }
+  const defaultOption = options.find((option) => option.product === "WAV" || option.accessible) ?? options[0];
   return {
-    optionId: option?.optionId ?? DEMO_UBER_WAV_OPTION_ID,
-    estimate: option?.estimate,
+    optionId: defaultOption?.optionId ?? DEMO_UBER_WAV_OPTION_ID,
+    estimate: defaultOption?.estimate,
   };
 }
 
-function openBookingCheckpoint(sessionId: string, active: ActiveRequest): HarnessTurnResult {
+async function openBookingCheckpoint(sessionId: string, active: ActiveRequest): Promise<HarnessTurnResult> {
   const before = auditLog.list().length;
   const { optionId } = pickBookingOption(sessionId, active.product);
-  invokeTool("book_ride", {
+  await invokeTool("book_ride", {
     input: { optionId },
     actor: "model",
     sessionId,
@@ -162,17 +174,35 @@ function openBookingCheckpoint(sessionId: string, active: ActiveRequest): Harnes
   };
 }
 
-function draftNotifySummary(transcript: string): string {
-  if (DOCTOR.test(normalize(transcript))) {
+function notifyBodyFromTranscript(transcript: string): string {
+  const saying = transcript.match(/\b(?:saying|that|about)\s+(.+)$/i);
+  const raw = saying?.[1]?.trim() || transcript.trim();
+  if (/missed.{0,40}medication/i.test(raw)) {
+    return "Maria missed her medication reminder.";
+  }
+  if (DOCTOR.test(normalize(raw))) {
     return "Maria is going to her doctor's appointment.";
   }
-  return `Maria asked me to let you know: ${transcript.trim()}`;
+  return `Maria asked me to let you know: ${raw.replace(/^(that\s+)/i, "")}`;
 }
 
-function openNotifyCheckpoint(sessionId: string, summary: string): HarnessTurnResult {
+function wantsNotify(text: string): boolean {
+  if (!NOTIFY.test(text)) return false;
+  return !RIDE.test(text) || /\bemail\b/.test(text);
+}
+
+async function openNotifyCheckpoint(
+  sessionId: string,
+  summary: string,
+  transcript: string,
+): Promise<HarnessTurnResult> {
   const before = auditLog.list().length;
-  invokeTool("notify_caretaker", {
-    input: { summary, urgency: "normal" },
+  await invokeTool("notify_caretaker", {
+    input: withNotifyRecipient({
+      summary,
+      urgency: "normal",
+      recipientName: resolveFamilyRecipient(transcript).name,
+    }),
     actor: "model",
     sessionId,
   });
@@ -181,7 +211,7 @@ function openNotifyCheckpoint(sessionId: string, summary: string): HarnessTurnRe
   return {
     text: `${preview} ${pending?.prompt ?? notifyApprovalPrompt()}`,
     kind: "proposal",
-    activeRequest: sessionStore.getConversation(sessionId).activeRequest,
+    activeRequest: { intent: "family_update", status: "proposed" },
     askedClarification: false,
     plan: planFromAuditEvents(auditLog.list().slice(before)),
     failure: null,
@@ -234,7 +264,7 @@ function hospitalInputFromActive(active: ActiveRequest) {
   });
 }
 
-function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
+async function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): Promise<HarnessTurnResult> {
   const active = decided.activeRequest;
   if (!active) return decided;
   const pending = sessionStore.get(sessionId).pendingApproval;
@@ -247,7 +277,7 @@ function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): Harn
       return decided;
     }
     const before = auditLog.list().length;
-    invokeTool("save_medication_reminder", {
+    await invokeTool("save_medication_reminder", {
       input: reminderInputFromActive(active),
       actor: "model",
       sessionId,
@@ -267,7 +297,7 @@ function openCareCheckpoint(sessionId: string, decided: HarnessTurnResult): Harn
       return decided;
     }
     const before = auditLog.list().length;
-    invokeTool("save_hospital_visit", {
+    await invokeTool("save_hospital_visit", {
       input: hospitalInputFromActive(active),
       actor: "model",
       sessionId,
@@ -289,16 +319,27 @@ function careRulesNeeded(
   sessionId: string,
 ): boolean {
   const pending = sessionStore.get(sessionId).pendingApproval;
-  if (pending?.tool === "save_medication_reminder" || pending?.tool === "save_hospital_visit") {
+  if (
+    pending?.tool === "save_medication_reminder" ||
+    pending?.tool === "save_hospital_visit" ||
+    pending?.tool === "notify_caretaker"
+  ) {
     return false;
   }
   if (
     decided.activeRequest?.intent === "medication_reminder" ||
-    decided.activeRequest?.intent === "hospital_schedule"
+    decided.activeRequest?.intent === "hospital_schedule" ||
+    decided.activeRequest?.intent === "family_update"
   ) {
     return false;
   }
+  if (pending?.tool === "notify_caretaker") {
+    return false;
+  }
   const text = normalize(transcript);
+  if (wantsNotify(text)) {
+    return false;
+  }
   return (
     looksLikeMedicationReminder(text) ||
     looksLikeHospitalSchedule(text, RIDE.test(text)) ||
@@ -307,27 +348,27 @@ function careRulesNeeded(
   );
 }
 
-function finishDecidedTurn(
+async function finishDecidedTurn(
   sessionId: string,
   transcript: string,
   state: ConversationState,
   now: Date,
   decided: HarnessTurnResult,
-): HarnessTurnResult {
-  let next = openCareCheckpoint(sessionId, maybeOpenBookingCheckpoint(sessionId, decided));
+): Promise<HarnessTurnResult> {
+  let next = await openCareCheckpoint(sessionId, await maybeOpenBookingCheckpoint(sessionId, decided));
   if (careRulesNeeded(transcript, state, next, sessionId)) {
-    next = openCareCheckpoint(
+    next = await openCareCheckpoint(
       sessionId,
-      maybeOpenBookingCheckpoint(
+      await maybeOpenBookingCheckpoint(
         sessionId,
-        applySpokenProduct(transcript, runRulesTurn(sessionId, transcript, state, now), state.activeRequest, sessionId),
+        applySpokenProduct(transcript, await runRulesTurn(sessionId, transcript, state, now), state.activeRequest, sessionId),
       ),
     );
   }
   return next;
 }
 
-function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): HarnessTurnResult {
+async function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): Promise<HarnessTurnResult> {
   if (decided.activeRequest?.intent !== "ride" || decided.activeRequest.status !== "accepted") {
     return applyPendingPrompt(sessionId, decided);
   }
@@ -339,7 +380,7 @@ function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResul
   if (pending && pending.tool !== "book_ride") {
     return applyPendingPrompt(sessionId, decided);
   }
-  const opened = openBookingCheckpoint(sessionId, decided.activeRequest);
+  const opened = await openBookingCheckpoint(sessionId, decided.activeRequest);
   return {
     ...opened,
     plan: { steps: [...decided.plan.steps, ...opened.plan.steps] },
@@ -367,8 +408,8 @@ function applyPendingPrompt(sessionId: string, decided: HarnessTurnResult): Harn
   };
 }
 
-function searchRides(sessionId: string, destination: string, arriveBy: string): void {
-  const result = invokeTool("find_ride_options", {
+async function searchRides(sessionId: string, destination: string, arriveBy: string): Promise<void> {
+  const result = await invokeTool("find_ride_options", {
     input: {
       pickup: getMariaAppointment().pickup,
       destination,
@@ -391,19 +432,30 @@ type Reply = {
   extraKasamaTexts?: string[];
 };
 
-function proposeRideToAppointment(
+async function proposeRideToAppointment(
   sessionId: string,
   appointment: Appointment,
   now: Date,
   preface = "",
   spoken = "",
-): Reply {
+): Promise<Reply> {
   const start = new Date(appointment.start);
+  if (Number.isNaN(start.getTime())) {
+    return {
+      text: "I'm sorry, I couldn't find the exact time for your appointment. Should I still try to set up a ride?",
+      kind: "proposal",
+      activeRequest: {
+        intent: "ride",
+        destination: appointment.location ?? "your appointment",
+        status: "proposed",
+      },
+    };
+  }
   const arriveBy = new Date(start);
   arriveBy.setMinutes(arriveBy.getMinutes() - 15);
   const destination = appointment.location ?? "your appointment";
 
-  searchRides(sessionId, destination, arriveBy.toISOString());
+  await searchRides(sessionId, destination, arriveBy.toISOString());
 
   const day = describeDay(appointment.start, now);
   const text =
@@ -425,12 +477,12 @@ function proposeRideToAppointment(
   };
 }
 
-function decide(
+async function decide(
   sessionId: string,
   transcript: string,
   state: ConversationState,
   now: Date,
-): Reply {
+): Promise<Reply> {
   const text = normalize(transcript);
   const active = state.activeRequest;
   const saysYes = YES.test(text);
@@ -484,6 +536,10 @@ function decide(
         activeRequest: null,
       };
     }
+  }
+
+  if (wantsNotify(text)) {
+    return await openNotifyCheckpoint(sessionId, notifyBodyFromTranscript(transcript), transcript);
   }
 
   if (looksLikeMedicationReminder(text)) {
@@ -589,21 +645,12 @@ function decide(
     };
   }
 
-  if (NOTIFY.test(text) && !RIDE.test(text)) {
-    const opened = openNotifyCheckpoint(sessionId, draftNotifySummary(transcript));
-    return {
-      text: opened.text,
-      kind: opened.kind,
-      activeRequest: opened.activeRequest,
-    };
-  }
-
   // Appointment question ("what time is my appointment").
   if (APPOINTMENT_INFO.test(text) && DOCTOR.test(text)) {
     const date = dateFromWords(text, now) ?? isoDate(new Date(getMariaAppointment(now).start));
-    const appointment = lookupAppointment(sessionId, date);
+    const appointment = await lookupAppointment(sessionId, date);
     if (!appointment) {
-      const next = lookupAppointment(sessionId, isoDate(new Date(getMariaAppointment(now).start)));
+      const next = await lookupAppointment(sessionId, isoDate(new Date(getMariaAppointment(now).start)));
       const nextText = next
         ? ` Your next one is ${describeAppointment(next)} ${describeDay(next.start, now)} at ${formatTime(next.start)}.`
         : "";
@@ -634,11 +681,11 @@ function decide(
     if (DOCTOR.test(text)) {
       const seed = getMariaAppointment(now);
       const requestedDate = dateFromWords(text, now) ?? active?.date ?? isoDate(new Date(seed.start));
-      const appointment = lookupAppointment(sessionId, requestedDate);
+      const appointment = await lookupAppointment(sessionId, requestedDate);
       if (appointment) {
         return proposeRideToAppointment(sessionId, appointment, now, "", text);
       }
-      const next = lookupAppointment(sessionId, isoDate(new Date(seed.start)));
+      const next = await lookupAppointment(sessionId, isoDate(new Date(seed.start)));
       if (next) {
         return proposeRideToAppointment(
           sessionId,
@@ -656,7 +703,7 @@ function decide(
       const destination = transcript.trim().replace(/[.!?]+$/, "");
       const arriveBy = new Date(now);
       arriveBy.setMinutes(arriveBy.getMinutes() + 30);
-      searchRides(sessionId, destination, arriveBy.toISOString());
+      await searchRides(sessionId, destination, arriveBy.toISOString());
       return {
         text: `I can have an Uber pick you up at home and take you to ${destination}. Should I set that up?`,
         kind: "proposal",
@@ -692,14 +739,14 @@ function decide(
   };
 }
 
-function runRulesTurn(
+async function runRulesTurn(
   sessionId: string,
   transcript: string,
   state: ConversationState,
   now: Date,
-): HarnessTurnResult {
+): Promise<HarnessTurnResult> {
   const before = auditLog.list().length;
-  const reply = decide(sessionId, transcript, state, now);
+  const reply = await decide(sessionId, transcript, state, now);
   const plan = planFromAuditEvents(auditLog.list().slice(before));
   const failed = plan.steps.find((step) => step.status === "failed");
   return {
@@ -728,9 +775,13 @@ export async function runConversationTurn(
   }
 
   const sessionId = resolveSessionId(request.data.sessionId);
+  if (request.data.chatId) {
+    sessionStore.startOrSelectChat({ sessionId, chatId: request.data.chatId, timestamp: now.toISOString() });
+  }
   const state = sessionStore.getConversation(sessionId);
-  const complete =
-    options.complete ?? (process.env.MODEL_API_KEY?.trim() ? openaiChatComplete : undefined);
+  const complete = isKasamaDemoEnabled()
+    ? undefined
+    : (options.complete ?? (process.env.MODEL_API_KEY?.trim() ? openaiChatComplete : undefined));
 
   const pending = sessionStore.get(sessionId).pendingApproval;
   const spoken = normalize(request.data.transcript);
@@ -739,7 +790,7 @@ export async function runConversationTurn(
 
   let decided: HarnessTurnResult;
   if (pending && (saysYes || saysNo)) {
-    const resolved = resolvePendingApproval({
+    const resolved = await resolvePendingApproval({
       sessionId,
       actor: request.data.actor,
       decision: saysNo ? "decline" : "approve",
@@ -766,43 +817,43 @@ export async function runConversationTurn(
         state.activeRequest,
         sessionId,
       );
-      decided = finishDecidedTurn(
+      decided = await finishDecidedTurn(
         sessionId,
         request.data.transcript,
         state,
         now,
         fromModel.plan.steps.length === 0 && isCheckingFiller(fromModel.text)
-          ? applySpokenProduct(
+          ? await applySpokenProduct(
               request.data.transcript,
-              runRulesTurn(sessionId, request.data.transcript, state, now),
+              await runRulesTurn(sessionId, request.data.transcript, state, now),
               state.activeRequest,
               sessionId,
             )
           : fromModel,
       );
     } catch {
-      decided = finishDecidedTurn(
+      decided = await finishDecidedTurn(
         sessionId,
         request.data.transcript,
         state,
         now,
-        applySpokenProduct(
+        await applySpokenProduct(
           request.data.transcript,
-          runRulesTurn(sessionId, request.data.transcript, state, now),
+          await runRulesTurn(sessionId, request.data.transcript, state, now),
           state.activeRequest,
           sessionId,
         ),
       );
     }
   } else {
-    decided = finishDecidedTurn(
+    decided = await finishDecidedTurn(
       sessionId,
       request.data.transcript,
       state,
       now,
-      applySpokenProduct(
+      await applySpokenProduct(
         request.data.transcript,
-        runRulesTurn(sessionId, request.data.transcript, state, now),
+        await runRulesTurn(sessionId, request.data.transcript, state, now),
         state.activeRequest,
         sessionId,
       ),
@@ -820,6 +871,7 @@ export async function runConversationTurn(
     failure: decided.failure,
     timestamp: now.toISOString(),
     extraKasamaTexts: decided.extraKasamaTexts,
+    chatId: request.data.chatId,
   });
 
   const body: ConversationTurnResponse = conversationTurnResponseSchema.parse({
@@ -831,6 +883,36 @@ export async function runConversationTurn(
     plan: view.conversation.plan,
     failure: view.conversation.failure,
     pendingApproval: view.pendingApproval,
+  });
+  return { status: 200, body };
+}
+
+export function runConversationChat(raw: unknown): ConversationHttpResult {
+  const request = conversationChatRequestSchema.safeParse(raw);
+  if (!request.success) {
+    return {
+      status: 400,
+      body: { success: false, summary: "Invalid request.", issues: request.error.issues },
+    };
+  }
+
+  const sessionId = resolveSessionId(request.data.sessionId);
+  const view = sessionStore.startOrSelectChat({
+    sessionId,
+    chatId: request.data.chatId,
+  });
+  const chatId = request.data.chatId ?? view.conversation.activeChatId;
+  if (!chatId || (request.data.chatId && view.conversation.activeChatId !== request.data.chatId)) {
+    return {
+      status: 404,
+      body: { success: false, summary: "That chat is not on this session." },
+    };
+  }
+
+  const body = conversationChatResponseSchema.parse({
+    sessionId,
+    chatId,
+    conversation: view.conversation,
   });
   return { status: 200, body };
 }

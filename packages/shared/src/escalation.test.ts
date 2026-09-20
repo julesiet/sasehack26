@@ -20,6 +20,7 @@ function view(partial: Partial<SessionView> = {}): SessionView {
     lastHospitalVisit: null,
     tasks: [],
     caretakerActivity: [],
+    caretakerNarrative: [],
     careSignal: null,
     consentGranted: false,
     conversation: emptyConversationState(),

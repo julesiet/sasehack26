@@ -4,12 +4,13 @@ import {
   composioConnectRequestSchema,
   composioExecuteRequestSchema,
   healthSchema,
+  sessionResetRequestSchema,
   speakRequestSchema,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { ComposioNotConfiguredError, kasamaComposio, type KasamaComposio } from "./composio";
 import { decideApproval } from "./approval";
-import { runConversationTurn } from "./conversation";
+import { runConversationChat, runConversationTurn } from "./conversation";
 import { invokeTool } from "./invoke-tool";
 import { runPlaygroundTurn } from "./playground";
 import type { ChatComplete } from "./model";
@@ -22,6 +23,7 @@ import {
   type Speaker,
   type Transcriber,
 } from "./speech";
+import { resetControlledUberProvider } from "./uber-provider";
 
 export type AppDeps = {
   transcribe: Transcriber;
@@ -51,8 +53,10 @@ export function createApp({
       health: "/health",
       tools: "POST /tools/:name",
       sessions: "GET /sessions/:sessionId",
+      sessionReset: "POST /sessions/:sessionId/reset",
       audit: "GET /audit",
       conversation: "POST /conversation/turn",
+      conversationChats: "POST /conversation/chats",
       playground: "POST /playground",
       approvals: "POST /approvals",
       transcribe: "POST /speech/transcribe",
@@ -86,6 +90,23 @@ export function createApp({
     return c.json(sessionStore.get(c.req.param("sessionId")));
   });
 
+  app.post("/sessions/:sessionId/reset", async (c) => {
+    let raw: unknown = {};
+    try {
+      raw = await c.req.json();
+    } catch {
+      raw = {};
+    }
+    const parsed = sessionResetRequestSchema.safeParse(raw && typeof raw === "object" ? raw : {});
+    if (!parsed.success) {
+      return c.json({ success: false, summary: "Invalid reset request.", issues: parsed.error.issues }, 400);
+    }
+    if (parsed.data.preset === "live-demo") {
+      resetControlledUberProvider();
+    }
+    return c.json(sessionStore.reset(c.req.param("sessionId"), parsed.data.preset));
+  });
+
   app.post("/tools/:name", async (c) => {
     let raw: unknown;
     try {
@@ -94,7 +115,7 @@ export function createApp({
       return c.json({ success: false, summary: "Request body must be JSON." }, 400);
     }
 
-    const result = invokeTool(c.req.param("name"), raw);
+    const result = await invokeTool(c.req.param("name"), raw);
     return c.json(result.body, result.status);
   });
 
@@ -106,7 +127,7 @@ export function createApp({
       return c.json({ success: false, summary: "Request body must be JSON." }, 400);
     }
 
-    const result = decideApproval(raw);
+    const result = await decideApproval(raw);
     return c.json(result.body, result.status);
   });
 
@@ -119,6 +140,18 @@ export function createApp({
     }
 
     const result = await runConversationTurn(raw, complete ? { complete } : {});
+    return c.json(result.body, result.status);
+  });
+
+  app.post("/conversation/chats", async (c) => {
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ success: false, summary: "Request body must be JSON." }, 400);
+    }
+
+    const result = runConversationChat(raw);
     return c.json(result.body, result.status);
   });
 

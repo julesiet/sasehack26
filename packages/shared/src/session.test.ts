@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SESSION_ID,
   resolveSessionId,
+  sessionResetRequestSchema,
   sessionViewSchema,
 } from "./session";
 
@@ -72,5 +73,11 @@ describe("session view contract", () => {
     expect(parsed.careSignal?.label).toBe("worth reviewing");
     expect(parsed.lastApproval).toBeNull();
     expect(parsed.lastRideOptions).toEqual([]);
+    expect(parsed.caretakerNarrative).toEqual([]);
+  });
+
+  it("defaults a session reset to the Maria seed preset", () => {
+    expect(sessionResetRequestSchema.parse({}).preset).toBe("seed");
+    expect(sessionResetRequestSchema.parse({ preset: "live-demo" }).preset).toBe("live-demo");
   });
 });

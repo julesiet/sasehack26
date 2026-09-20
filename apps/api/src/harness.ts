@@ -12,6 +12,7 @@ import {
   formatHospitalTimeLabel,
   getMariaAppointment,
   isKnownTool,
+  simpleLanguageInstruction,
   type ActiveRequest,
   type AuditEvent,
   type ConversationFailure,
@@ -85,6 +86,8 @@ export const KASAMA_CHAT_TOOLS = [
         properties: {
           summary: { type: "string" },
           urgency: { type: "string", enum: ["low", "normal", "high"] },
+          recipientId: { type: "string" },
+          recipientName: { type: "string" },
         },
         required: ["summary", "urgency"],
       },
@@ -180,9 +183,11 @@ function systemPrompt(now: Date, state: ConversationState): string {
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowDate = isoDate(tomorrow);
+  const simpleLanguage = simpleLanguageInstruction(MARIA_PROFILE.communicationPreferences);
   return [
     `You are Kasama, a voice-first companion for ${MARIA_PROFILE.name}.`,
-    "Speak in short, simple sentences she can hear. Never diagnose. Never change medication.",
+    ...(simpleLanguage ? [simpleLanguage] : []),
+    "Never diagnose. Never change medication.",
     'Care language is "worth reviewing" only — never a medical conclusion.',
     "Never say an Uber was booked or a message was sent. Those need a human yes on the iPhone.",
     "Do not call book_ride or notify_caretaker. Propose the action and wait.",
@@ -205,11 +210,11 @@ type ExecutedCall = {
   body: Record<string, unknown>;
 };
 
-function executeKasamaTool(
+async function executeKasamaTool(
   sessionId: string,
   name: string,
   rawArgs: unknown,
-): { step: ConversationPlanStep | null; content: string; executed?: ExecutedCall } {
+): Promise<{ step: ConversationPlanStep | null; content: string; executed?: ExecutedCall }> {
   if (!isKnownTool(name)) {
     const content = JSON.stringify({ success: false, summary: `Unknown tool: ${name}` });
     return { step: null, content };
@@ -228,7 +233,7 @@ function executeKasamaTool(
     input = { ...input, timeLabel: formatHospitalTimeLabel(input.timeLabel) };
   }
 
-  const result = invokeTool(name, {
+  const result = await invokeTool(name, {
     input,
     actor: "model",
     sessionId,
@@ -499,7 +504,7 @@ export async function runHarnessTurn(input: {
       } catch {
         parsed = {};
       }
-      const ran = executeKasamaTool(input.sessionId, call.function.name, parsed);
+      const ran = await executeKasamaTool(input.sessionId, call.function.name, parsed);
       if (ran.step && ran.executed) {
         executed.push(ran.executed);
       }

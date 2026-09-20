@@ -61,20 +61,6 @@ export function rideConfirmationData(
   };
 }
 
-export function notifyConfirmationData(preview: string): ConfirmationCardData {
-  return {
-    kind: "notify",
-    eyebrow: "Message",
-    intro: "Preview only. Nothing is sent yet.",
-    placeName: "James Alvarez",
-    placeHint: "Family",
-    reasonLabel: "Message",
-    reason: preview,
-    timeLabel: "When",
-    time: "Now",
-  };
-}
-
 export function confirmationFromPending(
   pending: PendingApproval | null,
   justResolved: LastApproval | null,
@@ -83,12 +69,6 @@ export function confirmationFromPending(
   now: Date = new Date(),
 ): ConfirmationCardData | null {
   const tool = pending?.tool ?? justResolved?.tool;
-  if (!tool) return null;
-  if (tool === "notify_caretaker") {
-    return notifyConfirmationData(
-      pending?.preview ?? justResolved?.summary ?? "A note for your family.",
-    );
-  }
   if (tool === "book_ride") {
     const selected = selectedRideOption(options, pending);
     const ride = rideConfirmationData(now, selected, lastBooking);

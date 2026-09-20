@@ -204,4 +204,23 @@ describe("runHarnessTurn", () => {
     expect(result.plan.steps).toEqual([]);
     expect(auditLog.list().map((event) => event.proposed.tool)).not.toContain("book_ride");
   });
+
+  it("asks ChatGPT for short simple language when Maria prefers it", async () => {
+    let system = "";
+    const complete: ChatComplete = async ({ messages }) => {
+      system = typeof messages[0]?.content === "string" ? messages[0].content : "";
+      return assistantText("Okay.");
+    };
+
+    await runHarnessTurn({
+      transcript: "Hello",
+      sessionId: "harness-style",
+      state: emptyConversationState(),
+      now: NOW,
+      complete,
+    });
+
+    expect(system).toContain("Speak in short, simple sentences she can hear.");
+    expect(system).toContain("Never diagnose. Never change medication.");
+  });
 });

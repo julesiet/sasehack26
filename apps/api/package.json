@@ -7,6 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "playground": "tsx src/playground-cli.ts",
+    "demo:rehearse": "tsx src/demo-rehearse-cli.ts",
+    "demo:pdf": "tsx src/demo-pdf.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

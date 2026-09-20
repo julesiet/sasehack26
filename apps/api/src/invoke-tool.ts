@@ -1,5 +1,6 @@
 import {
   bookRideInputSchema,
+  COMPOSIO_GMAIL_SEND_TOOL,
   computeArrivalTarget,
   evaluateToolCall,
   findRideOptionsInputSchema,
@@ -8,6 +9,8 @@ import {
   getCareSignalResultSchema,
   getMariaAppointment,
   getMariaSeedBundle,
+  FAMILY_EMAIL_RECIPIENT,
+  familyEmailCopy,
   invokeToolRequestSchema,
   isKnownTool,
   notifyCaretakerInputSchema,
@@ -18,12 +21,14 @@ import {
   saveMedicationReminderInputSchema,
   saveMedicationReminderResultSchema,
   toolInputSchemas,
+  withNotifyRecipient,
   type CareSignalAction,
   type ToolName,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
 import { getUberProvider } from "./uber-provider";
+import { ComposioNotConfiguredError, kasamaComposio } from "./composio";
 
 export type ToolHttpResult = {
   status: 200 | 400 | 403 | 404;
@@ -31,10 +36,12 @@ export type ToolHttpResult = {
 };
 
 function isSameCalendarDay(a: Date, b: Date): boolean {
+  const ad = new Date(a);
+  const bd = new Date(b);
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    ad.getFullYear() === bd.getFullYear() &&
+    ad.getMonth() === bd.getMonth() &&
+    ad.getDate() === bd.getDate()
   );
 }
 
@@ -105,7 +112,7 @@ function computeCareSignal(): {
   };
 }
 
-function executeStub(name: ToolName, input: unknown, options?: { preview?: boolean }) {
+async function executeStub(name: ToolName, input: unknown, options?: { preview?: boolean }) {
   switch (name) {
     case "get_appointment": {
       const { date } = getAppointmentInputSchema.parse(input);
@@ -142,24 +149,72 @@ function executeStub(name: ToolName, input: unknown, options?: { preview?: boole
       return getUberProvider().book(optionId);
     }
     case "notify_caretaker": {
-      const parsed = notifyCaretakerInputSchema.parse(input);
+      const parsed = withNotifyRecipient(notifyCaretakerInputSchema.parse(input));
       if (options?.preview) {
         return notifyCaretakerResultSchema.parse({
           success: true,
-          summary: `Draft for your family (${parsed.urgency}): ${parsed.summary} Not sent.`,
+          summary: `Draft for ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary} Not sent.`,
           preview: true,
           sent: false,
           draft: parsed,
         });
       }
-      return notifyCaretakerResultSchema.parse({
-        success: true,
-        confirmationId: `stub_notify_${parsed.urgency}`,
-        summary: `Mocked family email/SMS (${parsed.urgency}): ${parsed.summary}`,
-        preview: false,
-        sent: true,
-        draft: parsed,
-      });
+
+      const mockSend = () =>
+        notifyCaretakerResultSchema.parse({
+          success: true,
+          confirmationId: `notify_${Date.now()}`,
+          summary: `Email sent to ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary}`,
+          preview: false,
+          sent: true,
+          draft: parsed,
+        });
+
+      try {
+        const email = familyEmailCopy(parsed);
+        const composioResult = await kasamaComposio.execute({
+          toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+          arguments: {
+            recipient_email: FAMILY_EMAIL_RECIPIENT,
+            body: email.body,
+            subject: email.subject,
+            is_html: email.isHtml,
+          },
+        });
+
+        if (!composioResult.successful) {
+          if (composioResult.needsAuth || composioResult.error?.includes("not configured")) {
+            return mockSend();
+          }
+          return notifyCaretakerResultSchema.parse({
+            success: false,
+            summary: `Failed to send notification: ${composioResult.error ?? "Gmail send failed."}`,
+            preview: false,
+            sent: false,
+            draft: parsed,
+          });
+        }
+
+        return notifyCaretakerResultSchema.parse({
+          success: true,
+          confirmationId: composioResult.logId ?? `composio_${Date.now()}`,
+          summary: `Email sent to ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary}`,
+          preview: false,
+          sent: true,
+          draft: parsed,
+        });
+      } catch (e) {
+        if (e instanceof ComposioNotConfiguredError) {
+          return mockSend();
+        }
+        return notifyCaretakerResultSchema.parse({
+          success: false,
+          summary: `Unexpected error sending notification: ${e instanceof Error ? e.message : String(e)}`,
+          preview: false,
+          sent: false,
+          draft: parsed,
+        });
+      }
     }
     case "save_medication_reminder": {
       const parsed = saveMedicationReminderInputSchema.parse(input);
@@ -207,7 +262,7 @@ function executeStub(name: ToolName, input: unknown, options?: { preview?: boole
   }
 }
 
-export function invokeTool(name: string, raw: unknown): ToolHttpResult {
+export async function invokeTool(name: string, raw: unknown): Promise<ToolHttpResult> {
   if (!isKnownTool(name)) {
     return {
       status: 404,
@@ -306,7 +361,7 @@ export function invokeTool(name: string, raw: unknown): ToolHttpResult {
     };
   }
 
-  const result = executeStub(name, input, { preview: decision.preview });
+  const result = await executeStub(name, input, { preview: decision.preview });
   const event = auditLog.append({
     whoAsked: {
       actor: request.data.actor,

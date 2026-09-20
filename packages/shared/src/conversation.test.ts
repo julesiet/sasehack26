@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_CLARIFICATIONS_PER_REQUEST,
+  allConversationTurns,
+  chatTitleForIntent,
+  chatsNewestFirst,
   conversationTurnRequestSchema,
   conversationTurnResponseSchema,
   emptyConversationState,
+  ensureActiveChat,
   speakRequestSchema,
+  startNewChat,
+  type ConversationChat,
+  type ConversationTurn,
 } from "./conversation";
+
+function turn(
+  id: string,
+  timestamp: string,
+  speaker: ConversationTurn["speaker"],
+  text: string,
+): ConversationTurn {
+  return { id, timestamp, speaker, text };
+}
 
 describe("conversation contract", () => {
   it("allows exactly one clarification per request", () => {
@@ -24,14 +40,86 @@ describe("conversation contract", () => {
     expect(conversationTurnRequestSchema.safeParse({ transcript: "   " }).success).toBe(false);
   });
 
-  it("starts with no turns, no active request, and an empty plan", () => {
+  it("starts with no turns, no chats, no active request, and an empty plan", () => {
     expect(emptyConversationState()).toEqual({
       turns: [],
+      chats: [],
+      activeChatId: null,
       activeRequest: null,
       clarificationsAsked: 0,
       plan: { steps: [] },
       failure: null,
     });
+  });
+
+  it("uses short topic labels seniors can scan", () => {
+    expect(chatTitleForIntent("ride", "Springfield Family Medicine")).toBe("Doctor ride");
+    expect(chatTitleForIntent("ride", "the grocery store")).toBe("Ride");
+    expect(chatTitleForIntent("medication_reminder")).toBe("Medication reminder");
+    expect(chatTitleForIntent("hospital_schedule")).toBe("Hospital visit");
+    expect(chatTitleForIntent("family_update")).toBe("Family update");
+    expect(chatTitleForIntent("unknown")).toBe("New chat");
+  });
+
+  it("lists chats with the most recently updated first", () => {
+    const older: ConversationChat = {
+      id: "chat_hospital",
+      title: "Hospital visit",
+      intent: "hospital_schedule",
+      startedAt: "2026-09-18T07:15:00.000Z",
+      turns: [turn("h1", "2026-09-18T07:15:00.000Z", "senior", "Schedule an appointment.")],
+    };
+    const current: ConversationChat = {
+      id: "chat_ride",
+      title: "Doctor ride",
+      intent: "ride",
+      startedAt: "2026-09-18T08:42:00.000Z",
+      turns: [turn("r1", "2026-09-18T08:42:00.000Z", "senior", "Please get me a ride.")],
+    };
+    expect(chatsNewestFirst([older, current]).map((chat) => chat.id)).toEqual([
+      "chat_ride",
+      "chat_hospital",
+    ]);
+    expect(chatsNewestFirst([older, current], "chat_hospital").map((chat) => chat.id)).toEqual([
+      "chat_hospital",
+      "chat_ride",
+    ]);
+  });
+
+  it("starts a new chat and makes it active without copying turns", () => {
+    const state = emptyConversationState();
+    const first = ensureActiveChat(state, "2026-09-18T08:00:00.000Z");
+    first.turns.push(turn("t1", "2026-09-18T08:00:00.000Z", "senior", "Please get me a ride."));
+    state.turns = first.turns;
+
+    const started = startNewChat(state, "2026-09-18T09:00:00.000Z");
+    expect(started.title).toBe("New chat");
+    expect(started.turns).toEqual([]);
+    expect(state.activeChatId).toBe(started.id);
+    expect(state.turns).toEqual([]);
+    expect(state.chats).toHaveLength(2);
+    expect(state.chats[0]?.turns).toHaveLength(1);
+  });
+
+  it("flattens every chat's turns in time order for caretaker activity", () => {
+    const state = emptyConversationState();
+    state.chats = [
+      {
+        id: "chat_ride",
+        title: "Doctor ride",
+        intent: "ride",
+        startedAt: "2026-09-18T08:42:00.000Z",
+        turns: [turn("r1", "2026-09-18T08:42:00.000Z", "senior", "Ride please.")],
+      },
+      {
+        id: "chat_meds",
+        title: "Medication reminder",
+        intent: "medication_reminder",
+        startedAt: "2026-09-18T07:40:00.000Z",
+        turns: [turn("m1", "2026-09-18T07:40:00.000Z", "senior", "Remind me.")],
+      },
+    ];
+    expect(allConversationTurns(state).map((item) => item.id)).toEqual(["m1", "r1"]);
   });
 
   it("accepts a preferred Uber product on the active request", () => {

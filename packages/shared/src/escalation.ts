@@ -10,8 +10,6 @@ import { z } from "zod";
  * medical condition. Sending stays a separate, human-approved step (#16).
  */
 
-export type CaretakerUrgency = z.infer<typeof caretakerUrgencySchema>;
-
 export const escalationStatusSchema = z.enum(["drafted", "deferred"]);
 export type EscalationStatus = z.infer<typeof escalationStatusSchema>;
 

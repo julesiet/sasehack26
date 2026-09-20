@@ -2,18 +2,25 @@ import {
   bookRideInputSchema,
   bookRideResultSchema,
   DEFAULT_SESSION_ID,
+  applyChatTitleFromRequest,
   describePendingApproval,
   emptyConversationState,
+  ensureActiveChat,
   findRideOptionsResultSchema,
   getAppointmentResultSchema,
   getMariaDemoSession,
+  getMariaLiveDemoSession,
   getMariaSeedBundle,
   notifyCaretakerInputSchema,
+  notifyCaretakerResultSchema,
   saveHospitalVisitInputSchema,
   saveHospitalVisitResultSchema,
   saveMedicationReminderInputSchema,
   saveMedicationReminderResultSchema,
+  selectChat,
   sessionViewSchema,
+  startNewChat,
+  withNotifyRecipient,
   type Actor,
   type ActiveRequest,
   type Appointment,
@@ -31,10 +38,12 @@ import {
   type SessionHospitalVisit,
   type SessionMedicationReminder,
   type SessionRequest,
+  type SessionResetPreset,
   type SessionView,
   type SeniorTask,
   type ToolName,
   type UberRideOption,
+  generateCaretakerNarrative,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 
@@ -67,6 +76,7 @@ export type ApplyConversationTurnInput = {
   failure: ConversationFailure | null;
   timestamp: string;
   extraKasamaTexts?: string[];
+  chatId?: string;
 };
 
 export type ApplyToolEventInput = {
@@ -97,7 +107,10 @@ function seedCareSignal(): CareSignal {
   };
 }
 
-function emptyState(sessionId: string): SessionState {
+function emptyState(
+  sessionId: string,
+  preset: SessionResetPreset = "seed",
+): SessionState {
   const blank: SessionState = {
     sessionId,
     currentRequest: null,
@@ -114,6 +127,22 @@ function emptyState(sessionId: string): SessionState {
     consentGranted: false,
     conversation: emptyConversationState(),
   };
+  if (preset === "live-demo") {
+    const live = getMariaLiveDemoSession();
+    return {
+      ...blank,
+      appointment: live.appointment,
+      lastRideOptions: live.lastRideOptions,
+      lastBooking: live.lastBooking,
+      lastApproval: live.lastApproval,
+      lastMedicationReminder: live.lastMedicationReminder,
+      lastHospitalVisit: live.lastHospitalVisit,
+      tasks: live.tasks,
+      caretakerActivity: live.caretakerActivity,
+      consentGranted: live.consentGranted,
+      conversation: live.conversation,
+    };
+  }
   if (sessionId !== DEFAULT_SESSION_ID) {
     return blank;
   }
@@ -124,6 +153,9 @@ function emptyState(sessionId: string): SessionState {
     lastRideOptions: demo.lastRideOptions,
     lastBooking: demo.lastBooking,
     lastApproval: demo.lastApproval,
+    lastMedicationReminder: demo.lastMedicationReminder,
+    lastHospitalVisit: demo.lastHospitalVisit,
+    tasks: demo.tasks,
     caretakerActivity: demo.caretakerActivity,
     consentGranted: demo.consentGranted,
     conversation: demo.conversation,
@@ -135,10 +167,16 @@ function eventsFor(sessionId: string): AuditEvent[] {
 }
 
 function toView(state: SessionState): SessionView {
-  return sessionViewSchema.parse({
+  const events = eventsFor(state.sessionId);
+  const parsed = sessionViewSchema.parse({
     ...state,
-    events: eventsFor(state.sessionId),
+    events,
+    caretakerNarrative: [],
   });
+  return {
+    ...parsed,
+    caretakerNarrative: generateCaretakerNarrative(parsed),
+  };
 }
 
 function appendCaretakerActivity(
@@ -147,15 +185,41 @@ function appendCaretakerActivity(
   event: AuditEvent,
   sent: boolean,
 ): void {
-  const draft = notifyCaretakerInputSchema.parse(input);
+  const draft = withNotifyRecipient(notifyCaretakerInputSchema.parse(input));
   state.caretakerActivity.push({
     id: event.id,
     timestamp: event.timestamp,
     summary: draft.summary,
     urgency: draft.urgency,
+    recipientId: draft.recipientId,
+    recipientName: draft.recipientName,
     sent,
     preview: !sent,
   });
+}
+
+function notifyDraftFields(input: unknown, pending?: PendingApproval | null): Pick<
+  LastApproval,
+  "preview" | "recipientName" | "urgency"
+> {
+  const parsed = notifyCaretakerInputSchema.safeParse(input ?? pending?.input);
+  if (!parsed.success) {
+    return { preview: pending?.preview };
+  }
+  const draft = withNotifyRecipient(parsed.data);
+  return {
+    preview: draft.summary,
+    recipientName: draft.recipientName,
+    urgency: draft.urgency,
+  };
+}
+
+function clearNotifyPreviews(state: SessionState): void {
+  for (const item of state.caretakerActivity) {
+    if (item.preview && !item.sent) {
+      item.preview = false;
+    }
+  }
 }
 
 export type SessionStore = {
@@ -164,7 +228,9 @@ export type SessionStore = {
   getConversation: (sessionId: string) => ConversationState;
   applyToolEvent: (input: ApplyToolEventInput) => SessionView;
   applyConversationTurn: (input: ApplyConversationTurnInput) => SessionView;
+  startOrSelectChat: (input: { sessionId: string; chatId?: string; timestamp?: string }) => SessionView;
   declinePending: (input: { sessionId: string; actor: Actor }) => SessionView;
+  reset: (sessionId: string, preset?: SessionResetPreset) => SessionView;
   clear: () => void;
 };
 
@@ -205,43 +271,63 @@ export function createSessionStore(): SessionStore {
       failure,
       timestamp,
       extraKasamaTexts,
+      chatId,
     }) {
       const state = getOrCreate(sessionId);
       const conversation = state.conversation;
+      if (chatId) {
+        selectChat(conversation, chatId);
+      }
+      const chat = ensureActiveChat(conversation, timestamp);
 
-      conversation.turns.push({
+      chat.turns.push({
         id: nextTurnId(),
         timestamp,
         speaker: "senior",
         text: seniorText,
       });
       for (const extra of extraKasamaTexts ?? []) {
-        conversation.turns.push({
+        chat.turns.push({
           id: nextTurnId(),
           timestamp,
           speaker: "kasama",
           text: extra,
         });
       }
-      conversation.turns.push({
+      chat.turns.push({
         id: nextTurnId(),
         timestamp,
         speaker: "kasama",
         text: kasamaText,
         kind,
       });
+      applyChatTitleFromRequest(chat, activeRequest);
+      conversation.turns = chat.turns;
 
       // The clarification budget is per request: it grows while Kasama is still
       // gathering and resets once the request resolves (proposal, answer, or dropped).
       if (askedClarification) {
         conversation.clarificationsAsked += 1;
-      } else if (activeRequest === null || activeRequest.status !== "gathering") {
+      } else if (activeRequest === null || activeRequest === undefined || activeRequest.status !== "gathering") {
         conversation.clarificationsAsked = 0;
       }
       conversation.activeRequest = activeRequest;
       conversation.plan = plan;
       conversation.failure = failure;
 
+      return toView(state);
+    },
+    startOrSelectChat({ sessionId, chatId, timestamp }) {
+      const state = getOrCreate(sessionId);
+      const when = timestamp ?? new Date().toISOString();
+      if (chatId) {
+        const selected = selectChat(state.conversation, chatId);
+        if (!selected) {
+          return toView(state);
+        }
+        return toView(state);
+      }
+      startNewChat(state.conversation, when);
       return toView(state);
     },
     applyToolEvent({
@@ -343,6 +429,28 @@ export function createSessionStore(): SessionStore {
         return toView(state);
       }
 
+      if (tool === "notify_caretaker") {
+        const notifyResult = notifyCaretakerResultSchema.safeParse(result);
+        if (!notifyResult.success || notifyResult.data.sent !== true) {
+          if (state.pendingApproval?.tool === "notify_caretaker") {
+            state.pendingApproval = {
+              ...state.pendingApproval,
+              reason: "send_failed",
+              summary:
+                notifyResult.success && notifyResult.data.summary
+                  ? notifyResult.data.summary
+                  : "Failed to send the family note.",
+              timestamp: event.timestamp,
+            };
+          }
+          clearNotifyPreviews(state);
+          return toView(state);
+        }
+      }
+
+      const notifyFields = tool === "notify_caretaker" ? notifyDraftFields(input, state.pendingApproval) : {};
+      const notifySummary = notifyFields.preview;
+
       if (state.pendingApproval?.tool === tool) {
         state.lastApproval = {
           tool,
@@ -350,8 +458,9 @@ export function createSessionStore(): SessionStore {
           decision: "approved",
           actor,
           timestamp: event.timestamp,
-          summary: decision.summary,
+          summary: notifySummary ?? decision.summary,
           prompt: state.pendingApproval.prompt,
+          ...notifyFields,
         };
         state.pendingApproval = null;
       } else if (
@@ -371,8 +480,9 @@ export function createSessionStore(): SessionStore {
           decision: "approved",
           actor,
           timestamp: event.timestamp,
-          summary: decision.summary,
+          summary: notifySummary ?? decision.summary,
           prompt: described.prompt,
+          ...notifyFields,
         };
       }
 
@@ -402,7 +512,10 @@ export function createSessionStore(): SessionStore {
       }
 
       if (tool === "notify_caretaker") {
-        appendCaretakerActivity(state, input, event, true);
+        const notifyResult = notifyCaretakerResultSchema.safeParse(result);
+        if (notifyResult.success && notifyResult.data.sent === true) {
+          appendCaretakerActivity(state, input, event, true);
+        }
       }
 
       if (tool === "save_medication_reminder" && result) {
@@ -484,6 +597,8 @@ export function createSessionStore(): SessionStore {
         actor,
         timestamp: event.timestamp,
       };
+      const notifyFields =
+        pending.tool === "notify_caretaker" ? notifyDraftFields(pending.input, pending) : {};
       state.lastApproval = {
         tool: pending.tool,
         action: pending.action,
@@ -492,6 +607,7 @@ export function createSessionStore(): SessionStore {
         timestamp: event.timestamp,
         summary,
         prompt: pending.prompt,
+        ...notifyFields,
       };
       state.pendingApproval = null;
       state.conversation.activeRequest = null;
@@ -513,6 +629,13 @@ export function createSessionStore(): SessionStore {
         }
       }
       return toView(state);
+    },
+    reset(sessionId, preset = "seed") {
+      auditLog.clearSession(sessionId);
+      sessions.delete(sessionId);
+      const created = emptyState(sessionId, preset);
+      sessions.set(sessionId, created);
+      return toView(created);
     },
     clear() {
       sessions.clear();

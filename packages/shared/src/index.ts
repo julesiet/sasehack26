@@ -14,6 +14,7 @@ export const envKeys = [
   "BROWSERBASE_API_KEY",
   "BROWSERBASE_PROJECT_ID",
   "COMPOSIO_API_KEY",
+  "KASAMA_DEMO",
 ] as const;
 
 export * from "./tools";
@@ -22,12 +23,18 @@ export * from "./policy";
 export * from "./audit";
 export * from "./invoke";
 export * from "./seed";
+export * from "./family";
+export * from "./family-report";
+export * from "./communication";
 export * from "./demo-session";
+export * from "./demo-script";
 export * from "./approval";
 export * from "./session";
 export * from "./caretaker-dashboard";
+export * from "./care-aware";
 export * from "./conversation";
 export * from "./playground";
 export * from "./composio";
 export * from "./escalation";
+export * from "./narrative";
 

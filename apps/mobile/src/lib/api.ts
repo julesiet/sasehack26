@@ -1,11 +1,13 @@
 import { File } from "expo-file-system";
 import {
   approvalResponseSchema,
+  conversationChatResponseSchema,
   conversationTurnResponseSchema,
   sessionViewSchema,
   transcribeResponseSchema,
   type ApprovalChoice,
   type ApprovalResponse,
+  type ConversationChatResponse,
   type ConversationTurnResponse,
   type SessionView,
 } from "@kasama/shared";
@@ -40,14 +42,29 @@ async function readError(res: Response): Promise<ApiError> {
 export async function postConversationTurn(
   transcript: string,
   sessionId: string,
+  chatId?: string,
 ): Promise<ConversationTurnResponse> {
   const res = await fetch(`${apiUrl}/conversation/turn`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ transcript, sessionId, actor: "senior" }),
+    body: JSON.stringify({ transcript, sessionId, actor: "senior", chatId }),
   });
   if (!res.ok) throw await readError(res);
   return conversationTurnResponseSchema.parse(await res.json());
+}
+
+/** Start a new chat, or select an existing one, on the same session. */
+export async function postConversationChat(
+  sessionId: string,
+  chatId?: string,
+): Promise<ConversationChatResponse> {
+  const res = await fetch(`${apiUrl}/conversation/chats`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sessionId, chatId }),
+  });
+  if (!res.ok) throw await readError(res);
+  return conversationChatResponseSchema.parse(await res.json());
 }
 
 /**
@@ -74,14 +91,38 @@ export async function transcribeRecording(uri: string): Promise<string> {
 export async function postApproval(
   decision: ApprovalChoice,
   sessionId: string,
+  actor: "senior" | "caretaker" = "senior",
 ): Promise<ApprovalResponse> {
   const res = await fetch(`${apiUrl}/approvals`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ sessionId, decision, actor: "senior" }),
+    body: JSON.stringify({ sessionId, decision, actor }),
   });
   if (!res.ok) throw await readError(res);
   return approvalResponseSchema.parse(await res.json());
+}
+
+export async function postNotifyCaretaker(input: {
+  sessionId: string;
+  summary: string;
+  urgency: "low" | "normal" | "high";
+  recipientName: string;
+  actor: "senior" | "caretaker";
+}): Promise<void> {
+  const res = await fetch(`${apiUrl}/tools/notify_caretaker`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      input: {
+        summary: input.summary,
+        urgency: input.urgency,
+        recipientName: input.recipientName,
+      },
+      actor: input.actor,
+      sessionId: input.sessionId,
+    }),
+  });
+  if (!res.ok) throw await readError(res);
 }
 
 export async function fetchSession(sessionId: string): Promise<SessionView> {

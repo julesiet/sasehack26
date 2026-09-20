@@ -37,6 +37,14 @@ export const caretakerActivityItemSchema = z.object({
   urgency: caretakerUrgencySchema.optional(),
   sent: z.boolean(),
   preview: z.boolean(),
+  recipientId: z.string().optional(),
+  recipientName: z.string().optional(),
+});
+
+/** Timestamped caretaker activity copy from audit + session (#33). */
+export const caretakerNarrativeItemSchema = z.object({
+  timestamp: z.string(),
+  text: z.string(),
 });
 
 export const careSignalSchema = z.object({
@@ -88,6 +96,7 @@ export const sessionViewSchema = z.object({
   lastHospitalVisit: sessionHospitalVisitSchema.nullable().default(null),
   tasks: z.array(seniorTaskSchema).default([]),
   caretakerActivity: z.array(caretakerActivityItemSchema),
+  caretakerNarrative: z.array(caretakerNarrativeItemSchema).default([]),
   careSignal: careSignalSchema.nullable(),
   consentGranted: z.boolean(),
   /** Voice loop memory (#4): turns so far and the request Kasama is carrying. */
@@ -101,5 +110,15 @@ export type SessionMedicationReminder = z.infer<typeof sessionMedicationReminder
 export type SessionHospitalVisit = z.infer<typeof sessionHospitalVisitSchema>;
 export type SeniorTask = z.infer<typeof seniorTaskSchema>;
 export type CaretakerActivityItem = z.infer<typeof caretakerActivityItemSchema>;
+export type CaretakerNarrativeItem = z.infer<typeof caretakerNarrativeItemSchema>;
 export type CareSignal = z.infer<typeof careSignalSchema>;
 export type SessionView = z.infer<typeof sessionViewSchema>;
+
+/** `POST /sessions/:sessionId/reset` — restore Maria seed or the unbooked live demo. */
+export const sessionResetPresetSchema = z.enum(["seed", "live-demo"]);
+export type SessionResetPreset = z.infer<typeof sessionResetPresetSchema>;
+
+export const sessionResetRequestSchema = z.object({
+  preset: sessionResetPresetSchema.default("seed"),
+});
+export type SessionResetRequest = z.infer<typeof sessionResetRequestSchema>;

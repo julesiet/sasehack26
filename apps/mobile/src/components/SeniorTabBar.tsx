@@ -15,7 +15,7 @@ type Props = {
 };
 
 /**
- * Home is the sun welcome. Chat is the last started conversation.
+ * Home is the sun welcome. Chat is the history list (current thread first).
  * Tasks lists confirmed reminders and saved hospital visits. On Home the
  * bar is 80% translucent so the sun shows through.
  */

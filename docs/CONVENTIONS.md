@@ -5,8 +5,8 @@ Where to put work so every agent sees the same system.
 ## One layout
 
 ```text
-apps/mobile/src/screens/    iOS screens (app Home unchanged; Senior Home / Chat / Tasks; caretaker dashboard)
-apps/mobile/src/components/ Reusable pieces (orb, sun bowl, composer pill, chat bubble, ride option cards, ride status card, confirmation card, medication reminder card, hospital appointment card, compact tab bar, caretaker dashboard cards)
+apps/mobile/src/screens/    iOS screens (app Home unchanged; Senior Home / Chat history list + thread / Tasks; caretaker dashboard + care-aware view)
+apps/mobile/src/components/ Reusable pieces (orb, sun bowl, composer pill, chat bubble, ride option cards, ride status card, confirmation card, medication reminder card, hospital appointment card, family message card (MESSAGE TO), caretaker dashboard cards including FAMILY UPDATE, compact tab bar)
 apps/mobile/src/hooks/      Conversation state machine (record → transcribe → turn → speak)
 apps/mobile/src/lib/        API client
 apps/mobile/src/theme.ts    Design tokens
@@ -16,6 +16,7 @@ packages/shared/src/        Zod + policy + audit + session types (source of trut
 AGENTS.md                   Coding-agent operating manual
 ARCHITECTURE.md             System map
 docs/                       Extra canonical docs only (this folder)
+docs/demo/                  Printed 3-minute demo sheet (`pnpm demo:pdf`)
 ```
 
 New feature:
@@ -45,7 +46,7 @@ pnpm playground
 # or POST /playground after pnpm dev:api
 ```
 
-See [AGENTS.md](../AGENTS.md#test-with-the-playground-no-ios). The playground never auto-approves book / send / spend.
+See [AGENTS.md](../AGENTS.md#test-with-the-playground-no-ios). The playground never auto-approves book / send / spend. `pnpm demo:rehearse` is the 3-minute script; it does book the controlled Uber on a live-demo session.
 
 ## Code style
 
