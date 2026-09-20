@@ -91,15 +91,24 @@ describe("getMariaSeedBundle", () => {
     expect(bundle.dashboardViewer.firstName).toBe("Margaret");
     expect(bundle.familyContacts.map((contact) => contact.name)).toEqual([
       "Sarah",
-      "James",
+      "James Alvarez",
       "Emily",
+      "Jules",
     ]);
     expect(bundle.conversationTurns).toHaveLength(3);
     expect(bundle.conversationTurns[0]?.text).toBe(
       "Please get me a ride to my doctor tomorrow.",
     );
+    expect(bundle.conversationChats.map((chat) => chat.title)).toEqual([
+      "Hospital visit",
+      "Medication reminder",
+      "Doctor ride",
+    ]);
+    expect(bundle.conversationChats.at(-1)?.turns).toEqual(bundle.conversationTurns);
     expect(bundle.wearableReadings).toHaveLength(7);
-    expect(bundle.priorRequests.length).toBeGreaterThan(0);
+    expect(bundle.priorRequests.filter((request) => request.flaggedConfusion)).toHaveLength(3);
+    expect(bundle.careAwareUsage.totalMinutes).toBe(12);
+    expect(bundle.careAwareResponse.dailySeconds).toHaveLength(7);
   });
 });
 

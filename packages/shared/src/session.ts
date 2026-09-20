@@ -37,6 +37,8 @@ export const caretakerActivityItemSchema = z.object({
   urgency: caretakerUrgencySchema.optional(),
   sent: z.boolean(),
   preview: z.boolean(),
+  recipientId: z.string().optional(),
+  recipientName: z.string().optional(),
 });
 
 /** Timestamped caretaker activity copy from audit + session (#33). */

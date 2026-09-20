@@ -4,15 +4,19 @@ import {
   MARIA_PROFILE,
   bookingApprovalPrompt,
   pendingRideOptionId,
+  conversationChatRequestSchema,
+  conversationChatResponseSchema,
   conversationTurnRequestSchema,
   conversationTurnResponseSchema,
   findRideOptionsResultSchema,
   getAppointmentResultSchema,
   getMariaAppointment,
   notifyApprovalPrompt,
+  resolveFamilyRecipient,
   resolveSessionId,
   saveHospitalVisitInputSchema,
   saveMedicationReminderInputSchema,
+  withNotifyRecipient,
   type ActiveRequest,
   type Appointment,
   type ConversationReplyKind,
@@ -55,7 +59,7 @@ export type ConversationTurnDeps = {
 };
 
 export type ConversationHttpResult = {
-  status: 200 | 400;
+  status: 200 | 400 | 404;
   body: Record<string, unknown>;
 };
 
@@ -66,7 +70,7 @@ const DOCTOR = /\b(doctor'?s?|dr\.?|appointment|check ?up|clinic|chen|physician)
 const APPOINTMENT_INFO = /\b(what time|when is|when'?s|what day|do i have|remind me)\b/;
 const VAGUE_PLACE = /\b(somewhere|anywhere|i don'?t know|not sure|dunno|um+|uh+)\b/;
 const NOTIFY =
-  /\b(tell|text|message|notify|let (my )?(family|son|daughter|james|caretaker) know)\b/;
+  /\b(tell|text|message|notify|email|e-mail|send (an |a )?(email|e-mail|message)|let (my )?(family|son|daughter|james|jules|caretaker) know)\b/;
 
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^\p{L}\p{N}'\s.-]/gu, " ").replace(/\s+/g, " ").trim();
@@ -168,17 +172,35 @@ async function openBookingCheckpoint(sessionId: string, active: ActiveRequest): 
   };
 }
 
-function draftNotifySummary(transcript: string): string {
-  if (DOCTOR.test(normalize(transcript))) {
+function notifyBodyFromTranscript(transcript: string): string {
+  const saying = transcript.match(/\b(?:saying|that|about)\s+(.+)$/i);
+  const raw = saying?.[1]?.trim() || transcript.trim();
+  if (/missed.{0,40}medication/i.test(raw)) {
+    return "Maria missed her medication reminder.";
+  }
+  if (DOCTOR.test(normalize(raw))) {
     return "Maria is going to her doctor's appointment.";
   }
-  return `Maria asked me to let you know: ${transcript.trim()}`;
+  return `Maria asked me to let you know: ${raw.replace(/^(that\s+)/i, "")}`;
 }
 
-async function openNotifyCheckpoint(sessionId: string, summary: string): Promise<HarnessTurnResult> {
+function wantsNotify(text: string): boolean {
+  if (!NOTIFY.test(text)) return false;
+  return !RIDE.test(text) || /\bemail\b/.test(text);
+}
+
+async function openNotifyCheckpoint(
+  sessionId: string,
+  summary: string,
+  transcript: string,
+): Promise<HarnessTurnResult> {
   const before = auditLog.list().length;
   await invokeTool("notify_caretaker", {
-    input: { summary, urgency: "normal" },
+    input: withNotifyRecipient({
+      summary,
+      urgency: "normal",
+      recipientName: resolveFamilyRecipient(transcript).name,
+    }),
     actor: "model",
     sessionId,
   });
@@ -309,7 +331,13 @@ function careRulesNeeded(
   ) {
     return false;
   }
+  if (pending?.tool === "notify_caretaker") {
+    return false;
+  }
   const text = normalize(transcript);
+  if (wantsNotify(text)) {
+    return false;
+  }
   return (
     looksLikeMedicationReminder(text) ||
     looksLikeHospitalSchedule(text, RIDE.test(text)) ||
@@ -402,13 +430,13 @@ type Reply = {
   extraKasamaTexts?: string[];
 };
 
-function proposeRideToAppointment(
+async function proposeRideToAppointment(
   sessionId: string,
   appointment: Appointment,
   now: Date,
   preface = "",
   spoken = "",
-): Reply {
+): Promise<Reply> {
   const start = new Date(appointment.start);
   if (Number.isNaN(start.getTime())) {
     return {
@@ -425,7 +453,7 @@ function proposeRideToAppointment(
   arriveBy.setMinutes(arriveBy.getMinutes() - 15);
   const destination = appointment.location ?? "your appointment";
 
-  searchRides(sessionId, destination, arriveBy.toISOString());
+  await searchRides(sessionId, destination, arriveBy.toISOString());
 
   const day = describeDay(appointment.start, now);
   const text =
@@ -506,6 +534,10 @@ async function decide(
         activeRequest: null,
       };
     }
+  }
+
+  if (wantsNotify(text)) {
+    return await openNotifyCheckpoint(sessionId, notifyBodyFromTranscript(transcript), transcript);
   }
 
   if (looksLikeMedicationReminder(text)) {
@@ -611,10 +643,6 @@ async function decide(
     };
   }
 
-  if (NOTIFY.test(text) && !RIDE.test(text)) {
-    return await openNotifyCheckpoint(sessionId, draftNotifySummary(transcript));
-  }
-
   // Appointment question ("what time is my appointment").
   if (APPOINTMENT_INFO.test(text) && DOCTOR.test(text)) {
     const date = dateFromWords(text, now) ?? isoDate(new Date(getMariaAppointment(now).start));
@@ -673,7 +701,7 @@ async function decide(
       const destination = transcript.trim().replace(/[.!?]+$/, "");
       const arriveBy = new Date(now);
       arriveBy.setMinutes(arriveBy.getMinutes() + 30);
-      searchRides(sessionId, destination, arriveBy.toISOString());
+      await searchRides(sessionId, destination, arriveBy.toISOString());
       return {
         text: `I can have an Uber pick you up at home and take you to ${destination}. Should I set that up?`,
         kind: "proposal",
@@ -745,6 +773,9 @@ export async function runConversationTurn(
   }
 
   const sessionId = resolveSessionId(request.data.sessionId);
+  if (request.data.chatId) {
+    sessionStore.startOrSelectChat({ sessionId, chatId: request.data.chatId, timestamp: now.toISOString() });
+  }
   const state = sessionStore.getConversation(sessionId);
   const complete =
     options.complete ?? (process.env.MODEL_API_KEY?.trim() ? openaiChatComplete : undefined);
@@ -837,6 +868,7 @@ export async function runConversationTurn(
     failure: decided.failure,
     timestamp: now.toISOString(),
     extraKasamaTexts: decided.extraKasamaTexts,
+    chatId: request.data.chatId,
   });
 
   const body: ConversationTurnResponse = conversationTurnResponseSchema.parse({
@@ -848,6 +880,36 @@ export async function runConversationTurn(
     plan: view.conversation.plan,
     failure: view.conversation.failure,
     pendingApproval: view.pendingApproval,
+  });
+  return { status: 200, body };
+}
+
+export function runConversationChat(raw: unknown): ConversationHttpResult {
+  const request = conversationChatRequestSchema.safeParse(raw);
+  if (!request.success) {
+    return {
+      status: 400,
+      body: { success: false, summary: "Invalid request.", issues: request.error.issues },
+    };
+  }
+
+  const sessionId = resolveSessionId(request.data.sessionId);
+  const view = sessionStore.startOrSelectChat({
+    sessionId,
+    chatId: request.data.chatId,
+  });
+  const chatId = request.data.chatId ?? view.conversation.activeChatId;
+  if (!chatId || (request.data.chatId && view.conversation.activeChatId !== request.data.chatId)) {
+    return {
+      status: 404,
+      body: { success: false, summary: "That chat is not on this session." },
+    };
+  }
+
+  const body = conversationChatResponseSchema.parse({
+    sessionId,
+    chatId,
+    conversation: view.conversation,
   });
   return { status: 200, body };
 }

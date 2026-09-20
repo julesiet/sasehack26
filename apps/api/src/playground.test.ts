@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  COMPOSIO_GMAIL_SEND_TOOL,
   PLAYGROUND_DEMO_TRANSCRIPT,
   playgroundResponseSchema,
 } from "@kasama/shared";
@@ -130,8 +131,8 @@ describe("runPlaygroundTurn", () => {
     const { kasamaComposio } = await import("./composio");
     const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
       userId: "senior_maria",
-      sessionId: "sess_mock",
-      toolSlug: "GMAIL_SEND_EMAIL",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
       successful: true,
       logId: "mock_composio_log_123",
     });

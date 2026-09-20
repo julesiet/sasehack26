@@ -73,6 +73,16 @@ export const conversationTurnSchema = z.object({
 });
 export type ConversationTurn = z.infer<typeof conversationTurnSchema>;
 
+/** One titled thread on the session. History lists these; Chat opens one. */
+export const conversationChatSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  intent: conversationIntentSchema,
+  startedAt: z.string(),
+  turns: z.array(conversationTurnSchema),
+});
+export type ConversationChat = z.infer<typeof conversationChatSchema>;
+
 /** What Kasama currently believes Maria is asking for. Carried across turns. */
 export const activeRequestSchema = z.object({
   intent: conversationIntentSchema,
@@ -97,6 +107,9 @@ export type ActiveRequest = z.infer<typeof activeRequestSchema>;
 
 export const conversationStateSchema = z.object({
   turns: z.array(conversationTurnSchema),
+  /** Past and current threads. `turns` is always the active chat's turns. */
+  chats: z.array(conversationChatSchema).default([]),
+  activeChatId: z.string().nullable().default(null),
   activeRequest: activeRequestSchema.nullable(),
   clarificationsAsked: z.number().int().nonnegative(),
   /** Tools the harness ran on the latest turn. */
@@ -109,6 +122,8 @@ export type ConversationState = z.infer<typeof conversationStateSchema>;
 export function emptyConversationState(): ConversationState {
   return {
     turns: [],
+    chats: [],
+    activeChatId: null,
     activeRequest: null,
     clarificationsAsked: 0,
     plan: { steps: [] },
@@ -116,13 +131,139 @@ export function emptyConversationState(): ConversationState {
   };
 }
 
+const DOCTOR_PLACE = /doctor|medicine|clinic|checkup|physician/i;
+
+/** Short topic label for the Chat history list. */
+export function chatTitleForIntent(intent: ConversationIntent, destination?: string): string {
+  switch (intent) {
+    case "ride":
+      return destination && DOCTOR_PLACE.test(destination) ? "Doctor ride" : "Ride";
+    case "medication_reminder":
+      return "Medication reminder";
+    case "hospital_schedule":
+      return "Hospital visit";
+    case "appointment_info":
+      return "Appointment";
+    case "family_update":
+      return "Family update";
+    default:
+      return "New chat";
+  }
+}
+
+function chatSortTime(chat: ConversationChat): number {
+  const stamp = chat.turns.at(-1)?.timestamp ?? chat.startedAt;
+  const ms = Date.parse(stamp);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+/** Current / active chat first, then older threads by last turn. */
+export function chatsNewestFirst(chats: ConversationChat[], activeChatId?: string | null): ConversationChat[] {
+  return [...chats].sort((a, b) => {
+    if (activeChatId) {
+      if (a.id === activeChatId) return -1;
+      if (b.id === activeChatId) return 1;
+    }
+    return chatSortTime(b) - chatSortTime(a);
+  });
+}
+
+export function activeChat(state: ConversationState): ConversationChat | undefined {
+  return state.chats.find((chat) => chat.id === state.activeChatId);
+}
+
+export function syncActiveTurns(state: ConversationState): void {
+  state.turns = activeChat(state)?.turns ?? [];
+}
+
+function allocateChatId(state: ConversationState, timestamp: string): string {
+  const stamp = timestamp.replace(/[^\d]/g, "") || String(state.chats.length + 1);
+  let id = `chat_${stamp}`;
+  let n = 1;
+  while (state.chats.some((chat) => chat.id === id)) {
+    n += 1;
+    id = `chat_${stamp}_${n}`;
+  }
+  return id;
+}
+
+function applyActiveChat(state: ConversationState, chat: ConversationChat): ConversationChat {
+  state.activeChatId = chat.id;
+  state.turns = chat.turns;
+  return chat;
+}
+
+/** Always starts a fresh thread. Maria must ask for this — topics do not split alone. */
+export function startNewChat(state: ConversationState, timestamp: string): ConversationChat {
+  const chat: ConversationChat = {
+    id: allocateChatId(state, timestamp),
+    title: chatTitleForIntent("unknown"),
+    intent: "unknown",
+    startedAt: timestamp,
+    turns: [],
+  };
+  state.chats.push(chat);
+  state.activeRequest = null;
+  state.clarificationsAsked = 0;
+  state.plan = { steps: [] };
+  state.failure = null;
+  return applyActiveChat(state, chat);
+}
+
+export function ensureActiveChat(state: ConversationState, timestamp: string): ConversationChat {
+  const existing = activeChat(state);
+  if (existing) {
+    state.turns = existing.turns;
+    return existing;
+  }
+  return startNewChat(state, timestamp);
+}
+
+export function selectChat(state: ConversationState, chatId: string): ConversationChat | undefined {
+  const chat = state.chats.find((item) => item.id === chatId);
+  if (!chat) return undefined;
+  return applyActiveChat(state, chat);
+}
+
+/** Every thread's turns, oldest first — caretaker activity reads this. */
+export function allConversationTurns(state: ConversationState): ConversationTurn[] {
+  return (state.chats ?? [])
+    .flatMap((chat) => chat.turns)
+    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+}
+
+export function applyChatTitleFromRequest(
+  chat: ConversationChat,
+  activeRequest: ActiveRequest | null,
+): void {
+  if (!activeRequest) return;
+  chat.intent = activeRequest.intent;
+  chat.title = chatTitleForIntent(activeRequest.intent, activeRequest.destination);
+}
+
 /** `POST /conversation/turn` body. */
 export const conversationTurnRequestSchema = z.object({
   transcript: z.string().trim().min(1),
   sessionId: z.string().min(1).optional(),
   actor: z.enum(["senior", "caretaker"]).default("senior"),
+  /** When set, this thread becomes active before the turn is recorded. */
+  chatId: z.string().min(1).optional(),
 });
 export type ConversationTurnRequest = z.infer<typeof conversationTurnRequestSchema>;
+
+/** `POST /conversation/chats` body. Omit `chatId` to start a new thread. */
+export const conversationChatRequestSchema = z.object({
+  sessionId: z.string().min(1).optional(),
+  chatId: z.string().min(1).optional(),
+});
+export type ConversationChatRequest = z.infer<typeof conversationChatRequestSchema>;
+
+export const conversationChatResponseSchema = z.object({
+  sessionId: z.string(),
+  chatId: z.string(),
+  conversation: conversationStateSchema,
+});
+export type ConversationChatResponse = z.infer<typeof conversationChatResponseSchema>;
 
 /** `POST /conversation/turn` response. */
 export const conversationTurnResponseSchema = z.object({

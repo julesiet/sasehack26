@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  COMPOSIO_GMAIL_SEND_TOOL,
   computeArrivalTarget,
   conversationTurnResponseSchema,
   getMariaAppointment,
@@ -42,6 +43,7 @@ describe("runConversationTurn", () => {
       "find_ride_options",
     ]);
     expect(reply.failure).toBeNull();
+    expect(sessionStore.get("voice-1").lastRideOptions.length).toBeGreaterThan(0);
   });
 
   it("looks up the appointment and ride options through the audited tool path", async () => {
@@ -70,6 +72,7 @@ describe("runConversationTurn", () => {
 
     expect(reply.kind).toBe("proposal");
     expect(reply.reply).toBe("The Uber is $24.50. Should I book it?");
+    expect(reply.reply).not.toMatch(/\b(diagnos(?:is|e|ed)?|prescription|etiology|contraindication)\b/i);
     expect(reply.activeRequest?.status).toBe("accepted");
     expect(reply.pendingApproval?.tool).toBe("book_ride");
     expect(reply.pendingApproval?.estimate).toBe("$24.50");
@@ -123,18 +126,57 @@ describe("runConversationTurn", () => {
   });
 
   it("previews a caretaker message and only sends after yes", async () => {
-    const draft = await turn("Please tell my family I am going to the doctor.");
+    const { kasamaComposio } = await import("./composio");
+    const executeSpy = vi.spyOn(kasamaComposio, "execute").mockResolvedValue({
+      userId: "senior_maria",
+      sessionId: "composio_session",
+      toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
+      successful: true,
+      logId: "gmail_send_test",
+    });
+
+    try {
+      const draft = await turn("Please tell my family I am going to the doctor.");
+      expect(draft.kind).toBe("proposal");
+      expect(draft.pendingApproval?.tool).toBe("notify_caretaker");
+      expect(draft.pendingApproval?.preview).toBeTruthy();
+      expect(draft.reply).toContain("Should I send it?");
+      expect(sessionStore.get("voice-1").caretakerActivity.some((item) => item.sent)).toBe(false);
+
+      const sent = await turn("Yes");
+      expect(sent.pendingApproval).toBeNull();
+      const view = sessionStore.get("voice-1");
+      expect(view.caretakerActivity.some((item) => item.sent)).toBe(true);
+      expect(view.lastApproval?.decision).toBe("approved");
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("previews an email to James Alvarez from a spoken send request", async () => {
+    const draft = await turn("send an email to james alvarez saying i missed my medication");
     expect(draft.kind).toBe("proposal");
     expect(draft.pendingApproval?.tool).toBe("notify_caretaker");
-    expect(draft.pendingApproval?.preview).toBeTruthy();
+    expect(draft.pendingApproval?.preview).toMatch(/missed.*medication/i);
+    expect(draft.reply).toContain("Preview only. Nothing is sent yet.");
+    expect(draft.reply).toContain("James Alvarez, son");
+    expect(draft.reply).toContain("Health information is included");
     expect(draft.reply).toContain("Should I send it?");
+    const input = sessionStore.get("voice-1").pendingApproval?.input as {
+      recipientName?: string;
+      summary?: string;
+      urgency?: string;
+    };
+    expect(input.recipientName).toBe("James Alvarez");
+    expect(input.urgency).toBe("normal");
+    expect(input.summary).toMatch(/missed her medication/i);
     expect(sessionStore.get("voice-1").caretakerActivity.some((item) => item.sent)).toBe(false);
+  });
 
-    const sent = await turn("Yes");
-    expect(sent.pendingApproval).toBeNull();
-    const view = sessionStore.get("voice-1");
-    expect(view.caretakerActivity.some((item) => item.sent)).toBe(true);
-    expect(view.lastApproval?.decision).toBe("approved");
+  it("previews an email when Maria names Jules", async () => {
+    const draft = await turn("send an email to jules saying I am going to the doctor");
+    const input = sessionStore.get("voice-1").pendingApproval?.input as { recipientName?: string };
+    expect(input.recipientName).toBe("Jules");
   });
 
   it("asks exactly one clarification when the destination is missing", async () => {

@@ -1,11 +1,16 @@
 import {
   bookRideInputSchema,
+  COMPOSIO_GMAIL_SEND_TOOL,
   computeArrivalTarget,
   evaluateToolCall,
   findRideOptionsInputSchema,
   getAppointmentInputSchema,
   getAppointmentResultSchema,
+  getCareSignalResultSchema,
   getMariaAppointment,
+  getMariaSeedBundle,
+  FAMILY_EMAIL_RECIPIENT,
+  familyEmailCopy,
   invokeToolRequestSchema,
   isKnownTool,
   notifyCaretakerInputSchema,
@@ -16,13 +21,14 @@ import {
   saveMedicationReminderInputSchema,
   saveMedicationReminderResultSchema,
   toolInputSchemas,
+  withNotifyRecipient,
+  type CareSignalAction,
   type ToolName,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
 import { sessionStore } from "./session-store";
 import { getUberProvider } from "./uber-provider";
 import { ComposioNotConfiguredError, kasamaComposio } from "./composio";
-import { COMPOSIO_GMAIL_SEND_TOOL } from "@kasama/shared";
 
 export type ToolHttpResult = {
   status: 200 | 400 | 403 | 404;
@@ -57,6 +63,53 @@ function formatTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** Below this, a night counts as "less sleep than usual" for the weekly care signal. */
+const USUAL_SLEEP_HOURS = 7;
+/** This many same-topic repeats in the window counts as a "repeated question" signal. */
+const REPEATED_QUESTION_THRESHOLD = 2;
+
+function firstName(fullName: string): string {
+  return fullName.split(" ")[0] ?? fullName;
+}
+
+function computeCareSignal(): {
+  summary: string;
+  actions: CareSignalAction[];
+  diagnosis: false;
+} {
+  const seed = getMariaSeedBundle();
+  const name = firstName(seed.profile.name);
+
+  const flaggedCount = seed.priorRequests.filter((request) => request.flaggedConfusion).length;
+  const repeatedQuestion = flaggedCount >= REPEATED_QUESTION_THRESHOLD;
+
+  const averageSleepHours =
+    seed.wearableReadings.reduce((total, reading) => total + reading.sleepHours, 0) /
+    seed.wearableReadings.length;
+  const lessSleep = averageSleepHours < USUAL_SLEEP_HOURS;
+
+  const clauses: string[] = [];
+  if (repeatedQuestion) clauses.push(`${name} asked about the same appointment twice`);
+  if (lessSleep) clauses.push("slept less than usual this week");
+
+  if (clauses.length === 0) {
+    return {
+      summary: `Nothing unusual to review for ${name} this week.`,
+      actions: [],
+      diagnosis: false,
+    };
+  }
+
+  const actions: CareSignalAction[] = ["remind", "notify_caretaker"];
+  if (repeatedQuestion && lessSleep) actions.push("doctor_summary");
+
+  return {
+    summary: `${clauses.join(" and ")}.`,
+    actions,
+    diagnosis: false,
+  };
 }
 
 async function executeStub(name: ToolName, input: unknown, options?: { preview?: boolean }) {
@@ -96,11 +149,11 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
       return getUberProvider().book(optionId);
     }
     case "notify_caretaker": {
-      const parsed = notifyCaretakerInputSchema.parse(input);
+      const parsed = withNotifyRecipient(notifyCaretakerInputSchema.parse(input));
       if (options?.preview) {
         return notifyCaretakerResultSchema.parse({
           success: true,
-          summary: `Draft for your family (${parsed.urgency}): ${parsed.summary} Not sent.`,
+          summary: `Draft for ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary} Not sent.`,
           preview: true,
           sent: false,
           draft: parsed,
@@ -111,18 +164,21 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
         notifyCaretakerResultSchema.parse({
           success: true,
           confirmationId: `notify_${Date.now()}`,
-          summary: `Email and SMS sent to your family (${parsed.urgency}): ${parsed.summary}`,
+          summary: `Email sent to ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary}`,
           preview: false,
           sent: true,
           draft: parsed,
         });
 
       try {
+        const email = familyEmailCopy(parsed);
         const composioResult = await kasamaComposio.execute({
           toolSlug: COMPOSIO_GMAIL_SEND_TOOL,
           arguments: {
-            body: parsed.summary,
-            subject: `Note from Kasama about Maria (${parsed.urgency} urgency)`,
+            recipient_email: FAMILY_EMAIL_RECIPIENT,
+            body: email.body,
+            subject: email.subject,
+            is_html: email.isHtml,
           },
         });
 
@@ -142,7 +198,7 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
         return notifyCaretakerResultSchema.parse({
           success: true,
           confirmationId: composioResult.logId ?? `composio_${Date.now()}`,
-          summary: `Email sent to your family (${parsed.urgency}): ${parsed.summary}`,
+          summary: `Email sent to ${parsed.recipientName} (${parsed.urgency}): ${parsed.summary}`,
           preview: false,
           sent: true,
           draft: parsed,
@@ -190,6 +246,13 @@ async function executeStub(name: ToolName, input: unknown, options?: { preview?:
         confirmationId: "visit_st_marys_1",
         summary: `Appointment details saved for ${parsed.placeName}.`,
         visit: parsed,
+      });
+    }
+    case "get_care_signal": {
+      const signal = computeCareSignal();
+      return getCareSignalResultSchema.parse({
+        success: true,
+        ...signal,
       });
     }
     default: {
