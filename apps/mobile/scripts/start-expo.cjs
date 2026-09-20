@@ -7,12 +7,11 @@
  */
 const { spawn } = require("node:child_process");
 const { readFileSync } = require("node:fs");
-const { createRequire } = require("node:module");
 const { networkInterfaces } = require("node:os");
 const { resolve } = require("node:path");
 
 const mobileRoot = resolve(__dirname, "..");
-const requireFromMobile = createRequire(resolve(mobileRoot, "package.json"));
+const isWindows = process.platform === "win32";
 
 function loadEnvFile(file) {
   try {
@@ -84,7 +83,7 @@ loadEnvFile(resolve(mobileRoot, ".env.local"));
 
 const extra = process.argv.slice(2);
 
-if (extra.includes("--ios") && process.platform === "win32") {
+if (extra.includes("--ios") && isWindows) {
   console.error(
     "iOS Simulator needs a Mac. On Windows, run pnpm start and scan the QR in Expo Go on your phone.",
   );
@@ -137,11 +136,23 @@ if (lanHost) {
   );
 }
 
-const expoCli = requireFromMobile.resolve("expo/bin/cli");
-const child = spawn(process.execPath, [expoCli, ...args], {
+// Windows shims are expo.cmd; spawning `.bin/expo` is ENOENT. .cmd also
+// needs `shell: true`. Keep the command relative so paths with spaces
+// (e.g. D:\VSCode Repos\...) are not split by cmd.exe.
+const expoCommand = isWindows
+  ? "node_modules/.bin/expo.cmd"
+  : "node_modules/.bin/expo";
+
+const child = spawn(expoCommand, args, {
   cwd: mobileRoot,
   env: process.env,
   stdio: "inherit",
+  shell: isWindows,
+});
+
+child.on("error", (error) => {
+  console.error(`Failed to start Expo (${expoCommand}): ${error.message}`);
+  process.exit(1);
 });
 
 child.on("exit", (code, signal) => {
