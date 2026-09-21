@@ -244,6 +244,42 @@ export function applyChatTitleFromRequest(
 }
 
 /**
+ * Which live cards Chat should show. Ride option rows stay on ride threads;
+ * a family-email checkpoint is a MESSAGE TO card, never the Uber chooser.
+ */
+export function seniorThreadCards(input: {
+  live: boolean;
+  intent: ConversationIntent;
+  hasRideOptions: boolean;
+  pendingTool?: string | null;
+  justResolvedTool?: string | null;
+  justResolvedDecision?: "approved" | "declined" | null;
+  bookingStatus?: string | null;
+  activeStatus?: ActiveRequest["status"] | null;
+  reminderPending?: boolean;
+  hospitalPending?: boolean;
+}): { showRideOptions: boolean; showFamilyMessage: boolean } {
+  const pendingTool = input.pendingTool ?? null;
+  const showFamilyMessage =
+    input.live &&
+    (pendingTool === "notify_caretaker" || input.justResolvedTool === "notify_caretaker");
+  const rideFinished =
+    input.bookingStatus === "booked" && !pendingTool && input.activeStatus !== "proposed";
+  const showRideOptions =
+    input.live &&
+    input.intent === "ride" &&
+    input.hasRideOptions &&
+    input.justResolvedDecision !== "approved" &&
+    !rideFinished &&
+    !input.reminderPending &&
+    !input.hospitalPending &&
+    pendingTool !== "notify_caretaker" &&
+    pendingTool !== "save_medication_reminder" &&
+    pendingTool !== "save_hospital_visit";
+  return { showRideOptions, showFamilyMessage };
+}
+
+/**
  * True when Kasama is about to list UberX / WAV in chat. The iPhone already
  * shows those as tappable cards — do not also narrate them.
  */

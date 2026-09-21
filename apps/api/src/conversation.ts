@@ -402,7 +402,14 @@ async function finishDecidedTurn(
   now: Date,
   decided: HarnessTurnResult,
 ): Promise<HarnessTurnResult> {
-  let next = await openCareCheckpoint(sessionId, await maybeOpenBookingCheckpoint(sessionId, decided));
+  let next = decided;
+  if (
+    wantsNotify(normalize(transcript)) &&
+    sessionStore.get(sessionId).pendingApproval?.tool !== "notify_caretaker"
+  ) {
+    next = await openNotifyCheckpoint(sessionId, notifyBodyFromTranscript(transcript), transcript);
+  }
+  next = await openCareCheckpoint(sessionId, await maybeOpenBookingCheckpoint(sessionId, next));
   if (careRulesNeeded(transcript, state, next, sessionId)) {
     next = await openCareCheckpoint(
       sessionId,
@@ -441,13 +448,18 @@ function applyPendingPrompt(sessionId: string, decided: HarnessTurnResult): Harn
   if (pending.tool === "save_medication_reminder" || pending.tool === "save_hospital_visit") {
     return { ...decided, kind: "proposal" };
   }
-  const text =
-    pending.preview && pending.tool === "notify_caretaker"
-      ? `${pending.preview} ${pending.prompt}`
-      : pending.prompt;
+  if (pending.tool === "notify_caretaker") {
+    const text = pending.preview ? `${pending.preview} ${pending.prompt}` : pending.prompt;
+    return {
+      ...decided,
+      text,
+      kind: "proposal",
+      activeRequest: { intent: "family_update", status: "proposed" },
+    };
+  }
   return {
     ...decided,
-    text,
+    text: pending.prompt,
     kind: "proposal",
     activeRequest:
       decided.activeRequest ??

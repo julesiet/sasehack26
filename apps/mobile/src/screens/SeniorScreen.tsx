@@ -58,8 +58,9 @@ function orbModeFor(phase: ConversationPhase): OrbMode {
 }
 
 /**
- * Senior mode. Home is the sun welcome. Chat is the history list, then a
- * titled thread. Tasks lists confirmed reminders and saved hospital visits.
+ * Senior mode. Home is the sun welcome; talking there starts a new Chat
+ * row and makes it current. Chat is the history list, then a titled
+ * thread. Tasks lists confirmed reminders and saved hospital visits.
  * Composer stays on Home and on an open thread, above a compact tab bar.
  */
 export function SeniorScreen({ onBack }: Props) {
@@ -137,7 +138,7 @@ export function SeniorScreen({ onBack }: Props) {
     const text = draft.trim();
     if (!text) return;
     setDraft("");
-    void submitText(text);
+    void submitText(text, { newChat: onHome });
   };
 
   const selectTab = (next: SeniorTab) => {
@@ -228,7 +229,7 @@ export function SeniorScreen({ onBack }: Props) {
               value={draft}
               onChangeText={setDraft}
               onSubmit={handleSubmit}
-              onPressMic={() => void pressMic()}
+              onPressMic={() => void pressMic({ newChat: onHome })}
               onPressMore={() => setMenuOpen(true)}
             />
           </View>

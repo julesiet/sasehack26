@@ -141,6 +141,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
   const mounted = useRef(true);
+  const newChatOnNextTurn = useRef(false);
 
   const stopVoice = useCallback(() => {
     void Speech.stop();
@@ -245,9 +246,28 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
   );
 
   const sendTurn = useCallback(
-    async (transcript: string) => {
+    async (transcript: string, options?: { newChat?: boolean }) => {
       const clean = transcript.trim();
       if (!clean) return;
+      const startFresh = options?.newChat ?? newChatOnNextTurn.current;
+      newChatOnNextTurn.current = false;
+      let chatId = state.openedChatId ?? state.activeChatId ?? undefined;
+      let startedChats: ConversationChat[] | undefined;
+      if (startFresh) {
+        try {
+          const started = await postConversationChat(sessionId);
+          if (!mounted.current) return;
+          chatId = started.chatId;
+          startedChats = started.conversation.chats;
+        } catch {
+          patch({
+            phase: "error",
+            rideWork: "none",
+            notice: "Kasama could not start a new chat. Please try again.",
+          });
+          return;
+        }
+      }
       const localTurn: ConversationTurn = {
         id: `local_${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -255,26 +275,26 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         text: clean,
       };
       setState((prev) => {
-        const chatId = prev.openedChatId ?? prev.activeChatId;
+        const chats = startedChats ?? prev.chats;
         return {
           ...prev,
           phase: "thinking",
           seniorText: clean,
           notice: null,
           justResolved: null,
-          openedChatId: prev.openedChatId ?? prev.activeChatId,
+          openedChatId: chatId ?? prev.openedChatId,
+          activeChatId: chatId ?? prev.activeChatId,
           rideWork:
             looksLikeRide(clean) && prev.lastRideOptions.length === 0 && !prev.lastBooking
               ? "finding"
               : "none",
-          turns: [...prev.turns, localTurn],
-          chats: prev.chats.map((chat) =>
+          turns: [...(chats.find((chat) => chat.id === chatId)?.turns ?? prev.turns), localTurn],
+          chats: chats.map((chat) =>
             chat.id === chatId ? { ...chat, turns: [...chat.turns, localTurn] } : chat,
           ),
         };
       });
       try {
-        const chatId = state.openedChatId ?? state.activeChatId ?? undefined;
         const reply = await postConversationTurn(clean, sessionId, chatId);
         const session = await fetchSession(sessionId);
         if (mounted.current) {
@@ -286,7 +306,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
               !reply.pendingApproval && prev.pendingApproval && session.lastApproval
                 ? session.lastApproval
                 : null,
-            openedChatId: prev.openedChatId ?? session.conversation.activeChatId,
+            openedChatId: chatId ?? prev.openedChatId ?? session.conversation.activeChatId,
             rideWork: "none",
           }));
         }
@@ -317,11 +337,13 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
       if (!uri) throw new Error("No recording");
       const transcript = await transcribeRecording(uri);
       if (!transcript.trim()) {
+        newChatOnNextTurn.current = false;
         patch({ phase: "error", notice: "I didn't catch that. Please try again, or type below." });
         return;
       }
       await sendTurn(transcript);
     } catch (error) {
+      newChatOnNextTurn.current = false;
       if (error instanceof ApiError && error.code === "stt_not_configured") {
         patch({
           phase: "idle",
@@ -340,6 +362,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
       permission = await requestRecordingPermissionsAsync();
     }
     if (!permission.granted) {
+      newChatOnNextTurn.current = false;
       patch({ phase: "micDenied", notice: null });
       return;
     }
@@ -352,12 +375,13 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
         void stopListening();
       }, MAX_RECORDING_MS);
     } catch {
+      newChatOnNextTurn.current = false;
       patch({ phase: "error", notice: "The microphone isn't ready. Please try again, or type below." });
     }
   }, [patch, recorder, stopListening]);
 
   /** Primary mic button. Behaviour depends on the current phase. */
-  const pressMic = useCallback(async () => {
+  const pressMic = useCallback(async (options?: { newChat?: boolean }) => {
     switch (state.phase) {
       case "listening":
         await stopListening();
@@ -376,6 +400,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
       case "thinking":
         return;
       default:
+        newChatOnNextTurn.current = Boolean(options?.newChat);
         await startListening();
     }
   }, [
@@ -389,10 +414,10 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
   ]);
 
   const submitText = useCallback(
-    async (text: string) => {
+    async (text: string, options?: { newChat?: boolean }) => {
       if (state.phase === "listening" || state.phase === "thinking") return;
       stopVoice();
-      await sendTurn(text);
+      await sendTurn(text, options);
     },
     [sendTurn, state.phase, stopVoice],
   );
@@ -433,7 +458,7 @@ export function useKasamaConversation(sessionId: string = DEFAULT_SESSION_ID) {
     async (option: UberRideOption) => {
       if (state.phase === "listening" || state.phase === "thinking") return;
       if (pendingRideOptionId(state.pendingApproval) === option.optionId) return;
-      await sendTurn(spokenRideChoice(option.product));
+      await sendTurn(spokenRideChoice(option.product), { newChat: false });
     },
     [sendTurn, state.pendingApproval, state.phase],
   );

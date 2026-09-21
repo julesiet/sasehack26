@@ -10,6 +10,7 @@ import {
   emptyConversationState,
   ensureActiveChat,
   speakRequestSchema,
+  seniorThreadCards,
   startNewChat,
   type ConversationChat,
   type ConversationTurn,
@@ -207,6 +208,40 @@ describe("conversation contract", () => {
   it("requires reply text for Kasama's voice", () => {
     expect(speakRequestSchema.safeParse({ text: "Should I set that up?" }).success).toBe(true);
     expect(speakRequestSchema.safeParse({ text: "  " }).success).toBe(false);
+  });
+
+  it("does not show Uber option cards on a family email checkpoint", () => {
+    const email = seniorThreadCards({
+      live: true,
+      intent: "ride",
+      hasRideOptions: true,
+      pendingTool: "notify_caretaker",
+      bookingStatus: "booked",
+    });
+    expect(email.showRideOptions).toBe(false);
+    expect(email.showFamilyMessage).toBe(true);
+
+    const leftover = seniorThreadCards({
+      live: true,
+      intent: "unknown",
+      hasRideOptions: true,
+      pendingTool: "notify_caretaker",
+      bookingStatus: "booked",
+    });
+    expect(leftover.showRideOptions).toBe(false);
+    expect(leftover.showFamilyMessage).toBe(true);
+  });
+
+  it("still shows Uber option cards on an open ride thread", () => {
+    const choosing = seniorThreadCards({
+      live: true,
+      intent: "ride",
+      hasRideOptions: true,
+      activeStatus: "proposed",
+      bookingStatus: "booked",
+    });
+    expect(choosing.showRideOptions).toBe(true);
+    expect(choosing.showFamilyMessage).toBe(false);
   });
 
   it("detects a chat line that lists UberX and WAV so the cards can stand alone", () => {

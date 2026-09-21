@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   COMPOSIO_GMAIL_SEND_TOOL,
   computeArrivalTarget,
+  conversationChatResponseSchema,
   conversationTurnResponseSchema,
   getMariaAppointment,
 } from "@kasama/shared";
 import { auditLog } from "./audit-log";
-import { runConversationTurn } from "./conversation";
+import { runConversationChat, runConversationTurn } from "./conversation";
 import { sessionStore } from "./session-store";
 import { resetControlledUberProvider } from "./uber-provider";
 
@@ -171,7 +172,113 @@ describe("runConversationTurn", () => {
     expect(input.recipientName).toBe("James Alvarez");
     expect(input.urgency).toBe("normal");
     expect(input.summary).toMatch(/missed her medication/i);
+    expect(draft.activeRequest?.intent).toBe("family_update");
+    expect(sessionStore.get("voice-1").conversation.chats.at(-1)?.title).toBe("Family update");
     expect(sessionStore.get("voice-1").caretakerActivity.some((item) => item.sent)).toBe(false);
+  });
+
+  it("keeps a ChatGPT notify draft as a family update, not a ride", async () => {
+    let calls = 0;
+    const result = await runConversationTurn(
+      {
+        transcript: "send an email to james alvarez saying i missed my medication",
+        sessionId: "notify-harness",
+      },
+      {
+        complete: async () => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: {
+                    name: "notify_caretaker",
+                    arguments: JSON.stringify({
+                      summary: "Maria missed her medication reminder.",
+                      urgency: "normal",
+                      recipientName: "James Alvarez",
+                    }),
+                  },
+                },
+              ],
+            };
+          }
+          return { role: "assistant", content: "I drafted a note for James." };
+        },
+      },
+    );
+    expect(result.status).toBe(200);
+    const body = conversationTurnResponseSchema.parse(result.body);
+    expect(body.pendingApproval?.tool).toBe("notify_caretaker");
+    expect(body.activeRequest?.intent).toBe("family_update");
+    expect(sessionStore.get("notify-harness").conversation.chats[0]?.intent).toBe("family_update");
+    expect(sessionStore.get("notify-harness").conversation.chats[0]?.title).toBe("Family update");
+  });
+
+  it("still drafts a family email when ChatGPT searches Uber instead", async () => {
+    const appointment = getMariaAppointment();
+    let calls = 0;
+    const result = await runConversationTurn(
+      {
+        transcript: "send an email to james alvarez saying i missed my medication",
+        sessionId: "notify-not-ride",
+      },
+      {
+        complete: async () => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: {
+                    name: "find_ride_options",
+                    arguments: JSON.stringify({
+                      pickup: appointment.pickup,
+                      destination: appointment.destination,
+                      arriveBy: computeArrivalTarget(appointment),
+                    }),
+                  },
+                },
+              ],
+            };
+          }
+          return {
+            role: "assistant",
+            content: "I found two Uber options. Which one would you like?",
+          };
+        },
+      },
+    );
+    expect(result.status).toBe(200);
+    const body = conversationTurnResponseSchema.parse(result.body);
+    expect(body.pendingApproval?.tool).toBe("notify_caretaker");
+    expect(body.activeRequest?.intent).toBe("family_update");
+  });
+
+  it("starts a family email on a new chat without retitling the seeded doctor ride", async () => {
+    const started = runConversationChat({ sessionId: "default" });
+    expect(started.status).toBe(200);
+    const chatId = conversationChatResponseSchema.parse(started.body).chatId;
+    await runConversationTurn({
+      transcript: "send an email to james alvarez saying i missed my medication",
+      sessionId: "default",
+      chatId,
+    });
+    const view = sessionStore.get("default");
+    const ride = view.conversation.chats.find((chat) => chat.title === "Doctor ride");
+    expect(ride?.intent).toBe("ride");
+    expect(view.conversation.activeChatId).toBe(chatId);
+    const current = view.conversation.chats.find((chat) => chat.id === chatId);
+    expect(current?.title).toBe("Family update");
+    expect(current?.intent).toBe("family_update");
   });
 
   it("previews an email when Maria names Jules", async () => {
@@ -606,6 +713,51 @@ describe("runConversationTurn", () => {
     );
     expect(reply.reply).not.toMatch(/booked/i);
     expect(sessionStore.get("voice-1").lastBooking).toEqual(firstBooking);
+  });
+
+  it("does not write a bare every onto Tasks when ChatGPT omits the cadence", async () => {
+    let calls = 0;
+    const result = await runConversationTurn(
+      { transcript: "Remind me to take Lisinopril every 4 days", sessionId: "freq-every" },
+      {
+        complete: async () => {
+          calls += 1;
+          if (calls === 1) {
+            return {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: {
+                    name: "save_medication_reminder",
+                    arguments: JSON.stringify({
+                      name: "Lisinopril",
+                      frequency: "every",
+                      intervalDays: 4,
+                    }),
+                  },
+                },
+              ],
+            };
+          }
+          return { role: "assistant", content: "I'll set that up for you." };
+        },
+      },
+    );
+    expect(result.status).toBe(200);
+    const body = conversationTurnResponseSchema.parse(result.body);
+    expect(body.pendingApproval?.tool).toBe("save_medication_reminder");
+    expect(body.pendingApproval?.input).toMatchObject({
+      name: "Lisinopril",
+      frequency: "Every 4 days",
+      intervalDays: 4,
+    });
+    expect(body.activeRequest).toMatchObject({
+      frequency: "Every 4 days",
+      intervalDays: 4,
+    });
   });
 
   it("opens a medication reminder card without changing a prescription", async () => {

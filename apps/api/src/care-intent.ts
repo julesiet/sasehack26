@@ -1,4 +1,9 @@
-import { formatHospitalTimeLabel, formatIsoTimeLabel, MARIA_NEARBY_HOSPITAL } from "@kasama/shared";
+import {
+  formatHospitalTimeLabel,
+  formatIsoTimeLabel,
+  MARIA_NEARBY_HOSPITAL,
+  medicationFrequencyLabel,
+} from "@kasama/shared";
 
 const STOP_MED_NAMES = new Set(["my", "the", "a", "an", "some", "this"]);
 const CLOCK_RE = /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i;
@@ -35,13 +40,9 @@ export function parseMedicationReminder(text: string): {
   const name = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
   return {
     name,
-    frequency: frequencyLabel(intervalDays),
+    frequency: medicationFrequencyLabel(intervalDays),
     intervalDays,
   };
-}
-
-function frequencyLabel(intervalDays: number): string {
-  return intervalDays === 1 ? "Every day" : `Every ${intervalDays} days`;
 }
 
 export function looksLikeHospitalSchedule(text: string, isRide: boolean): boolean {

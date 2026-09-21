@@ -12,6 +12,7 @@ import {
   formatHospitalTimeLabel,
   getMariaAppointment,
   isKnownTool,
+  saveMedicationReminderInputSchema,
   simpleLanguageInstruction,
   type ActiveRequest,
   type AuditEvent,
@@ -103,7 +104,10 @@ export const KASAMA_CHAT_TOOLS = [
         type: "object",
         properties: {
           name: { type: "string" },
-          frequency: { type: "string" },
+          frequency: {
+            type: "string",
+            description: 'Speakable cadence like "Every 4 days" or "Every day". Never just "every".',
+          },
           intervalDays: { type: "number" },
           saveLocally: { type: "boolean" },
         },
@@ -234,6 +238,10 @@ async function executeKasamaTool(
   }
   if (name === "save_hospital_visit" && typeof input.timeLabel === "string") {
     input = { ...input, timeLabel: formatHospitalTimeLabel(input.timeLabel) };
+  }
+  if (name === "save_medication_reminder") {
+    const reminder = saveMedicationReminderInputSchema.safeParse(input);
+    if (reminder.success) input = reminder.data;
   }
 
   const result = await invokeTool(name, {
@@ -370,10 +378,22 @@ function inferReply(
     };
   }
 
-  if (booked || notified) {
-    const denied = (booked ?? notified)?.step.status === "denied";
-    const notifyWaiting = notified && notified.body.sent === false;
-    if (denied || notifyWaiting) {
+  if (notified) {
+    const waiting = notified.step.status === "denied" || notified.body.sent === false;
+    return {
+      kind: waiting ? "proposal" : "answer",
+      activeRequest: {
+        intent: "family_update",
+        status: waiting ? "proposed" : "accepted",
+      },
+      askedClarification: false,
+      failure,
+    };
+  }
+
+  if (booked) {
+    const denied = booked.step.status === "denied";
+    if (denied) {
       const wasProposed = previous?.status === "proposed";
       return {
         kind: wasProposed ? "answer" : "proposal",

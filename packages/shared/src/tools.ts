@@ -105,14 +105,62 @@ export const notifyCaretakerResultSchema = z.object({
   draft: notifyCaretakerDraftSchema.optional(),
 });
 
+/** Speakable cadence for Tasks and the reminder card (`Every 4 days`). */
+export function medicationFrequencyLabel(intervalDays: number): string {
+  const days = Math.max(1, Math.trunc(intervalDays) || 1);
+  return days === 1 ? "Every day" : `Every ${days} days`;
+}
+
+/** Pull a day count out of copy like `every 4 days` when ChatGPT omits intervalDays. */
+export function intervalDaysFromFrequency(frequency: string): number | undefined {
+  const everyN = frequency.match(/every\s+(\d+)\s+days?/i);
+  if (everyN) {
+    const days = Number(everyN[1]);
+    return days > 0 ? days : undefined;
+  }
+  if (/\b(every\s+day|once a day|once daily|daily)\b/i.test(frequency)) return 1;
+  if (/\bevery\s+other\s+day\b/i.test(frequency)) return 2;
+  return undefined;
+}
+
+function isIncompleteMedicationFrequency(frequency: string): boolean {
+  const trimmed = frequency.trim();
+  if (!trimmed || /^as discussed$/i.test(trimmed)) return true;
+  if (/^every\.?$/i.test(trimmed)) return true;
+  return /^every\b/i.test(trimmed) && !/\d/.test(trimmed) && !/\b(day|week|month|hour|morning|night|evening)/i.test(trimmed);
+}
+
+/** Never store a bare "every" — Tasks needs the how-often. */
+export function speakableMedicationFrequency(frequency: string, intervalDays: number): string {
+  const days = intervalDaysFromFrequency(frequency) ?? intervalDays;
+  if (
+    isIncompleteMedicationFrequency(frequency) ||
+    /every\s+\d+\s+days?/i.test(frequency) ||
+    /\bevery\s+day\b/i.test(frequency) ||
+    /^\s*daily\s*$/i.test(frequency)
+  ) {
+    return medicationFrequencyLabel(days);
+  }
+  return frequency.trim();
+}
+
 /** Local task only — never a prescription change. */
-export const saveMedicationReminderInputSchema = z.object({
-  name: z.string().min(1),
-  frequency: z.string().min(1),
-  intervalDays: z.number().int().positive(),
-  /** Skip the (stub) health provider and keep the reminder on-device. */
-  saveLocally: z.boolean().optional(),
-});
+export const saveMedicationReminderInputSchema = z
+  .object({
+    name: z.string().min(1),
+    frequency: z.string().min(1),
+    intervalDays: z.number().int().positive(),
+    /** Skip the (stub) health provider and keep the reminder on-device. */
+    saveLocally: z.boolean().optional(),
+  })
+  .transform((value) => {
+    const intervalDays = intervalDaysFromFrequency(value.frequency) ?? value.intervalDays;
+    return {
+      ...value,
+      intervalDays,
+      frequency: speakableMedicationFrequency(value.frequency, intervalDays),
+    };
+  });
 
 export const medicationReminderSchema = z.object({
   name: z.string(),

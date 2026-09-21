@@ -7,6 +7,7 @@ import {
   pendingMedicationReminder,
   selectedRideOption,
   announcesRideOptions,
+  seniorThreadCards,
   type ActiveRequest,
   type ConversationIntent,
   type ConversationTurn,
@@ -105,30 +106,28 @@ export function SeniorChatScreen({
     lastHospitalVisit?.status === "saved" && hospitalJustResolved && justResolved?.decision === "approved";
   const hospitalCancelled =
     lastHospitalVisit?.status === "cancelled" && hospitalJustResolved;
-  const rideFinished =
-    lastBooking?.status === "booked" && !pendingApproval && activeRequest?.status !== "proposed";
-  const rideIntent = intent === "ride" || intent === "unknown";
+  const rideIntent = intent === "ride";
   const reminderIntent = intent === "medication_reminder" || intent === "unknown";
   const hospitalIntent = intent === "hospital_schedule" || intent === "unknown";
-  const notifyIntent = intent === "family_update" || intent === "unknown";
   const notify = familyMessageFromApproval(pendingApproval, justResolved);
-  const showOptions =
-    liveCards &&
-    rideIntent &&
-    lastRideOptions.length > 0 &&
-    justResolved?.decision !== "approved" &&
-    !rideFinished &&
-    !reminder &&
-    !hospitalPending;
+  const { showRideOptions: showOptions, showFamilyMessage: showNotify } = seniorThreadCards({
+    live: liveCards,
+    intent,
+    hasRideOptions: lastRideOptions.length > 0,
+    pendingTool: pendingApproval?.tool,
+    justResolvedTool: justResolved?.tool,
+    justResolvedDecision: justResolved?.decision,
+    bookingStatus: lastBooking?.status,
+    activeStatus: activeRequest?.status,
+    reminderPending: Boolean(reminder),
+    hospitalPending: Boolean(hospitalPending),
+  });
   const showRideConfirmation =
     liveCards &&
     rideIntent &&
     Boolean(card && cardStatus && !reminder && !hospitalPending) &&
-    (pendingApproval?.tool === "book_ride" || justResolved?.tool === "book_ride");
-  const showNotify =
-    liveCards &&
-    notifyIntent &&
-    (pendingApproval?.tool === "notify_caretaker" || justResolved?.tool === "notify_caretaker");
+    (pendingApproval?.tool === "book_ride" || justResolved?.tool === "book_ride") &&
+    !showNotify;
   const busy = phase === "thinking" || rideWork !== "none";
 
   useEffect(() => {
@@ -168,7 +167,7 @@ export function SeniorChatScreen({
           <ChatBubble key={turn.id} speaker={turn.speaker} text={turn.text} />
         ))}
 
-      {liveCards && rideIntent && (rideWork === "finding" || rideWork === "booking") ? (
+      {liveCards && (rideWork === "finding" || rideWork === "booking") && !showNotify ? (
         <View style={styles.cardWrap}>
           <RideStatusCard work={rideWork} />
         </View>

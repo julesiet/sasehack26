@@ -224,4 +224,37 @@ describe("runHarnessTurn", () => {
     expect(system).toContain("Never diagnose. Never change medication.");
     expect(system).toContain("Do not list those options or their prices.");
   });
+
+  it("treats a notify_caretaker draft as a family update, not a ride", async () => {
+    const complete = scripted([
+      assistantTools([
+        {
+          name: "notify_caretaker",
+          args: {
+            summary: "Maria missed her medication reminder.",
+            urgency: "normal",
+            recipientName: "James Alvarez",
+          },
+        },
+      ]),
+      assistantText("I drafted a note for James."),
+    ]);
+
+    const result = await runHarnessTurn({
+      transcript: "send an email to james alvarez saying i missed my medication",
+      sessionId: "harness-notify",
+      state: emptyConversationState(),
+      now: NOW,
+      complete,
+    });
+
+    expect(result.kind).toBe("proposal");
+    expect(result.activeRequest).toMatchObject({
+      intent: "family_update",
+      status: "proposed",
+    });
+    expect(result.plan.steps.map((step) => step.tool)).toEqual(["notify_caretaker"]);
+    expect(sessionStore.get("harness-notify").pendingApproval?.tool).toBe("notify_caretaker");
+    expect(sessionStore.get("harness-notify").lastBooking).toBeNull();
+  });
 });
