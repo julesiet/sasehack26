@@ -10,6 +10,8 @@ import {
   conversationTurnRequestSchema,
   conversationTurnResponseSchema,
   findRideOptionsResultSchema,
+  formatPickupWhen,
+  formatRelativeDay,
   getAppointmentResultSchema,
   getMariaAppointment,
   isKasamaDemoEnabled,
@@ -41,6 +43,8 @@ import {
   parseAppointmentTime,
   formatSpeakableTimeLabel,
   parseMedicationReminder,
+  spokenClockPresent,
+  spokenDateTime,
   tidyAppointmentReason,
 } from "./care-intent";
 import { openaiChatComplete, type ChatComplete } from "./model";
@@ -103,12 +107,7 @@ function formatTime(iso: string): string {
 }
 
 function describeDay(iso: string, now: Date): string {
-  const target = isoDate(new Date(iso));
-  if (target === isoDate(now)) return "today";
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  if (target === isoDate(tomorrow)) return "tomorrow";
-  return new Date(iso).toLocaleDateString("en-US", { weekday: "long" });
+  return formatRelativeDay(iso, now);
 }
 
 /** "Dr. Chen — annual checkup" → "checkup with Dr. Chen"; falls back to the title. */
@@ -224,7 +223,8 @@ function applySpokenProduct(
   decided: HarnessTurnResult,
   previous: ActiveRequest | null,
   sessionId: string,
-): HarnessTurnResult {
+  now: Date = new Date(),
+): Promise<HarnessTurnResult> {
   const product = spokenProduct(normalize(transcript));
   const active =
     decided.activeRequest?.intent === "ride"
@@ -233,16 +233,62 @@ function applySpokenProduct(
         ? previous
         : null;
   if (!product || !active) {
-    return decided;
+    return applySpokenRideTime(transcript, decided, sessionId, now);
   }
   const answeringProposal = previous?.intent === "ride" && previous.status === "proposed";
   const hasOptions = sessionStore.get(sessionId).lastRideOptions.length > 0;
+  return applySpokenRideTime(
+    transcript,
+    {
+      ...decided,
+      activeRequest: {
+        ...active,
+        product,
+        status: answeringProposal || hasOptions ? "accepted" : active.status,
+      },
+    },
+    sessionId,
+    now,
+  );
+}
+
+async function applySpokenRideTime(
+  transcript: string,
+  decided: HarnessTurnResult,
+  sessionId: string,
+  now: Date,
+): Promise<HarnessTurnResult> {
+  const active = decided.activeRequest?.intent === "ride" ? decided.activeRequest : null;
+  if (!active || !spokenClockPresent(transcript)) return decided;
+  const when = spokenDateTime(transcript, now);
+  if (!when) return decided;
+  const destination = active.destination ?? getMariaAppointment(now).destination;
+  const alreadySet =
+    Boolean(active.arriveBy) && new Date(active.arriveBy ?? "").getTime() === when.getTime();
+  if (active.status !== "gathering" && !alreadySet) {
+    await searchRides(sessionId, destination, when.toISOString());
+  }
+  let text = decided.text;
+  if (!/\btomorrow\b/i.test(transcript)) {
+    text = text.replace(/\btomorrow\b/gi, formatRelativeDay(when.toISOString(), now));
+  }
+  const clock = formatTime(when.toISOString());
+  if (!text.includes(clock)) {
+    const seed = getMariaAppointment(now);
+    text = text.replace(formatTime(seed.start), clock);
+    const lead = new Date(seed.start);
+    lead.setMinutes(lead.getMinutes() - 15);
+    text = text.replace(formatTime(lead.toISOString()), clock);
+  }
   return {
     ...decided,
+    text,
     activeRequest: {
       ...active,
-      product,
-      status: answeringProposal || hasOptions ? "accepted" : active.status,
+      destination: active.destination ?? destination,
+      date: isoDate(when),
+      arriveBy: when.toISOString(),
+      timeLabel: formatPickupWhen(when.toISOString(), now),
     },
   };
 }
@@ -362,7 +408,7 @@ async function finishDecidedTurn(
       sessionId,
       await maybeOpenBookingCheckpoint(
         sessionId,
-        applySpokenProduct(transcript, await runRulesTurn(sessionId, transcript, state, now), state.activeRequest, sessionId),
+        await applySpokenProduct(transcript, await runRulesTurn(sessionId, transcript, state, now), state.activeRequest, sessionId, now),
       ),
     );
   }
@@ -449,10 +495,32 @@ function rideProposalText(appointment: Appointment, now: Date, preface = ""): st
   );
 }
 
+function spokenPickupProposalText(destination: string, when: Date, now: Date, preface = ""): string {
+  const day = describeDay(when.toISOString(), now);
+  const clock = formatTime(when.toISOString());
+  return (
+    `${preface}I can have an Uber pick you up at home ${day} around ${clock} to ${destination}. ` +
+    "Should I set that up?"
+  );
+}
+
+function appointmentLeadTime(appointment: Appointment): Date {
+  const arriveBy = new Date(appointment.start);
+  arriveBy.setMinutes(arriveBy.getMinutes() - 15);
+  return arriveBy;
+}
+
+function usesSpokenPickup(arriveBy: string | undefined, appointment: Appointment): boolean {
+  if (!arriveBy) return false;
+  const named = new Date(arriveBy);
+  if (Number.isNaN(named.getTime())) return false;
+  return Math.abs(named.getTime() - appointmentLeadTime(appointment).getTime()) > 60_000;
+}
+
 /**
  * UberX / WAV are tappable cards. Never also chat a line that lists them.
  * Speak the appointment/pickup instead, and skip that bubble when the cards
- * are the selection.
+ * are the selection. Keep Maria's spoken clock when she named one.
  */
 function withoutRideOptionListing(
   sessionId: string,
@@ -479,11 +547,55 @@ function withoutRideOptionListing(
     decided.activeRequest?.intent === "ride" &&
     decided.activeRequest.status === "proposed" &&
     view.lastRideOptions.length > 0;
+  let text = decided.text;
+  if (listed) {
+    const named = decided.activeRequest?.arriveBy;
+    text =
+      usesSpokenPickup(named, appointment) && named
+        ? spokenPickupProposalText(
+            decided.activeRequest?.destination ?? appointment.location ?? seed.destination,
+            new Date(named),
+            now,
+          )
+        : rideProposalText(appointment, now);
+  }
   return {
     ...decided,
-    text: listed ? rideProposalText(appointment, now) : decided.text,
+    text,
     extraKasamaTexts: extras,
     skipKasamaTurn: presentingCards || decided.skipKasamaTurn,
+  };
+}
+
+function rideWhenFields(when: Date, now: Date): Pick<ActiveRequest, "date" | "arriveBy" | "timeLabel"> {
+  return {
+    date: isoDate(when),
+    arriveBy: when.toISOString(),
+    timeLabel: formatPickupWhen(when.toISOString(), now),
+  };
+}
+
+async function proposeRideAtTime(
+  sessionId: string,
+  destination: string,
+  when: Date,
+  now: Date,
+  spoken: string,
+  appointment?: Appointment | null,
+  preface = "",
+): Promise<Reply> {
+  await searchRides(sessionId, destination, when.toISOString());
+  return {
+    text: spokenPickupProposalText(destination, when, now, preface),
+    kind: "proposal",
+    activeRequest: {
+      intent: "ride",
+      destination,
+      appointmentId: appointment?.id,
+      product: spokenProduct(spoken),
+      status: "proposed",
+      ...rideWhenFields(when, now),
+    },
   };
 }
 
@@ -494,6 +606,21 @@ async function proposeRideToAppointment(
   preface = "",
   spoken = "",
 ): Promise<Reply> {
+  if (spokenClockPresent(spoken)) {
+    const when = spokenDateTime(spoken, now);
+    if (when) {
+      return proposeRideAtTime(
+        sessionId,
+        appointment.location ?? "your appointment",
+        when,
+        now,
+        spoken,
+        appointment,
+        preface,
+      );
+    }
+  }
+
   const start = new Date(appointment.start);
   if (Number.isNaN(start.getTime())) {
     return {
@@ -506,8 +633,7 @@ async function proposeRideToAppointment(
       },
     };
   }
-  const arriveBy = new Date(start);
-  arriveBy.setMinutes(arriveBy.getMinutes() - 15);
+  const arriveBy = appointmentLeadTime(appointment);
   const destination = appointment.location ?? "your appointment";
 
   await searchRides(sessionId, destination, arriveBy.toISOString());
@@ -518,10 +644,10 @@ async function proposeRideToAppointment(
     activeRequest: {
       intent: "ride",
       destination,
-      date: isoDate(start),
       appointmentId: appointment.id,
       product: spokenProduct(spoken),
       status: "proposed",
+      ...rideWhenFields(arriveBy, now),
     },
   };
 }
@@ -729,8 +855,23 @@ async function decide(
 
     if (DOCTOR.test(text)) {
       const seed = getMariaAppointment(now);
-      const requestedDate = dateFromWords(text, now) ?? active?.date ?? isoDate(new Date(seed.start));
+      const spokenWhen = spokenDateTime(text, now);
+      const requestedDate =
+        dateFromWords(text, now) ??
+        (spokenWhen ? isoDate(spokenWhen) : undefined) ??
+        active?.date ??
+        isoDate(new Date(seed.start));
       const appointment = await lookupAppointment(sessionId, requestedDate);
+      if (spokenClockPresent(text) && spokenWhen) {
+        return proposeRideAtTime(
+          sessionId,
+          appointment?.location ?? seed.destination,
+          spokenWhen,
+          now,
+          text,
+          appointment,
+        );
+      }
       if (appointment) {
         return proposeRideToAppointment(sessionId, appointment, now, "", text);
       }
@@ -748,28 +889,39 @@ async function decide(
 
     const looksLikeAPlace = !saysYes && !RIDE.test(text) && !VAGUE_PLACE.test(text);
     if (answeringWhere && looksLikeAPlace) {
-      // Free-form destination from the clarification answer.
       const destination = transcript.trim().replace(/[.!?]+$/, "");
-      const arriveBy = new Date(now);
-      arriveBy.setMinutes(arriveBy.getMinutes() + 30);
-      await searchRides(sessionId, destination, arriveBy.toISOString());
+      const stored = active?.arriveBy ? new Date(active.arriveBy) : undefined;
+      const when = spokenDateTime(text, now) ?? stored ?? new Date(now.getTime() + 30 * 60 * 1000);
+      const namedClock = Boolean(spokenClockPresent(text) || active?.arriveBy);
+      await searchRides(sessionId, destination, when.toISOString());
+      const pickup =
+        namedClock
+          ? `I can have an Uber pick you up at home ${describeDay(when.toISOString(), now)} around ${formatTime(when.toISOString())} and take you to ${destination}. Should I set that up?`
+          : `I can have an Uber pick you up at home and take you to ${destination}. Should I set that up?`;
       return {
-        text: `I can have an Uber pick you up at home and take you to ${destination}. Should I set that up?`,
+        text: pickup,
         kind: "proposal",
         activeRequest: {
           intent: "ride",
           destination,
-          date: isoDate(now),
+          product: spokenProduct(text) ?? active?.product,
           status: "proposed",
+          ...rideWhenFields(when, now),
         },
       };
     }
 
     if (state.clarificationsAsked < MAX_CLARIFICATIONS_PER_REQUEST) {
+      const gatheringWhen = spokenDateTime(text, now);
       return {
         text: "Of course. Where would you like to go?",
         kind: "clarification",
-        activeRequest: { intent: "ride", status: "gathering", date: dateFromWords(text, now) },
+        activeRequest: {
+          intent: "ride",
+          status: "gathering",
+          date: dateFromWords(text, now) ?? (gatheringWhen ? isoDate(gatheringWhen) : undefined),
+          ...(gatheringWhen ? rideWhenFields(gatheringWhen, now) : {}),
+        },
         askedClarification: true,
       };
     }
@@ -855,7 +1007,7 @@ export async function runConversationTurn(
     };
   } else if (complete) {
     try {
-      const fromModel = applySpokenProduct(
+      const fromModel = await applySpokenProduct(
         request.data.transcript,
         await runHarnessTurn({
           transcript: request.data.transcript,
@@ -866,6 +1018,7 @@ export async function runConversationTurn(
         }),
         state.activeRequest,
         sessionId,
+        now,
       );
       decided = await finishDecidedTurn(
         sessionId,
@@ -878,6 +1031,7 @@ export async function runConversationTurn(
               await runRulesTurn(sessionId, request.data.transcript, state, now),
               state.activeRequest,
               sessionId,
+              now,
             )
           : fromModel,
       );
@@ -892,6 +1046,7 @@ export async function runConversationTurn(
           await runRulesTurn(sessionId, request.data.transcript, state, now),
           state.activeRequest,
           sessionId,
+          now,
         ),
       );
     }
@@ -906,6 +1061,7 @@ export async function runConversationTurn(
         await runRulesTurn(sessionId, request.data.transcript, state, now),
         state.activeRequest,
         sessionId,
+        now,
       ),
     );
   }
