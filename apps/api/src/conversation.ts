@@ -2,6 +2,7 @@ import {
   DEMO_UBER_WAV_OPTION_ID,
   MAX_CLARIFICATIONS_PER_REQUEST,
   MARIA_PROFILE,
+  announcesRideOptions,
   bookingApprovalPrompt,
   pendingRideOptionId,
   conversationChatRequestSchema,
@@ -411,7 +412,7 @@ async function finishDecidedTurn(
       ),
     );
   }
-  return next;
+  return withoutRideOptionListing(sessionId, now, next);
 }
 
 async function maybeOpenBookingCheckpoint(sessionId: string, decided: HarnessTurnResult): Promise<HarnessTurnResult> {
@@ -476,7 +477,95 @@ type Reply = {
   activeRequest: ActiveRequest | null;
   askedClarification?: boolean;
   extraKasamaTexts?: string[];
+  skipKasamaTurn?: boolean;
 };
+
+function rideProposalText(appointment: Appointment, now: Date, preface = ""): string {
+  const start = new Date(appointment.start);
+  if (Number.isNaN(start.getTime())) {
+    return "I'm sorry, I couldn't find the exact time for your appointment. Should I still try to set up a ride?";
+  }
+  const arriveBy = new Date(start);
+  arriveBy.setMinutes(arriveBy.getMinutes() - 15);
+  const day = describeDay(appointment.start, now);
+  return (
+    `${preface}Your ${describeAppointment(appointment)} is ${day} at ${formatTime(appointment.start)}. ` +
+    `I can have an Uber pick you up at home around ${formatTime(arriveBy.toISOString())} so you arrive with time to spare. ` +
+    "Should I set that up?"
+  );
+}
+
+function spokenPickupProposalText(destination: string, when: Date, now: Date, preface = ""): string {
+  const day = describeDay(when.toISOString(), now);
+  const clock = formatTime(when.toISOString());
+  return (
+    `${preface}I can have an Uber pick you up at home ${day} around ${clock} to ${destination}. ` +
+    "Should I set that up?"
+  );
+}
+
+function appointmentLeadTime(appointment: Appointment): Date {
+  const arriveBy = new Date(appointment.start);
+  arriveBy.setMinutes(arriveBy.getMinutes() - 15);
+  return arriveBy;
+}
+
+function usesSpokenPickup(arriveBy: string | undefined, appointment: Appointment): boolean {
+  if (!arriveBy) return false;
+  const named = new Date(arriveBy);
+  if (Number.isNaN(named.getTime())) return false;
+  return Math.abs(named.getTime() - appointmentLeadTime(appointment).getTime()) > 60_000;
+}
+
+/**
+ * UberX / WAV are tappable cards. Never also chat a line that lists them.
+ * Speak the appointment/pickup instead, and skip that bubble when the cards
+ * are the selection. Keep Maria's spoken clock when she named one.
+ */
+function withoutRideOptionListing(
+  sessionId: string,
+  now: Date,
+  decided: HarnessTurnResult,
+): HarnessTurnResult {
+  const view = sessionStore.get(sessionId);
+  if (view.pendingApproval?.tool === "book_ride") {
+    return decided;
+  }
+  const extras = (decided.extraKasamaTexts ?? []).filter((text) => !announcesRideOptions(text));
+  const listed = announcesRideOptions(decided.text);
+  if (!listed && extras.length === (decided.extraKasamaTexts ?? []).length) {
+    return decided;
+  }
+  const seed = getMariaAppointment(now);
+  const appointment = view.appointment ?? {
+    id: seed.id,
+    title: seed.title,
+    start: seed.start,
+    location: seed.destination,
+  };
+  const presentingCards =
+    decided.activeRequest?.intent === "ride" &&
+    decided.activeRequest.status === "proposed" &&
+    view.lastRideOptions.length > 0;
+  let text = decided.text;
+  if (listed) {
+    const named = decided.activeRequest?.arriveBy;
+    text =
+      usesSpokenPickup(named, appointment) && named
+        ? spokenPickupProposalText(
+            decided.activeRequest?.destination ?? appointment.location ?? seed.destination,
+            new Date(named),
+            now,
+          )
+        : rideProposalText(appointment, now);
+  }
+  return {
+    ...decided,
+    text,
+    extraKasamaTexts: extras,
+    skipKasamaTurn: presentingCards || decided.skipKasamaTurn,
+  };
+}
 
 function rideWhenFields(when: Date, now: Date): Pick<ActiveRequest, "date" | "arriveBy" | "timeLabel"> {
   return {
@@ -496,12 +585,8 @@ async function proposeRideAtTime(
   preface = "",
 ): Promise<Reply> {
   await searchRides(sessionId, destination, when.toISOString());
-  const day = describeDay(when.toISOString(), now);
-  const clock = formatTime(when.toISOString());
   return {
-    text:
-      `${preface}I can have an Uber pick you up at home ${day} around ${clock} to ${destination}. ` +
-      "Should I set that up?",
+    text: spokenPickupProposalText(destination, when, now, preface),
     kind: "proposal",
     activeRequest: {
       intent: "ride",
@@ -548,20 +633,13 @@ async function proposeRideToAppointment(
       },
     };
   }
-  const arriveBy = new Date(start);
-  arriveBy.setMinutes(arriveBy.getMinutes() - 15);
+  const arriveBy = appointmentLeadTime(appointment);
   const destination = appointment.location ?? "your appointment";
 
   await searchRides(sessionId, destination, arriveBy.toISOString());
 
-  const day = describeDay(appointment.start, now);
-  const text =
-    `${preface}Your ${describeAppointment(appointment)} is ${day} at ${formatTime(appointment.start)}. ` +
-    `I can have an Uber pick you up at home around ${formatTime(arriveBy.toISOString())} so you arrive with time to spare. ` +
-    "Should I set that up?";
-
   return {
-    text,
+    text: rideProposalText(appointment, now, preface),
     kind: "proposal",
     activeRequest: {
       intent: "ride",
@@ -880,6 +958,7 @@ async function runRulesTurn(
     plan,
     failure: failed ? { kind: "retry", tool: failed.tool, summary: failed.summary } : null,
     extraKasamaTexts: reply.extraKasamaTexts,
+    skipKasamaTurn: reply.skipKasamaTurn,
   };
 }
 
@@ -998,6 +1077,7 @@ export async function runConversationTurn(
     failure: decided.failure,
     timestamp: now.toISOString(),
     extraKasamaTexts: decided.extraKasamaTexts,
+    skipKasamaTurn: decided.skipKasamaTurn,
     chatId: request.data.chatId,
   });
 

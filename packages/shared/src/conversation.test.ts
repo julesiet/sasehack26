@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_CLARIFICATIONS_PER_REQUEST,
   allConversationTurns,
+  announcesRideOptions,
   chatTitleForIntent,
   chatsNewestFirst,
   conversationTurnRequestSchema,
@@ -206,5 +207,21 @@ describe("conversation contract", () => {
   it("requires reply text for Kasama's voice", () => {
     expect(speakRequestSchema.safeParse({ text: "Should I set that up?" }).success).toBe(true);
     expect(speakRequestSchema.safeParse({ text: "  " }).success).toBe(false);
+  });
+
+  it("detects a chat line that lists UberX and WAV so the cards can stand alone", () => {
+    expect(
+      announcesRideOptions("I found two Uber options: UberX for $18.00 and WAV for $24.50. Which one would you like?"),
+    ).toBe(true);
+    expect(announcesRideOptions("I found 2 Uber options.")).toBe(true);
+    expect(
+      announcesRideOptions(
+        "Your checkup with Dr. Chen is tomorrow at 10:30 AM. I can have an Uber pick you up at home around 10:15 AM so you arrive with time to spare. Should I set that up?",
+      ),
+    ).toBe(false);
+    expect(announcesRideOptions("The Uber is $24.50. Should I book it?")).toBe(false);
+    expect(
+      announcesRideOptions("I booked the wheelchair Uber for $24.50. Your confirmation is UBER-WAV-0001."),
+    ).toBe(false);
   });
 });

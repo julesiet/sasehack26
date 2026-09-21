@@ -243,6 +243,23 @@ export function applyChatTitleFromRequest(
   chat.title = chatTitleForIntent(activeRequest.intent, activeRequest.destination);
 }
 
+/**
+ * True when Kasama is about to list UberX / WAV in chat. The iPhone already
+ * shows those as tappable cards — do not also narrate them.
+ */
+export function announcesRideOptions(text: string): boolean {
+  const normalized = text.toLowerCase();
+  if (/\bfound\b.{0,80}\buber options?\b/.test(normalized)) return true;
+  if (/\btwo\b.{0,40}\buber\b/.test(normalized) && /\b(uberx|uber x|wav|wheelchair)\b/.test(normalized)) {
+    return true;
+  }
+  const namesUberX = /\buberx\b|\buber x\b/.test(normalized);
+  const namesWav = /\bwav\b|\bwheelchair\b/.test(normalized);
+  if (namesUberX && namesWav && /\$\d/.test(text)) return true;
+  if (namesUberX && namesWav && /\b(option|options|choose|which)\b/.test(normalized)) return true;
+  return false;
+}
+
 /** `POST /conversation/turn` body. */
 export const conversationTurnRequestSchema = z.object({
   transcript: z.string().trim().min(1),

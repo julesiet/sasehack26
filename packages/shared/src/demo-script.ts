@@ -68,7 +68,7 @@ export function demoScriptBeats(): DemoScriptBeat[] {
       title: "Ask for the ride",
       say: DEMO_SCRIPT_TRANSCRIPTS.rideRequest,
       expect:
-        "Kasama names Dr. Chen, tomorrow, 10:30, and a pickup around 10:15. Two large Uber cards: UberX $18.00 and Wheelchair Uber $24.50. Screen may say Finding Ubers.",
+        "Kasama names Dr. Chen, tomorrow, 10:30, and a pickup around 10:15. Two large Uber cards: UberX $18.00 and Wheelchair Uber $24.50. Chat does not list those options as a second bubble. Screen may say Finding Ubers.",
       fallback:
         "Mic denied, STT missing, or a missed transcript: type the same line. Do not rephrase.",
     },
